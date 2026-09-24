@@ -110,20 +110,31 @@ class Convention:
         two_theta = float(np.degrees(np.arccos(np.clip(kf @ b / k, -1, 1))))
         kf_h = float(kf @ np.asarray(self.horizontal, dtype=float))
         kf_v = float(kf @ np.asarray(self.vertical, dtype=float))
-        if abs(kf_h) < 1e-10 and abs(kf_v) < 1e-10:
+        if abs(kf_h) < 1e-10 and abs(kf_v) < 1e-10:  # on axis: eta is undefined, use the zero
             eta = -self.eta_zero_offset
-        elif self.eta_mode == "sacla":
-            eta = float(np.degrees(np.arctan2(kf_v, -kf_h))) - self.eta_zero_offset
+            if self.eta_mode == "sacla":
+                eta = float(np.mod(eta, 360.0))
         else:
-            eta = float(np.degrees(np.arctan2(kf_h, kf_v))) - self.eta_zero_offset
-        if self.eta_mode == "sacla":
-            eta = float(np.mod(eta, 360.0))
+            eta = float(eta_of_kf(kf_h, kf_v, self))
         return two_theta, eta
 
     def with_eta_offset(self, eta_zero_offset: float) -> Convention:
         from dataclasses import replace
 
         return replace(self, eta_zero_offset=eta_zero_offset)
+
+
+def eta_of_kf(kf_h: Any, kf_v: Any, convention: Convention) -> np.ndarray:
+    """Azimuth eta (deg) from the horizontal and vertical components of ``k_f``, vectorised.
+
+    ``"vertical"`` mode: ``atan2(kf_h, kf_v) - eta_zero``; ``"sacla"`` mode:
+    ``atan2(kf_v, -kf_h) - eta_zero`` wrapped to ``[0, 360)``.
+    """
+    kf_h = np.asarray(kf_h, dtype=float)
+    kf_v = np.asarray(kf_v, dtype=float)
+    if convention.eta_mode == "sacla":
+        return np.mod(np.degrees(np.arctan2(kf_v, -kf_h)) - convention.eta_zero_offset, 360.0)
+    return np.degrees(np.arctan2(kf_h, kf_v)) - convention.eta_zero_offset
 
 
 CONVENTIONS: dict[str, Convention] = {
