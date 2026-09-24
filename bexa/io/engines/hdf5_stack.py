@@ -313,6 +313,8 @@ class Hdf5StackSource(BaseSource):
                 raise KeyError(f"scan {self.scan} ({self._entry!r}) not found in {self.master}")
             per_frame, scalars = self._read_motor_table(f)
             declared = self._declared_motors(f)
+            title_path = f"{self._entry}/title"
+            title = str(_decode(f[title_path][()])) if title_path in f else ""
 
         aliases = self.spec.motors.get("aliases", {}) or {}
         for logical, physical in aliases.items():
@@ -361,6 +363,7 @@ class Hdf5StackSource(BaseSource):
                 {k: v for k, v in per_frame.items() if k not in structure.per_frame}
             )
             structure.scalars.update(scalars)
+            structure.title = title
             return structure
         structure = Structure.frames_only(
             self._n_frames,
@@ -370,6 +373,7 @@ class Hdf5StackSource(BaseSource):
             units=units,
             energy_keV=energy,
         )
+        structure.title = title
         return structure
 
     def _energy(self, per_frame: dict[str, np.ndarray], scalars: dict[str, float]) -> float | None:

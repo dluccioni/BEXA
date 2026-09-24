@@ -24,7 +24,8 @@ from typing import Any
 import numpy as np
 import xarray as xr
 
-from bexa._log import get_logger, progress
+from bexa._log import get_logger, interactive_session, progress
+from bexa.core import accessor as _accessor  # noqa: F401  (registers the .bexa accessors)
 from bexa.core import backend
 from bexa.core.cache import Cache
 from bexa.core.parallel import Prefetcher
@@ -35,6 +36,7 @@ from bexa.core.structure import PIXEL_DIMS, Structure
 from bexa.io.base import FrameBatch, Source
 
 log = get_logger(__name__)
+AUTO_PROGRESS_FRAMES = 200  # longer passes show a progress bar in interactive sessions
 
 __all__ = [
     "Accumulator",
@@ -866,8 +868,8 @@ def reduce(
     method: str = "mean",
     cache: Cache | bool | None = None,
     prefetch: bool = True,
-    show_progress: bool = False,
-) -> dict[str, xr.DataArray]:
+    show_progress: bool | None = None,
+) -> xr.Dataset:
     """Run accumulators over a scan in one streaming pass.
 
     Parameters
@@ -884,11 +886,16 @@ def reduce(
         size is halved; after two GPU failures the run falls back to the CPU.
     cache
         ``True`` (the scan's cache), a :class:`Cache`, or ``None``/``False``.
+    show_progress
+        Show a progress bar; ``None`` shows one for passes over
+        ``AUTO_PROGRESS_FRAMES`` or more frames in an interactive session.
 
     Returns
     -------
-    dict
-        Result name -> DataArray with coordinates and provenance attrs.
+    xarray.Dataset
+        One variable per result (``sum``, ``com_mu``, ``roi_peak``, ...) with
+        coordinates, and provenance attrs on every variable and on the dataset.
+        Square brackets, ``in`` and ``.items()`` work as on a dict.
     """
     from bexa.core.scan import Scan
 
@@ -932,7 +939,9 @@ def reduce(
                 continue
         to_run.append((acc, key))
     if not to_run:
-        return results
+        return _as_dataset(results)
+    if show_progress is None:
+        show_progress = plan.frame_ids.size >= AUTO_PROGRESS_FRAMES and interactive_session()
 
     stats = RunStats(resolved).start()
     attempts = 0
@@ -986,7 +995,19 @@ def reduce(
         if key is not None and isinstance(cache, Cache):
             cache.put(key, xr.Dataset(res))
         results.update(res)
-    return results
+    return _as_dataset(results, base_attrs)
+
+
+def _as_dataset(
+    results: dict[str, xr.DataArray], attrs: dict[str, Any] | None = None
+) -> xr.Dataset:
+    """The results as one Dataset; without ``attrs`` the first result's provenance is used."""
+    dataset = xr.Dataset(results)
+    if attrs is None and results:
+        first = next(iter(results.values()))
+        attrs = {k: v for k, v in first.attrs.items() if k not in ("accumulator", "params")}
+    dataset.attrs.update(attrs or {})
+    return dataset
 
 
 def _unpack(res: Any) -> dict[str, xr.DataArray]:

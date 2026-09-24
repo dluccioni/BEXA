@@ -18,21 +18,8 @@ PATH_HELP = "Dataset folder, master file or scanNNNN folder (or use --profile/--
 
 
 def parse_roi(text: str | None) -> ROI | None:
-    """``"x=800:1200,y=700:1100,chi=0:8"`` -> ROI (motor ranges are values)."""
-    if not text:
-        return None
-    roi = ROI()
-    for part in text.split(","):
-        if not part.strip():
-            continue
-        dim, rng = part.split("=")
-        lo, hi = rng.split(":")
-        roi.set(dim.strip(), (float(lo) if lo else None, float(hi) if hi else None))
-        if dim.strip() in ("y", "x"):
-            roi.ranges[dim.strip()] = tuple(
-                None if v is None else int(v) for v in roi.ranges[dim.strip()]
-            )
-    return roi
+    """``"x=800:1200,y=700:1100,chi=0:8"`` -> ROI (see :meth:`bexa.core.roi.ROI.parse`)."""
+    return ROI.parse(text) if text else None
 
 
 def parse_downsample(text: str | None) -> Any:

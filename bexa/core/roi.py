@@ -175,6 +175,62 @@ class ROI:
             return cls(data["ranges"], index_dims=data.get("index_dims", ()))
         return cls(data)
 
+    @classmethod
+    def parse(cls, text: str | None) -> ROI:
+        """``"y=700:1100,x=800:1200,chi=-0.2:0.2"`` to an ROI.
+
+        Pixel ranges are integers, motor ranges values; a missing bound
+        (``x=800:``) means "to the edge". Empty text gives an empty ROI.
+        """
+        roi = cls()
+        for part in (text or "").split(","):
+            if not part.strip():
+                continue
+            if "=" not in part or ":" not in part:
+                raise ValueError(f"cannot parse {part!r}; expected dim=low:high")
+            dim, rng = part.split("=", 1)
+            lo, hi = rng.split(":", 1)
+            dim = dim.strip()
+            convert = int if dim in PIXEL_DIMS else float
+            roi.set(dim, (convert(lo) if lo.strip() else None, convert(hi) if hi.strip() else None))
+        return roi
+
+    @classmethod
+    def from_indices(
+        cls,
+        image: Any,
+        y: Sequence[float | None] | None = None,
+        x: Sequence[float | None] | None = None,
+        **motors: Sequence[float | None] | None,
+    ) -> ROI:
+        """An ROI given in the pixel indices of ``image``, in full-resolution pixels.
+
+        ``image`` is a preview or a windowed result whose ``y``/``x``
+        coordinates are full-resolution pixel indices, as bexa writes them; the
+        first coordinate and the step map the indices back. Plain arrays are
+        taken as full resolution. Motor ranges pass through unchanged.
+        """
+        roi = cls(dict(motors))
+        for dim, rng in (("y", y), ("x", x)):
+            if rng is not None:
+                roi.set(dim, _scale_range(image, dim, rng))
+        return roi
+
+    def to_indices(self, image: Any) -> tuple[slice, slice]:
+        """``(slice_y, slice_x)`` of this ROI in the pixel indices of ``image``."""
+        height, width = np.shape(image)[-2:]
+        slices = []
+        for dim, size in (("y", height), ("x", width)):
+            rng = self.ranges.get(dim)
+            if rng is None:
+                slices.append(slice(0, size))
+                continue
+            origin, step = _axis_of(image, dim)
+            lo = 0 if rng[0] is None else round((float(rng[0]) - origin) / step)
+            hi = size if rng[1] is None else round((float(rng[1]) - origin) / step)
+            slices.append(slice(max(lo, 0), min(hi, size)))
+        return slices[0], slices[1]
+
     def describe(self, structure: Structure | None = None) -> str:
         if not self.ranges:
             return "ROI: everything"
@@ -191,3 +247,20 @@ class ROI:
             except ValueError as exc:
                 text += f" (invalid: {exc})"
         return text
+
+
+def _axis_of(image: Any, dim: str) -> tuple[float, float]:
+    """Origin and step of the ``dim`` coordinate of ``image`` (index units for plain arrays)."""
+    coords = getattr(image, "coords", None)
+    if coords is not None and dim in coords and len(coords[dim]) > 0:
+        values = np.asarray(coords[dim].values, dtype=float)
+        step = float(values[1] - values[0]) if len(values) > 1 else 1.0
+        return float(values[0]), step
+    return 0.0, 1.0
+
+
+def _scale_range(image: Any, dim: str, rng: Sequence[float | None]) -> Range:
+    origin, step = _axis_of(image, dim)
+    lo = None if rng[0] is None else round(origin + step * float(rng[0]))
+    hi = None if rng[1] is None else round(origin + step * float(rng[1]))
+    return lo, hi

@@ -23,7 +23,7 @@ def curve(
     dim = da.dims[0]
     x = da.coords[dim].values if dim in da.coords else np.arange(da.size)
     ax.plot(x, as_array(da), label=label or (str(da.name) if da.name else None), **kwargs)
-    ax.set_xlabel(dim_label(da, dim))
+    ax.set_xlabel(dim_label(da, str(dim)))
     ax.set_ylabel(str(da.name or ""))
     if label or da.name:
         ax.legend(frameon=False)
@@ -136,7 +136,7 @@ def moments_vs_axis(
                 dim = da.dims[0]
                 x = da.coords[dim].values if dim in da.coords else np.arange(da.size)
                 ax.plot(x, as_array(da), color=color, label=key if key != "value" else None)
-                ax.set_xlabel(dim_label(da, dim))
+                ax.set_xlabel(dim_label(da, str(dim)))
         if difference and "on" in parts and "off" in parts:
             ax.plot(
                 x,
@@ -184,7 +184,7 @@ def rocking_curves(
                 fy = (fy - np.nanmin(fy)) / (np.nanmax(fy) - np.nanmin(fy))
             ax.plot(fx, fy, "-", color=line.get_color())
         if xlabel is None:
-            xlabel = dim_label(da, dim)
+            xlabel = dim_label(da, str(dim))
     ax.set_xlabel(xlabel or "motor")
     ax.set_ylabel("normalised intensity" if normalize else "intensity")
     if any(items):

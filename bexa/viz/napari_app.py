@@ -217,9 +217,15 @@ class SlicesToVoxels:
     layers
         One 4-D array ``(phi, mu, y, x)`` (or DataArray) per z layer, or a list
         of :class:`bexa.core.scan.Scan` objects whose preview is used.
+    dims
+        Names of the two leading dims, used to label the sliders; taken from
+        the first layer's dims (a DataArray or a Scan) when not given.
     """
 
-    def __init__(self, layers: list[Any], downsample: int = 4) -> None:
+    def __init__(
+        self, layers: list[Any], downsample: int = 4, dims: tuple[str, str] | None = None
+    ) -> None:
+        self.dims = tuple(dims) if dims else self._dims_of(layers[0])
         self.layers = [self._as_grid(layer, downsample) for layer in layers]
         shape = self.layers[0].shape
         self.phi_count, self.mu_count = int(shape[0]), int(shape[1])
@@ -229,6 +235,21 @@ class SlicesToVoxels:
         self.mu_rad = 0
         self.offsets = np.zeros((len(self.layers), 2), dtype=int)  # (dphi, dmu) per layer
         self.visible = np.ones(len(self.layers), dtype=bool)
+
+    @staticmethod
+    def _dims_of(layer: Any) -> tuple[str, str]:
+        """Names of the two leading dims of a layer (``phi``/``mu`` for plain arrays)."""
+        if hasattr(layer, "structure"):
+            motors = tuple(str(d) for d in layer.structure.motor_dims)
+        elif hasattr(layer, "dims"):
+            motors = tuple(str(d) for d in layer.dims if d not in ("y", "x"))
+        else:
+            motors = ()
+        if len(motors) >= 2:
+            return motors[0], motors[1]
+        if len(motors) == 1:
+            return motors[0], "index"
+        return "phi", "mu"
 
     @staticmethod
     def _as_grid(layer: Any, downsample: int) -> np.ndarray:
@@ -329,12 +350,20 @@ def slices_to_voxels_app(
     downsample: int = 4,
     show: bool = True,
     scale: tuple[float, float, float] = (5.0, 0.15, 0.15),
+    dims: tuple[str, str] | None = None,
 ) -> Any:
-    """Slices-to-Voxels: one frame per z layer chosen with phi and mu sliders, stacked in 3-D."""
+    """Slices-to-Voxels: one frame per z layer chosen with two sliders, stacked in 3-D.
+
+    The sliders step the two leading dims of the layers (``phi`` and ``mu`` in
+    the legacy app; ``chi`` and ``mu`` for a mosaicity scan per layer,
+    ``energy`` and ``mu`` for an energy series per layer). ``scale`` is the
+    voxel size ``(z, y, x)`` napari uses to draw the stack.
+    """
     napari = _napari()
     from magicgui import magicgui
 
-    model = SlicesToVoxels(layers, downsample=downsample)
+    model = SlicesToVoxels(layers, downsample=downsample, dims=dims)
+    first, second = model.dims
     viewer = napari.Viewer(title="bexa Slices to Voxels", show=show)
     layer = volume_layer(
         model.build_volume(), name="voxels", rendering="iso", colormap="viridis", scale=scale
@@ -345,8 +374,10 @@ def slices_to_voxels_app(
 
     @magicgui(
         auto_call=True,
-        phi_idx={"widget_type": "Slider", "max": model.phi_count - 1},
-        mu_idx={"widget_type": "Slider", "max": model.mu_count - 1},
+        phi_idx={"widget_type": "Slider", "max": model.phi_count - 1, "label": first},
+        mu_idx={"widget_type": "Slider", "max": model.mu_count - 1, "label": second},
+        phi_rad={"label": f"{first} radius"},
+        mu_rad={"label": f"{second} radius"},
     )
     def global_controls(
         phi_idx: int = 0, mu_idx: int = 0, phi_rad: int = 0, mu_rad: int = 0
@@ -355,13 +386,18 @@ def slices_to_voxels_app(
         model.phi_rad, model.mu_rad = phi_rad, mu_rad
         rebuild()
 
-    @magicgui(call_button="Apply to layer", z={"max": len(model.layers) - 1})
+    @magicgui(
+        call_button="Apply to layer",
+        z={"max": len(model.layers) - 1},
+        dphi={"label": f"d{first}"},
+        dmu={"label": f"d{second}"},
+    )
     def local_controls(z: int = 0, dphi: int = 0, dmu: int = 0, visible: bool = True) -> None:
         model.offsets[z] = (dphi, dmu)
         model.visible[z] = visible
         rebuild()
 
-    viewer.window.add_dock_widget(global_controls, name="GLOBAL phi/mu", area="right")
+    viewer.window.add_dock_widget(global_controls, name=f"GLOBAL {first}/{second}", area="right")
     viewer.window.add_dock_widget(local_controls, name="LOCAL slice offsets", area="right")
     viewer.dims.ndisplay = 3
     return viewer

@@ -87,3 +87,17 @@ def progress(
         yield from iterable
         return
     yield from tqdm(iterable, total=total, desc=desc, leave=False)
+
+
+def in_ipython() -> bool:
+    """True inside IPython, Jupyter or a VS Code interactive window."""
+    try:
+        from IPython import get_ipython
+    except ImportError:
+        return False
+    return get_ipython() is not None
+
+
+def interactive_session() -> bool:
+    """True when someone is watching: an IPython kernel, or a terminal on stderr."""
+    return in_ipython() or bool(getattr(sys.stderr, "isatty", lambda: False)())

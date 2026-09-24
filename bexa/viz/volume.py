@@ -76,8 +76,8 @@ def projections_panel(
             extent = [c1[0], c1[-1], c0[-1], c0[0]]
         im = ax.imshow(values, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto", extent=extent)
         ax.set_title(name, fontsize=9)
-        ax.set_xlabel(dim_label(arr, d1))
-        ax.set_ylabel(dim_label(arr, d0))
+        ax.set_xlabel(dim_label(arr, str(d1)))
+        ax.set_ylabel(dim_label(arr, str(d0)))
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
     for ax in axes.ravel()[n:]:
         ax.axis("off")
@@ -113,10 +113,9 @@ def _projections_plotly(
             row=i // cols + 1,
             col=i % cols + 1,
         )
-        fig.update_xaxes(title_text=dim_label(arr, d1), row=i // cols + 1, col=i % cols + 1)
-        fig.update_yaxes(
-            title_text=dim_label(arr, d0), autorange="reversed", row=i // cols + 1, col=i % cols + 1
-        )
+        row, col = i // cols + 1, i % cols + 1
+        fig.update_xaxes(title_text=dim_label(arr, str(d1)), row=row, col=col)
+        fig.update_yaxes(title_text=dim_label(arr, str(d0)), autorange="reversed", row=row, col=col)
     fig.update_layout(height=320 * rows, width=380 * cols)
     return fig
 

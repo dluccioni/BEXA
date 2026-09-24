@@ -9,18 +9,14 @@ from __future__ import annotations
 import sys
 
 from bexa._log import configure, get_logger
+from bexa._log import in_ipython as _in_ipython
 
 log = get_logger(__name__)
 
 
 def in_ipython() -> bool:
     """True inside IPython, Jupyter or a VS Code interactive window."""
-    try:
-        from IPython import get_ipython
-
-        return get_ipython() is not None
-    except ImportError:
-        return False
+    return _in_ipython()
 
 
 def setup(

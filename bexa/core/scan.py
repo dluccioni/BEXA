@@ -7,6 +7,7 @@ metadata; frames are touched when ``read``, ``preview`` or ``reduce`` is called.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ import xarray as xr
 
 from bexa._log import get_logger
 from bexa.config import BeamtimeProfile, cache_root, load_profile
+from bexa.config.paths import CACHE_DIR_ENV
 from bexa.core.cache import Cache
 from bexa.core.registry import engines
 from bexa.core.roi import ROI
@@ -26,7 +28,7 @@ from bexa.io.multi import MultiScanSource
 
 log = get_logger(__name__)
 
-__all__ = ["Scan", "open", "open_profile", "open_source"]
+__all__ = ["Scan", "list_scans", "open", "open_profile", "open_source"]
 
 
 class Scan:
@@ -132,11 +134,100 @@ class Scan:
         return f"Scan({self.name!r}, dims={self.dims}, shape={self.shape})"
 
     # ------------------------------------------------------------ reading
-    def reduce(self, accumulators: Sequence[Any], **kwargs: Any) -> dict[str, xr.DataArray]:
+    def reduce(self, accumulators: Sequence[Any], **kwargs: Any) -> xr.Dataset:
         """Run accumulators over this scan (see :func:`bexa.core.reductions.reduce`)."""
         from bexa.core.reductions import reduce
 
         return reduce(self, accumulators, **kwargs)
+
+    # ------------------------------------------------------------ everyday verbs
+    def sum(self, roi: ROI | None = None, downsample: Any = None, **kwargs: Any) -> xr.DataArray:
+        """The summed image ``(y, x)``; ``roi``, ``downsample``, ``device`` as in :meth:`reduce`."""
+        from bexa.core.reductions import Sum
+
+        return self.reduce([Sum()], roi=roi, downsample=downsample, **kwargs)["sum"]
+
+    def max(self, roi: ROI | None = None, downsample: Any = None, **kwargs: Any) -> xr.DataArray:
+        """The pixel-wise maximum over the frames."""
+        from bexa.core.reductions import Max
+
+        return self.reduce([Max()], roi=roi, downsample=downsample, **kwargs)["max"]
+
+    def rocking_curve(
+        self, roi: ROI | None = None, method: str = "sum", downsample: Any = None, **kwargs: Any
+    ) -> xr.DataArray:
+        """Integrated intensity of the pixel ROI at every motor point (1-D for a rocking scan).
+
+        The whole frame is integrated when ``roi`` has no pixel ranges; motor
+        ranges of the ROI limit the points.
+        """
+        from bexa.core.reductions import RoiIntegral
+
+        window = roi if roi is not None else self.roi
+        result = self.reduce(
+            [RoiIntegral({"curve": window}, method=method)],
+            roi=window,
+            downsample=downsample,
+            **kwargs,
+        )
+        return result["roi_curve"].rename("rocking_curve")
+
+    def com(
+        self,
+        axes: Sequence[str] | None = None,
+        sigma: float = 3.0,
+        roi: ROI | None = None,
+        downsample: Any = None,
+        moments: int = 2,
+        **kwargs: Any,
+    ) -> xr.Dataset:
+        """Centre-of-mass maps per motor axis: ``com_<axis>``, ``width_<axis>`` and ``total``."""
+        from bexa.core.reductions import MotorCOM
+
+        return self.reduce(
+            [MotorCOM(axes=axes, sigma=sigma, moments=moments)],
+            roi=roi,
+            downsample=downsample,
+            **kwargs,
+        )
+
+    def energy_com(
+        self, sigma: float = 0.0, roi: ROI | None = None, downsample: Any = None, **kwargs: Any
+    ) -> xr.Dataset:
+        """Centre of mass along the ``energy`` dim of a series: ``com_energy``, ``width_energy``."""
+        from bexa.core.reductions import EnergyCOM
+
+        return self.reduce([EnergyCOM(sigma=sigma)], roi=roi, downsample=downsample, **kwargs)
+
+    def stats(self, roi: ROI | None = None, downsample: Any = None, **kwargs: Any) -> xr.Dataset:
+        """Per-frame sum, mean, maximum and detector centre of mass on the motor grid."""
+        from bexa.core.reductions import FrameStats
+
+        return self.reduce([FrameStats()], roi=roi, downsample=downsample, **kwargs)
+
+    def _repr_html_(self) -> str:
+        """A small table for notebooks: what the scan is, before any frame is read."""
+        s = self.structure
+        rows: list[tuple[str, str]] = [
+            ("format", type(self.source).__name__ + (f" ({self.spec.name})" if self.spec else "")),
+            ("scan", s.scan_type + (f": {s.title}" if s.title else "")),
+            ("dims", " x ".join(f"{d}[{n}]" for d, n in zip(s.dims, s.shape, strict=True))),
+        ]
+        for d in s.motor_dims:
+            unit = s.units.get(d, "")
+            rows.append((d, f"{s.coords[d].min():.5g} to {s.coords[d].max():.5g} {unit}".rstrip()))
+        rows.append(
+            ("energy", f"{s.energy_keV:.4f} keV" if s.energy_keV is not None else "unknown")
+        )
+        frames = f"{s.n_frames} of {s.frame_shape[0]} x {s.frame_shape[1]} {self.source.dtype}"
+        if s.n_missing:
+            frames += f", {s.n_missing} grid points missing"
+        rows.append(("frames", frames))
+        rows.append(("files", f"{len(self.files)}, first {self.files[0]}"))
+        body = "".join(
+            f"<tr><th style='text-align:left'>{k}</th><td>{v}</td></tr>" for k, v in rows
+        )
+        return f"<table><caption><b>{self.name}</b></caption>{body}</table>"
 
     def preview(
         self,
@@ -270,7 +361,12 @@ def open_source(
     stack_dim: str | None = None,
     **kwargs: Any,
 ) -> Source:
-    """Instantiate the engine of ``spec`` for ``path``; several scans become a MultiScanSource."""
+    """Instantiate the engine of ``spec`` for ``path``; several scans become a MultiScanSource.
+
+    ``stack_dim`` names the new leading dim of a series: ``"energy"`` (the
+    default when every scan has its own energy), ``"scan"`` (the scan numbers)
+    or a positioner such as ``"samz"`` read from every scan.
+    """
     engine = engines.get(spec.engine)
     path = Path(path)
     if detector is not None:
@@ -296,16 +392,38 @@ def open_source(
             else 0
         )
         stack_dim = "energy" if distinct == len(parts) and len(parts) > 1 else "scan"
-    coords = energies if stack_dim == "energy" else scans
-    order = np.argsort(coords) if stack_dim == "energy" else np.arange(len(parts))
+    if stack_dim == "energy":
+        if any(e is None for e in energies):
+            raise ValueError("cannot stack on energy: a scan of the series has no energy")
+        coords = [float(e) for e in energies]
+    elif stack_dim == "scan":
+        coords = [float(s) for s in scans]
+    else:  # a positioner recorded in every scan, for example samz
+        coords = [_positioner(p, stack_dim, s) for p, s in zip(parts, scans, strict=True)]
+    order = np.arange(len(parts)) if stack_dim == "scan" else np.argsort(coords)
     parts = [parts[i] for i in order]
     coords = [coords[i] for i in order]
     return MultiScanSource(parts, stack_dim, coords)
 
 
+def _positioner(source: Source, name: str, scan: int) -> float:
+    """The fixed value of motor ``name`` in one scan of a series."""
+    s = source.structure()
+    if name in s.scalars:
+        return float(s.scalars[name])
+    if name in s.per_frame:
+        return float(np.mean(s.per_frame[name]))
+    raise ValueError(
+        f"scan {scan} records no positioner {name!r} to stack on; available: {sorted(s.scalars)}"
+    )
+
+
 def open(
-    path: str | Path,
+    path: str | Path | None = None,
     *,
+    profile: str | Path | BeamtimeProfile | None = None,
+    sample: str | None = None,
+    dataset: str | None = None,
     format: str | None = None,
     scan: int | Sequence[int] | tuple[int, int] | None = None,
     detector: str | None = None,
@@ -314,22 +432,47 @@ def open(
     geometry: Any = None,
     crystal: Any = None,
     cache: Cache | bool | None = True,
+    cache_reductions: bool | None = None,
     **kwargs: Any,
 ) -> Scan:
-    """Open a scan from a path, sniffing the format unless ``format`` names a spec.
+    """Open a scan from a path, or from a beamtime profile and a sample name.
 
     Parameters
     ----------
     path
-        Dataset folder, master file, ``scanNNNN`` folder, run folder or cube file.
+        Dataset folder, master file, ``scanNNNN`` folder, run folder or cube
+        file; the format is sniffed unless ``format`` names a spec. Leave it
+        out to open through a profile.
+    profile, sample, dataset
+        A beamtime profile (name, path or object; with no path and no profile
+        the ``BEXA_PROFILE`` variable is read) and the sample, or the dataset
+        folder, to open in it.
     scan
         One scan number, ``(start, end)`` or a list; ``None`` opens the only scan
-        or, for a dataset with several, all of them as a series.
+        or, for a dataset with several, all of them as a series. ``stack_dim``
+        names the dim of a series (``energy``, ``scan`` or a positioner).
     detector
         Detector name when the layout has several.
     energy_keV
         Override the energy derived from the monochromator.
+    cache_reductions
+        Keep reduction results in the disk cache like previews. Off by default
+        for a path; on for a profile with a ``processed_root``.
     """
+    if path is None or profile is not None:
+        if path is not None:
+            raise ValueError("give either a path or a profile, not both")
+        if energy_keV is not None:
+            kwargs["energy_keV"] = energy_keV
+        return open_profile(
+            profile,
+            sample=sample,
+            scan=scan,
+            detector=detector,
+            dataset=dataset,
+            cache_reductions=cache_reductions,
+            **kwargs,
+        )
     if format is None and "::" in str(path):  # file.h5::/dataset shortcut
         format = "generic_stack"
     spec = _resolve_spec(Path(str(path).split("::")[0]), format, overrides)
@@ -346,18 +489,31 @@ def open(
         cache = Cache(cache_root())
     elif cache is False:
         cache = None
-    return Scan(source, spec, geometry=geometry, crystal=crystal, cache=cache)
+    return Scan(
+        source,
+        spec,
+        geometry=geometry,
+        crystal=crystal,
+        cache=cache,
+        cache_reductions=bool(cache_reductions) and cache is not None,
+    )
 
 
 def open_profile(
-    profile: str | Path | BeamtimeProfile,
+    profile: str | Path | BeamtimeProfile | None,
     sample: str | None = None,
     scan: int | Sequence[int] | tuple[int, int] | None = None,
     detector: str | None = None,
     dataset: str | None = None,
+    cache_reductions: bool | None = None,
     **kwargs: Any,
 ) -> Scan:
-    """Open a scan described by a beamtime profile (the everyday entry point)."""
+    """Open a scan described by a beamtime profile (``bexa.open(profile=..., sample=...)``).
+
+    ``profile`` may be ``None`` to use ``BEXA_PROFILE``. Reduction results are
+    cached under the profile's ``processed_root`` unless ``cache_reductions``
+    says otherwise.
+    """
     prof = profile if isinstance(profile, BeamtimeProfile) else load_profile(profile)
     spec = load_spec(prof.format, overrides=prof.format_overrides or None)
     root = prof.data_root()
@@ -395,6 +551,8 @@ def open_profile(
         except Exception as exc:
             log.warning("could not load CIF %s: %s", cif_path, exc)
     cache = Cache(cache_root(prof.processed_root))
+    if cache_reductions is None:
+        cache_reductions = prof.processed_root is not None or bool(os.environ.get(CACHE_DIR_ENV))
     return Scan(
         source,
         spec,
@@ -403,5 +561,28 @@ def open_profile(
         cache=cache,
         profile=prof,
         name=f"{prof.name}/{dataset}",
+        cache_reductions=cache_reductions,
         hkl_center=None if hkl_center is None else (hkl_center[0], hkl_center[1], hkl_center[2]),
     )
+
+
+def list_scans(
+    path: str | Path, *, format: str | None = None, detector: str | None = None
+) -> list[int]:
+    """Scan numbers of a dataset that hold detector files (layouts with numbered scans).
+
+    ``path`` is a dataset folder, its master file or one of its ``scanNNNN``
+    folders. Layouts without numbered scans give an empty list.
+    """
+    path = Path(str(path).split("::")[0])
+    spec = _resolve_spec(path, format, None)
+    engine = engines.get(spec.engine)
+    if not hasattr(engine, "list_scans"):
+        return []
+    if path.is_file():
+        root, dataset = path.parent.parent, path.stem
+    elif path.name.startswith("scan") and path.name[4:].isdigit():
+        root, dataset = path.parent.parent, path.parent.name
+    else:
+        root, dataset = path.parent, path.name
+    return [int(number) for number in engine.list_scans(spec, root, dataset, detector)]

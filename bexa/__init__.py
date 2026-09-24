@@ -8,9 +8,12 @@ without a GPU.
 Everyday entry points::
 
     import bexa
-    scan = bexa.open_profile("hc6293", sample="WS2G_100", scan=7)
+    scan = bexa.open(profile="hc6293", sample="WS2G_100", scan=7)   # or bexa.open(path, scan=7)
     prev = scan.preview(downsample=(1, 1, 4, 4))
-    res = bexa.reduce(scan, [bexa.acc.Sum(), bexa.acc.MotorCOM(axes=("chi", "mu"))])
+    maps = scan.com(axes=("chi", "mu"))          # com_chi, com_mu, width_..., total
+    bexa.plot(maps["com_mu"])                    # or maps["com_mu"].bexa.plot()
+    ds = bexa.open_dataset(profile="hc6293", sample="WS2G_100")   # every scan of the dataset
+    ds.table(); ds.select(type="fscan2d"); bexa.stack(ds[[1, 7, 13]], [bexa.acc.Sum()], dim="samz")
 
 Submodules are imported lazily so that ``import bexa`` stays fast; heavy
 optional dependencies (cupy, napari, lmfit, ...) load only inside the
@@ -25,23 +28,30 @@ from typing import TYPE_CHECKING, Any
 __version__ = "1.0.0.dev0"
 __all__ = [
     "ROI",
+    "Dataset",
     "Scan",
     "__version__",
     "acc",
     "analysis",
     "crystal",
+    "demo",
     "geometry",
     "help",
     "io",
+    "list_scans",
     "load",
     "notebook",
     "open",
+    "open_dataset",
     "open_profile",
     "optics",
     "pipelines",
+    "plot",
     "profile",
     "reduce",
     "save",
+    "settings",
+    "stack",
     "testing",
     "to_host",
     "viz",
@@ -52,6 +62,13 @@ _LAZY_ATTRS: dict[str, tuple[str, str]] = {
     "open": ("bexa.core.scan", "open"),
     "open_profile": ("bexa.core.scan", "open_profile"),
     "Scan": ("bexa.core.scan", "Scan"),
+    "list_scans": ("bexa.core.scan", "list_scans"),
+    "Dataset": ("bexa.core.dataset", "Dataset"),
+    "open_dataset": ("bexa.core.dataset", "open_dataset"),
+    "stack": ("bexa.core.dataset", "stack"),
+    "settings": ("bexa.core.settings", "show"),
+    "plot": ("bexa.viz.auto", "plot"),
+    "demo": ("bexa.testing.demo", "demo"),
     "ROI": ("bexa.core.roi", "ROI"),
     "reduce": ("bexa.core.reductions", "reduce"),
     "load": ("bexa.io.cube", "load"),
@@ -79,10 +96,14 @@ if TYPE_CHECKING:  # pragma: no cover - static analysis only
     from bexa._help import help
     from bexa._profiling import profile
     from bexa.core.backend import to_host
+    from bexa.core.dataset import Dataset, open_dataset, stack
     from bexa.core.reductions import reduce
     from bexa.core.roi import ROI
-    from bexa.core.scan import Scan, open, open_profile
+    from bexa.core.scan import Scan, list_scans, open, open_profile
+    from bexa.core.settings import show as settings
     from bexa.io.cube import load, save
+    from bexa.testing.demo import demo
+    from bexa.viz.auto import plot
 
 
 def __getattr__(name: str) -> Any:

@@ -54,6 +54,8 @@ class Structure:
         ``"fscan1d"``, ``"fscan2d"``, ``"fscan3d"``, ``"list"``, ``"points"`` or ``"cube"``.
     energy_keV
         Photon energy when known.
+    title
+        The command as recorded by the control system (``fscan2d chi ... mu ...``).
     """
 
     motor_dims: tuple[str, ...]
@@ -67,6 +69,7 @@ class Structure:
     scan_type: str = "grid"
     units: dict[str, str] = field(default_factory=dict)
     energy_keV: float | None = None
+    title: str = ""
     _grid_of_frame: np.ndarray | None = field(default=None, repr=False, compare=False)
 
     # ------------------------------------------------------------------ basics
@@ -169,6 +172,8 @@ class Structure:
             f"{self.n_frames} frames"
             + (f", {self.n_missing} grid points missing" if self.n_missing else ""),
         ]
+        if self.title:
+            lines.append(f"  title: {self.title}")
         for d in self.motor_dims:
             c = self.coords[d]
             unit = self.units.get(d, "")
@@ -328,6 +333,7 @@ class Structure:
             scan_type="multi",
             units=dict(first.units),
             energy_keV=first.energy_keV,
+            title=first.title,
         )
         return stacked
 

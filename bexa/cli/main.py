@@ -96,6 +96,14 @@ def version() -> None:
 
 
 @app.command()
+def settings() -> None:
+    """Print the device, memory budget, cache folder and profile in use, with their sources."""
+    from bexa.core.settings import describe
+
+    typer.echo(describe())
+
+
+@app.command()
 def info(
     path: Path = typer.Argument(..., exists=True, help="A scan folder, dataset folder or file."),
     depth: int = typer.Option(3, help="Maximum HDF5 tree depth to print."),

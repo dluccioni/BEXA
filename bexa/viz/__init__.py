@@ -13,11 +13,12 @@ is drawn when the effective pixel size is known.
 - :mod:`bexa.viz.animation`: GIF and MP4 from any stack.
 - :mod:`bexa.viz.style`: screen and paper themes.
 - :mod:`bexa.viz.napari_app`: optional napari launchers (imported on demand).
+- :mod:`bexa.viz.auto`: ``plot(obj)`` picks the figure from the object's dims and attrs.
 
 ``projections_panel``, ``isosurface`` and ``rlp_scatter`` accept ``backend="plotly"``
 for interactive figures.
 """
 
-from bexa.viz import animation, curves, images, interactive, maps, style, volume
+from bexa.viz import animation, auto, curves, images, interactive, maps, style, volume
 
-__all__ = ["animation", "curves", "images", "interactive", "maps", "style", "volume"]
+__all__ = ["animation", "auto", "curves", "images", "interactive", "maps", "style", "volume"]
