@@ -14,7 +14,7 @@ import os
 import subprocess
 import sys
 import time
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -108,6 +108,14 @@ def build_attrs(
             continue
         attrs[key] = value if isinstance(value, (str, int, float, bool)) else to_json(value)
     return attrs
+
+
+def parameters_of(attrs: Mapping[str, Any]) -> dict[str, Any]:
+    """The ``parameters`` of provenance attrs as a dict (they are stored as JSON text)."""
+    value = attrs.get("parameters")
+    if isinstance(value, str):
+        return dict(json.loads(value)) if value else {}
+    return dict(value or {})
 
 
 def attach(obj: Any, **attrs: Any) -> Any:

@@ -4,7 +4,8 @@
 with its coordinates and provenance attrs. ``load`` reads those back and also
 understands the legacy PAL-XFEL cubes (``runN.h5``) and LCLS cube triples, so
 old and new reduced data look the same in memory: a Dataset with
-``frames(laser, <axis>, y, x)`` and ``i0(laser, <axis>)``.
+``frames(laser, <axis>, y, x)`` plus the per-point series along the axis
+(``signal`` = ROI/I0 mean for PAL cubes, ``i0`` for LCLS shots).
 """
 
 from __future__ import annotations
@@ -215,8 +216,8 @@ def load_legacy_cube(path: str | Path, axis: str | None = None) -> xr.Dataset:
         for name in LEGACY_AXES:
             if name in f and f[name].shape == (n,):
                 axes[name] = f[name][()]
-        i0_on = f["signals_on"][()] if "signals_on" in f else np.full(n, np.nan)
-        i0_off = f["signals_off"][()] if "signals_off" in f else np.full(n, np.nan)
+        signal_on = f["signals_on"][()] if "signals_on" in f else np.full(n, np.nan)
+        signal_off = f["signals_off"][()] if "signals_off" in f else np.full(n, np.nan)
     if axis is None:
         varying = [a for a in LEGACY_AXES if a in axes and np.ptp(axes[a]) > 0]
         axis = varying[0] if varying else "index"
@@ -233,13 +234,14 @@ def load_legacy_cube(path: str | Path, axis: str | None = None) -> xr.Dataset:
         coords=coords,
         name="frames",
     )
-    i0 = xr.DataArray(
-        np.stack([i0_off, i0_on]),
+    signal = xr.DataArray(
+        np.stack([signal_off, signal_on]),
         dims=("laser", dim),
         coords={"laser": LASER_COORD, dim: axes[axis]},
-        name="i0",
+        name="signal",
+        attrs={"description": "mean of roi_stat / i0 over the shots of each laser state"},
     )
-    dataset = xr.Dataset({"frames": frames, "i0": i0})
+    dataset = xr.Dataset({"frames": frames, "signal": signal})
     dataset.attrs.update(build_attrs(source_files=[path], parameters={"legacy_axis": axis}))
     dataset.attrs["scan_axis"] = dim
     return dataset

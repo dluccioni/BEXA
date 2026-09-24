@@ -459,6 +459,8 @@ def make_pal_spec_scan(
         )
         n_total = outer[1] * inner[1]
     n_recorded = n_total - partial
+    if len(motors) == 2:  # the 2-D layout stores whole rows of the inner motor
+        n_recorded -= n_recorded % motors[1][1]
     yy, xx = np.mgrid[0:H, 0:W]
     peak = np.exp(-0.5 * (((yy - H / 2) / 3.0) ** 2 + ((xx - W / 2) / 4.0) ** 2))
     i0 = rng.uniform(0.9, 1.1, size=n_recorded)

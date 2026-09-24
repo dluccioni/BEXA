@@ -1,0 +1,12 @@
+# Cubes written by bexa itself (bexa.save): an HDF5 file tagged with the
+# bexa_format attribute. Opened through the array_cube engine so previews and
+# reductions run on reduced data as on raw scans.
+name: bexa_cube
+engine: array_cube
+description: HDF5 cube written by bexa.save (frames plus per-point series and provenance).
+
+fingerprint:
+  h5_attrs:
+    "/": [bexa_format]
+
+axis_priority: [delay, phi, chi, th, tth, laser_v, laser_h, scanvar, index]
