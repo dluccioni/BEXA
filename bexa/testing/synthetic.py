@@ -16,6 +16,7 @@ from typing import Any
 
 import h5py
 import numpy as np
+from scipy.special import erf
 
 from bexa.core.units import energy_to_mono_angle
 
@@ -34,15 +35,18 @@ PAL_FRAMES_PATH = "/detector/eh1/jungfrau2/image/block0_values"
 def _peak_frames(
     motor_values: dict[str, np.ndarray],
     frame_shape: tuple[int, int],
-    amplitude: float,
+    amplitude: float | np.ndarray,
     background: float,
     rng: np.random.Generator,
     noise: float,
+    curve: str = "gaussian",
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
-    """Frames whose rocking curve in each motor is a Gaussian centred at a per-pixel value.
+    """Frames whose curve in each motor is a Gaussian (or a blurred step) at a per-pixel centre.
 
     The centre of the first motor varies linearly along x, the second along y.
-    Returns the float frames ``(n, H, W)`` and the centre maps.
+    ``curve="edge"`` gives an error-function step instead of a peak, as a
+    knife-edge or sample-height scan does. Returns the float frames
+    ``(n, H, W)`` and the centre maps.
     """
     names = list(motor_values)
     n = len(next(iter(motor_values.values())))
@@ -59,9 +63,13 @@ def _peak_frames(
         centre = lo + span * (0.2 + 0.6 * frac)
         sigma = 0.12 * span
         truth[f"{name}_center"] = centre
-        weight *= np.exp(-0.5 * ((values[:, None, None] - centre[None]) / sigma) ** 2)
+        offset = (values[:, None, None] - centre[None]) / sigma
+        if curve == "edge":
+            weight *= 0.5 * (1.0 + erf(offset / np.sqrt(2.0)))
+        else:
+            weight *= np.exp(-0.5 * offset**2)
     envelope = np.exp(-0.5 * (((yy - H / 2) / (0.45 * H)) ** 2 + ((xx - W / 2) / (0.45 * W)) ** 2))
-    frames = background + amplitude * weight * envelope[None]
+    frames = background + np.asarray(amplitude, dtype=float) * weight * envelope[None]
     if noise > 0:
         frames = frames + rng.normal(0.0, noise, size=frames.shape)
     return frames.astype(np.float32), truth
@@ -110,11 +118,13 @@ def make_esrf_scan(
     layout: str = "2026",
     order: str = "slow_major",
     partial: int = 0,
-    amplitude: float = 4000.0,
+    amplitude: float | np.ndarray = 4000.0,
     background: float = 10.0,
     noise: float = 0.0,
     seed: int = 0,
     dtype: Any = np.uint16,
+    positioners: dict[str, float] | None = None,
+    curve: str = "gaussian",
 ) -> SyntheticEsrfScan:
     """Write one ESRF BLISS scan (master file plus detector files).
 
@@ -123,6 +133,15 @@ def make_esrf_scan(
     motors
         ``(name, n_points)`` per scanned motor, slow first. One motor gives an
         fscan1d, two an fscan2d.
+    amplitude
+        Peak height: one number, or an ``(H, W)`` map (a bright grain on a dim
+        background).
+    positioners
+        Fixed motor values written to the positioners group, for example
+        ``{"samz": 0.5}`` for one layer of a z-stack.
+    curve
+        ``"gaussian"`` (a peak) or ``"edge"`` (a blurred step across the range,
+        as a knife-edge or sample-height scan records).
     layout
         ``"2026"``/``"2025"`` write ``fscan_parameters``; ``"2024"`` omits them
         so the grid must be detected from readbacks (and adds ``obpitch``).
@@ -153,7 +172,7 @@ def make_esrf_scan(
     n_frames = n_total - partial
     per_frame = {n: v[:n_frames] for n, v in per_frame_full.items()}
 
-    frames, truth = _peak_frames(per_frame, frame_shape, amplitude, background, rng, noise)
+    frames, truth = _peak_frames(per_frame, frame_shape, amplitude, background, rng, noise, curve)
     stored = np.clip(np.rint(frames), 0, np.iinfo(dtype).max).astype(dtype)
 
     dataset_dir = root / dataset
@@ -227,6 +246,7 @@ def make_esrf_scan(
             scalars["obpitch"] = float(coords.get("obpitch", np.zeros(1))[0])
         if layout == "2026":
             scalars.update({"ux": 0.0, "uy": 0.0, "uz": 0.0})
+        scalars.update(positioners or {})
         for name, value in scalars.items():
             pos.create_dataset(name, data=np.float64(value))
         for name in names:  # BLISS also records the scanned motors as arrays here
@@ -585,3 +605,115 @@ def make_legacy_cube(
         f.create_dataset("jungfrau_on", data=on.astype(np.float64))
         f.create_dataset("jungfrau_off", data=off.astype(np.float64))
     return path
+
+
+# ------------------------------------------------------------------------ ESRF z-stack
+@dataclass
+class SyntheticZStack:
+    """What :func:`make_esrf_zstack` wrote: a mosaicity scan and an energy series per height."""
+
+    root: Path
+    dataset: str
+    z_values: np.ndarray
+    mosa_scans: list[int]
+    energy_scans: list[tuple[int, int]]
+    energies: np.ndarray
+    layers: list[SyntheticEsrfScan]
+    truth: dict[str, np.ndarray] = field(default_factory=dict)
+
+    @property
+    def dataset_dir(self) -> Path:
+        return self.root / self.dataset
+
+
+def make_esrf_zstack(
+    root: str | Path,
+    dataset: str = "synth_zstack",
+    z_values: tuple[float, ...] = (-0.02, -0.01, 0.0, 0.01, 0.02),
+    mosa: tuple[tuple[str, int], ...] = (("chi", 4), ("mu", 10)),
+    energies: tuple[float, ...] = (16.98, 16.99, 17.0, 17.01, 17.02),
+    energy_motor: tuple[str, int] = ("mu", 8),
+    frame_shape: tuple[int, int] = (40, 48),
+    first_scan: int = 1,
+    n_files: int = 1,
+    seed: int = 0,
+    **kwargs: Any,
+) -> SyntheticZStack:
+    """One mosaicity scan plus one energy series per sample height (``samz``).
+
+    The scans of every layer share one dataset: the mosaicity scan comes first,
+    the energy series (one ``energy_motor`` scan per energy) right after it, so
+    ``bexa.open(dataset, scan=mosa_scans[k])`` and
+    ``bexa.open(dataset, scan=energy_scans[k])`` open layer ``k``. A bright
+    grain (a disc) drifts across the field of view with the height, and its
+    energy centre varies along ``x`` and with the height, so the stacked maps
+    show a tilted grain and a strain gradient. The planted values are in
+    ``truth`` (``grain_center`` per layer, ``energy_center`` maps).
+    """
+    root = Path(root)
+    height, width = frame_shape
+    yy, xx = np.mgrid[0:height, 0:width]
+    z_array = np.asarray(z_values, dtype=float)
+    e_array = np.asarray(energies, dtype=float)
+    n_z = len(z_array)
+    e_span = float(e_array.max() - e_array.min()) or 0.04
+    layers: list[SyntheticEsrfScan] = []
+    mosa_scans: list[int] = []
+    energy_scans: list[tuple[int, int]] = []
+    grain_centres = np.zeros((n_z, 2))
+    energy_centres = np.zeros((n_z, height, width))
+    scan = first_scan
+    for k, z in enumerate(z_array):
+        frac = k / max(n_z - 1, 1)
+        cy, cx = height * (0.35 + 0.3 * frac), width * (0.3 + 0.4 * frac)
+        radius = 0.22 * min(height, width)
+        grain = 0.15 + np.exp(-0.5 * ((yy - cy) ** 2 + (xx - cx) ** 2) / radius**2)
+        grain_centres[k] = (cy, cx)
+        fixed = {"samz": float(z)}
+        made = make_esrf_scan(
+            root,
+            dataset=dataset,
+            scan=scan,
+            motors=mosa,
+            frame_shape=frame_shape,
+            n_files=n_files,
+            amplitude=4000.0 * grain,
+            positioners=fixed,
+            seed=seed + scan,
+            **kwargs,
+        )
+        layers.append(made)
+        mosa_scans.append(scan)
+        scan += 1
+        centre = e_array.mean() + e_span * (
+            0.25 * (xx / max(width - 1, 1) - 0.5) + 0.2 * (frac - 0.5)
+        )
+        energy_centres[k] = centre
+        first = scan
+        for energy in e_array:
+            weight = np.exp(-0.5 * ((energy - centre) / (0.3 * e_span)) ** 2)
+            make_esrf_scan(
+                root,
+                dataset=dataset,
+                scan=scan,
+                motors=(energy_motor,),
+                frame_shape=frame_shape,
+                n_files=n_files,
+                energy_keV=float(energy),
+                amplitude=4000.0 * grain * weight,
+                positioners=fixed,
+                seed=seed + scan,
+                **kwargs,
+            )
+            scan += 1
+        energy_scans.append((first, scan - 1))
+    return SyntheticZStack(
+        root=root,
+        dataset=dataset,
+        z_values=z_array,
+        mosa_scans=mosa_scans,
+        energy_scans=energy_scans,
+        energies=e_array,
+        layers=layers,
+        truth={"grain_center": grain_centres, "energy_center": energy_centres},
+    )

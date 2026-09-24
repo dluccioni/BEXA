@@ -111,7 +111,36 @@ def save(
         coords_group = f.create_group("coords")
         for name, coord in dataset.coords.items():
             _write_variable(coords_group, str(name), coord, None)
+        _write_nexus(f, dataset)
     return path
+
+
+def _write_nexus(f: Any, dataset: xr.Dataset) -> None:
+    """NeXus ``NXdata`` groups linking to the arrays, so h5web and silx plot the file as it is."""
+    names = [str(n) for n in dataset.data_vars]
+    if not names:
+        return
+    f.attrs["NX_class"] = "NXroot"
+    f.attrs["default"] = "nexus"
+    entry = f.create_group("nexus")
+    entry.attrs["NX_class"] = "NXentry"
+    entry.attrs["default"] = names[0]
+    for name in names:
+        group = entry.create_group(name)
+        group.attrs["NX_class"] = "NXdata"
+        group.attrs["signal"] = name
+        group[name] = f[name]  # a hard link: no second copy of the data
+        axes = []
+        for dim in dataset[name].dims:
+            dim = str(dim)
+            usable = dim in f["coords"] and dim in dataset.coords and dataset.coords[dim].ndim == 1
+            if usable and dim != name:
+                if dim not in group:
+                    group[dim] = f["coords"][dim]
+                axes.append(dim)
+            else:
+                axes.append(".")
+        group.attrs["axes"] = axes
 
 
 def _write_variable(group: Any, name: str, var: xr.DataArray, compression: str | None) -> None:
@@ -189,7 +218,8 @@ def _load_bexa_h5(path: Path) -> xr.Dataset:
     with h5py.File(path, "r") as f:
         attrs = _read_attrs(f)
         names = json.loads(attrs.pop("data_vars", "[]"))
-        attrs.pop(FORMAT_MARKER, None)
+        for key in (FORMAT_MARKER, "NX_class", "default"):
+            attrs.pop(key, None)
         data_vars = {name: _read_variable(f[name]) for name in names}
         coords = (
             {name: _read_variable(f["coords"][name]) for name in f["coords"]}

@@ -20,6 +20,8 @@ from bexa.core.units import FWHM_PER_SIGMA
 
 __all__ = [
     "FitResult",
+    "edge",
+    "fit_edge",
     "fit_multi_gaussian",
     "fit_report",
     "fit_rocking_curves",
@@ -250,3 +252,52 @@ def fit_rocking_curves(
         np.asarray(to_host(row), dtype=float) for row in np.atleast_2d(np.asarray(to_host(curves)))
     ]
     return thread_map(lambda row: fit_multi_gaussian(x, row, **kwargs), rows, workers=workers)
+
+
+def edge(x: Any, amplitude: float, center: float, sigma: float, offset: float) -> Any:
+    """A step of height ``amplitude`` at ``center``, blurred by a Gaussian of width ``sigma``."""
+    from scipy.special import erf
+
+    z = (np.asarray(x, dtype=float) - center) / (np.sqrt(2.0) * sigma)
+    return offset + 0.5 * amplitude * (1.0 + erf(z))
+
+
+def fit_edge(x: Any, y: Any, center: float | None = None) -> FitResult:
+    """Fit a blurred step (an error function) to a curve: knife-edge and sample-height scans.
+
+    The centre is where the signal crosses half way, ``sigmas`` holds the
+    Gaussian width of the blur and ``fwhm`` its full width at half maximum, so
+    a beam size read from an edge scan comes out in the units of a peak width.
+    A falling edge gives a negative amplitude.
+    """
+    from scipy.optimize import curve_fit
+
+    x = np.asarray(to_host(x), dtype=float)
+    y = np.asarray(to_host(y), dtype=float)
+    span = float(x.max() - x.min()) or 1.0
+    third = max(len(y) // 3, 1)
+    rising = y[-third:].mean() >= y[:third].mean()
+    amplitude0 = float(y.max() - y.min()) * (1.0 if rising else -1.0)
+    offset0 = float(y.min() if rising else y.max())
+    if center is None:
+        half = offset0 + amplitude0 / 2.0
+        crossings = np.flatnonzero(np.diff(np.sign(y - half)))
+        center = float(x[crossings[0]]) if crossings.size else float(x.mean())
+    p0 = [amplitude0, float(center), 0.1 * span, offset0]
+    bounds = ([-np.inf, x.min(), 1e-3 * span, -np.inf], [np.inf, x.max(), span, np.inf])
+    params, _ = curve_fit(edge, x, y, p0=p0, bounds=bounds)
+    best = edge(x, *params)
+    r2, red_chi2 = _r2_and_chi2(y, best, len(params))
+    amplitude, centre, sigma, offset = (float(v) for v in params)
+    return FitResult(
+        centers=np.array([centre]),
+        sigmas=np.array([sigma]),
+        amplitudes=np.array([amplitude]),
+        fwhm=np.array([FWHM_PER_SIGMA * sigma]),
+        r2=r2,
+        reduced_chi2=red_chi2,
+        best_fit=best,
+        background={"c": offset},
+        success=True,
+        result=None,
+    )
