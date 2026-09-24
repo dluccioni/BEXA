@@ -3,6 +3,7 @@
 name: esrf_bliss_base
 engine: hdf5_stack
 description: ESRF BLISS master file with per-scan detector files (ID03 dark-field microscopy).
+abstract: true   # only a base for the dated specs below; sniffing never picks it
 
 fingerprint:
   master_glob: "*.h5"

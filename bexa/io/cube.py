@@ -246,7 +246,7 @@ def load_legacy_cube(path: str | Path, axis: str | None = None) -> xr.Dataset:
 
 
 def load_lcls_cube(path: str | Path, run: int | None = None) -> xr.Dataset:
-    """Read an LCLS XCS cube triple: per-shot ``frames(laser, shot, y, x)``, ``scanvar`` and ``i0``."""
+    """Read an LCLS XCS cube triple as ``frames(laser, shot, y, x)`` with ``scanvar`` and ``i0``."""
     path = Path(path)
     folder = path if path.is_dir() else path.parent
     if run is None:

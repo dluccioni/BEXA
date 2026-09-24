@@ -11,6 +11,7 @@ from __future__ import annotations
 import shutil
 import threading
 from collections import OrderedDict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -67,7 +68,7 @@ class Cache:
 
     # ------------------------------------------------------------------ keys
     @staticmethod
-    def key(files: list[str | Path], params: Any) -> str:
+    def key(files: Sequence[str | Path], params: Any) -> str:
         """Fingerprint of ``files`` and ``params`` (:func:`bexa.core.provenance.fingerprint`)."""
         return fingerprint(files, params)
 

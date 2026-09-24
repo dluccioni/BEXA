@@ -40,6 +40,7 @@ class FormatSpec(BaseModel):
     engine: str
     extends: str | None = None
     description: str = ""
+    abstract: bool = False  # a base for ``extends`` only; never matched by sniffing
     fingerprint: dict[str, Any] = Field(default_factory=dict)
     layout: dict[str, Any] = Field(default_factory=dict)
     motors: dict[str, Any] = Field(default_factory=dict)
@@ -184,7 +185,8 @@ def load_spec(
     parent_name = raw.get("extends")
     if parent_name:
         parent = load_spec(parent_name, _chain=chain)
-        merged = deep_merge(parent.model_dump(exclude={"source_path", "name", "extends"}), raw)
+        inherited = parent.model_dump(exclude={"source_path", "name", "extends", "abstract"})
+        merged = deep_merge(inherited, raw)
     else:
         merged = raw
     if overrides:
@@ -306,13 +308,20 @@ def _fingerprint_checks(spec: FormatSpec, path: Path) -> list[bool]:
     return results
 
 
+def _specificity(fingerprint: dict[str, Any]) -> int:
+    """Number of individual fingerprint items (every list entry counts one)."""
+    return sum(len(v) if isinstance(v, list) else 1 for v in fingerprint.values())
+
+
 def match_spec(
     path: str | Path, specs: Iterable[FormatSpec] | None = None
 ) -> list[tuple[float, FormatSpec]]:
     """Score every spec against ``path``; best first.
 
     Returns ``(score, spec)`` pairs where ``score`` is the fraction of fingerprint
-    checks that passed. Specs without a fingerprint are never matched.
+    checks that passed. Specs without a fingerprint and abstract specs (bases for
+    ``extends``) are never matched. Ties go to the more detailed fingerprint, then
+    to the newest name (dated specs sort by year).
     """
     path = Path(path)
     if specs is None:
@@ -322,15 +331,16 @@ def match_spec(
                 specs.append(load_spec(name))
             except Exception as exc:  # one broken spec must not disable sniffing
                 log.warning("skipping format spec %s: %s", name, exc)
-    scored: list[tuple[float, FormatSpec]] = []
+    scored: list[tuple[float, int, FormatSpec]] = []
     for spec in specs:
+        if spec.abstract:
+            continue
         checks = _fingerprint_checks(spec, path)
         if not checks:
             continue
-        score = sum(checks) / len(checks)
-        scored.append((score, spec))
-    scored.sort(key=lambda item: (item[0], len(item[1].fingerprint)), reverse=True)
-    return scored
+        scored.append((sum(checks) / len(checks), _specificity(spec.fingerprint), spec))
+    scored.sort(key=lambda item: (item[0], item[1], item[2].name), reverse=True)
+    return [(score, spec) for score, _, spec in scored]
 
 
 def best_spec(path: str | Path) -> FormatSpec | None:

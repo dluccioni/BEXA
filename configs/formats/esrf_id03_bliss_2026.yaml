@@ -4,6 +4,12 @@ name: esrf_id03_bliss_2026
 extends: esrf_bliss_base
 description: ESRF ID03 BLISS layout as recorded in January 2026 (hc6293).
 
+fingerprint:   # fscan_parameters distinguishes this layout from 2024
+  master_paths:
+    - "{scan}.1/measurement"
+    - "{scan}.1/instrument/positioners"
+    - "{scan}.1/instrument/fscan_parameters"
+
 motors:
   known: [mu, chi, phi, samz, ffz, ffx, nfx, nfy, nfz, ux, uy, uz, ccmth]
   default_axes: [chi, mu]
