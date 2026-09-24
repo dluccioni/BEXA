@@ -1,4 +1,4 @@
-"""Frame preprocessing: clipping, I0 normalisation, cropping, background boxes.
+"""Frame preprocessing: darks, hot pixels, clipping, normalisation, cropping, binning.
 
 Every function takes a frame stack ``(n, y, x)`` (numpy or cupy) and returns
 the same kind of array. Nothing here reads files or touches the structure.
@@ -6,16 +6,64 @@ the same kind of array. Nothing here reads files or touches the structure.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
 
-from bexa.core.backend import array_module
+from bexa.core.backend import array_module, ndimage_module
 from bexa.core.roi import ROI
 
-__all__ = ["box_mean", "clip_nonpositive", "crop", "normalize_box", "normalize_i0"]
+__all__ = [
+    "bin_spatial",
+    "box_mean",
+    "clip_nonpositive",
+    "crop",
+    "log_scale",
+    "normalize_box",
+    "normalize_i0",
+    "remove_hot_pixels",
+    "subtract_dark",
+    "threshold_floor",
+]
 
 BoxLike = ROI | tuple[tuple[int, int], tuple[int, int]] | dict[str, Any]
+
+
+def subtract_dark(frames: Any, dark: Any, mode: str = "mean") -> Any:
+    """Subtract a dark frame; a dark *stack* is first reduced by ``mode`` (mean or median)."""
+    xp = array_module(frames)
+    dark = xp.asarray(dark)
+    if dark.ndim == frames.ndim:
+        dark = dark.mean(axis=0) if mode == "mean" else xp.median(dark, axis=0)
+    return frames - dark
+
+
+def remove_hot_pixels(frames: Any, size: int | Sequence[int] = (1, 3, 3)) -> Any:
+    """Median filter over the stack (``size`` per axis; the default keeps frames separate)."""
+    ndi = ndimage_module(frames)
+    return ndi.median_filter(frames, size=size)
+
+
+def threshold_floor(frames: Any, percentile: float = 1.0) -> Any:
+    """Raise every value below the ``percentile``-th percentile of the stack to that level."""
+    xp = array_module(frames)
+    floor = xp.percentile(frames, percentile)
+    return xp.maximum(frames, floor)
+
+
+def log_scale(frames: Any) -> Any:
+    """``log10(1 + I)`` with negative values clipped to zero (the v9 preview scaling)."""
+    xp = array_module(frames)
+    return xp.log10(1.0 + xp.clip(frames, 0, None))
+
+
+def bin_spatial(frames: Any, factors: int | Sequence[int], method: str = "mean") -> Any:
+    """Block-reduce the last two axes by integer factors (``bexa.core.reductions.block_reduce``)."""
+    from bexa.core.reductions import block_reduce
+
+    dy, dx = (factors, factors) if isinstance(factors, int) else (int(factors[0]), int(factors[1]))
+    return block_reduce(frames, dy, dx, method)
 
 
 def clip_nonpositive(frames: Any, eps: float = 1e-4, copy: bool = True) -> Any:

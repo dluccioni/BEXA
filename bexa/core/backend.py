@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import functools
 import os
+import types
 from typing import Any, Literal
 
 import numpy as np
@@ -80,7 +81,12 @@ def array_module(target: str | Any = "cpu") -> Any:
 
 
 def ndimage_module(xp: Any) -> Any:
-    """``scipy.ndimage`` for numpy, ``cupyx.scipy.ndimage`` for cupy."""
+    """``scipy.ndimage`` for numpy, ``cupyx.scipy.ndimage`` for cupy.
+
+    ``xp`` may be the array module or an array.
+    """
+    if not isinstance(xp, types.ModuleType):
+        xp = array_module(xp)
     if xp is np:
         import scipy.ndimage
 
