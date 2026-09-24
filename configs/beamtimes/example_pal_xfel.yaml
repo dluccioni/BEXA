@@ -1,0 +1,25 @@
+# Example beamtime profile: PAL-XFEL pump-probe run with point files (layout of September 2025).
+#
+# Copy this file to configs/beamtimes/<beamtime>.yaml and fill in the roots; then
+#   bexa cube build -p <beamtime> --run 42 --workers 16       one run to a laser on/off cube
+#   bexa auto -p <beamtime> --watch --interval 60             every new run, during the beamtime
+
+name: example_pal_xfel
+format: pal_xfel_points_2025_09
+
+raw_root: /path/to/ue_250913_FXS/raw           # holds type=measurement/ and type=raw/
+processed_root: /path/to/ue_250913_FXS/reduced # cubes go to data/runNN.h5, figures to outputs/
+
+detector: jungfrau2
+geometry:
+  energy_keV: 9.7                              # photon energy of the run series
+
+rois:                                          # named detector windows, [start, stop]
+  peak: {y: [400, 550], x: [200, 375]}
+background_box: {y: [0, 50], x: [0, 50]}       # corner used for the per-frame background
+
+auto_process:                                  # the beamtime watcher (bexa auto)
+  roi_table: ROI_dict.csv                      # per-run ROI and axis overrides (legacy columns)
+  skip_list: Skip_dict.csv                     # runs that failed twice are added here
+  outputs: outputs                             # figure sets and GIFs, under processed_root
+  interval_s: 60

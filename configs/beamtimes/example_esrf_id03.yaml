@@ -1,0 +1,39 @@
+# Example beamtime profile: ESRF ID03 dark-field microscopy, BLISS layout of 2026.
+#
+# Copy this file to configs/beamtimes/<proposal>.yaml, fill in the paths and the
+# samples, and open scans by name:
+#   bexa.open(profile="<proposal>", sample="WS2G_100", scan=7)      Python
+#   bexa scan report -p <proposal> -s WS2G_100 --scan 7 -o out/       command line
+# A profile holds what is specific to one beamtime. The file layout itself is the
+# format spec named under `format` (see configs/formats/).
+
+name: example_esrf_id03
+format: esrf_id03_bliss_2026
+
+root: /data/visitor/hc6293/id03/20260119/RAW_DATA               # the dataset folders
+processed_root: /data/visitor/hc6293/id03/20260119/PROCESSED_DATA/bexa   # results and the cache
+path_aliases:                    # the same profile on the lab PC once the data is copied
+  /data/visitor/hc6293/id03/20260119: X:/Beamtimes/hc6293
+
+samples:
+  WS2G_100:
+    dataset: WS2G_100/WS2G_100_DFXM      # <sample>/<dataset> under root
+    cif: cifs/WS2.cif                    # optional, relative to root: enables hkl coordinates
+    hkl_center: [0, 0, 6]                # the reflection the scans are centred on
+    notes: mosaicity scans chi x mu; energy series through ccmth; z-stack on samz
+  D2: {dataset: D2_dfxm/D2_dfxm_mosa_test}
+
+detector: pco_ff                         # pco_ff (far field) or pco_nf (near field)
+geometry:
+  effective_pixel_nm: 235                # sample-plane pixel size after the objective (scalebars)
+  distance_mm: null                      # sample to detector, for pixel-to-angle conversions
+
+defaults:
+  downsample: [1, 1, 4, 4]               # preview factors per dim (chi, mu, y, x)
+  device: auto                           # cpu, cuda or auto
+
+rois:                                    # named pixel windows, full resolution, [start, stop]
+  grain: {y: [700, 1500], x: [800, 1800]}
+
+# darks:                                 # where dark frames were recorded, per detector
+#   pco_ff: {dataset: WS2G_100/WS2G_100_darks, scan: 1}
