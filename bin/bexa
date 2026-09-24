@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Run bexa from any directory on Linux or macOS: puts the repo root on
+# PYTHONPATH and starts the command-line interface.
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="${root}${PYTHONPATH:+:${PYTHONPATH}}"
+python_bin="$(command -v python3 || command -v python)"
+exec "${python_bin}" -m bexa "$@"

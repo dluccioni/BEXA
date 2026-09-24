@@ -1,0 +1,18 @@
+# ESRF ID03, 2024 (WTe2): rocking scans on mu with obpitch (theta-2theta) as a
+# second axis across scans, no fscan_parameters group, separate dark datasets.
+name: esrf_id03_bliss_2024
+extends: esrf_bliss_base
+description: ESRF ID03 BLISS layout as recorded in 2024 (WTe2); grid detected from motor values.
+
+fingerprint:
+  master_glob: "*.h5"
+  master_paths: ["{scan}.1/instrument/positioners"]
+  scan_dir_glob: "scan[0-9][0-9][0-9][0-9]"
+
+motors:
+  structure: null            # no fscan_parameters: detect the grid from readbacks
+  known: [mu, phi, samz, obpitch, ccmth]
+  default_axes: [mu]
+
+options:
+  darks_dataset_glob: "*darks*"

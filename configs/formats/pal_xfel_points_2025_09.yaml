@@ -1,0 +1,45 @@
+# PAL-XFEL, September 2025 (ue_250913_FXS): one file per motor point in
+# type=measurement (per-shot table) and type=raw (Jungfrau frames).
+name: pal_xfel_points_2025_09
+engine: hdf5_points
+description: PAL-XFEL point files (measurement table + raw frames per motor point), September 2025.
+
+fingerprint:
+  dir_globs: ["type=measurement", "type=raw"]
+
+layout:
+  points: "{raw_root}/type=measurement/run={run:03d}/scan={scan:03d}"
+  frames: "{raw_root}/type=raw/run={run:03d}/scan={scan:03d}"
+  point_glob: "p*.h5"
+  table_key: measurements
+  frames_path: "/detector/eh1/jungfrau2/image/block0_values"
+  metadata_key: metadata
+
+keys:                                   # first alias present in the file wins
+  laser_flag: [event_info.THIRTY_HERTZ, event_info.FIFTEEN_HERTZ]
+  i0: ["qbpm:eh1:qbpm1:sum", "qbpm:oh:qbpm2:sum"]
+  i0_upstream: ["qbpm:oh:qbpm2:sum"]
+  roi_stat: ["detector:eh1:jungfrau2:ROI1_stat.sum", "detector:eh1:jungfrau1:ROI1_stat.sum"]
+  delay: [delay_input]
+  th: [th_value, th_input]
+  phi: [phi_input, "gonio:eh1:FourC:phi"]
+  chi: [chi_value, "gonio:eh1:FourC:chi"]
+  tth: [tth_value, "gonio:eh1:FourC:thh"]
+  laser_v: [laser_v_value, laser_v_input]
+  laser_h: [laser_h_value, laser_h_input]
+  beam_x: ["qbpm:eh1:qbpm1:pos_X"]
+  beam_y: ["qbpm:eh1:qbpm1:pos_Y"]
+  raw_laser_flag: [timestamp_info.THIRTY_HERTZ]
+  raw_delay: [delay_stage_eh1_delay_stage_delay_time]
+
+axis_priority: [delay, phi, chi, th, tth, laser_v, laser_h, index]
+
+detectors:
+  jungfrau2: {frames_path: "/detector/eh1/jungfrau2/image/block0_values", pixel_size_um: 75.0}
+  jungfrau1: {frames_path: "/detector/eh1/jungfrau1/image/block0_values", pixel_size_um: 75.0}
+
+options:
+  clip_nonpositive: 1.0e-4       # legacy cube builder: raw[raw <= 0] = 1e-4
+  background_box: {y: [10, 30], x: [10, 30]}
+
+convention: pal_fourc

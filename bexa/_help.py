@@ -38,7 +38,7 @@ def _first_line(obj: object) -> str:
     return doc.splitlines()[0] if doc else ""
 
 
-def help(section: str | None = None, verbose: bool = False) -> str:  # noqa: A001
+def help(section: str | None = None, verbose: bool = False) -> str:
     """Return (and print) a compact listing of the public API.
 
     Parameters

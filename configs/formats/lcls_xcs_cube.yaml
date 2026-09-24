@@ -1,0 +1,19 @@
+# LCLS XCS reduced cubes: per-shot laser-on and laser-off image stacks with a
+# stats table (scan variable and I0 per shot).
+name: lcls_xcs_cube
+engine: array_cube
+description: LCLS XCS reduced cube triple (RunNNNN_onStk.npy, _offStk.npy, _stats.csv).
+
+fingerprint:
+  file_globs: ["Run*_onStk.npy", "Run*_stats.csv"]
+
+layout:
+  "on": "Run{run:04d}_onStk.npy"      # quoted: bare on/off are booleans in YAML
+  "off": "Run{run:04d}_offStk.npy"
+  stats: "Run{run:04d}_stats.csv"
+  stats_columns: {scanvar: 1, i0_on: 2, i0_off: 3}
+  stats_skiprows: 1
+
+axis_priority: [scanvar]
+
+convention: lcls_xcs

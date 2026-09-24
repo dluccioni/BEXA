@@ -1,0 +1,16 @@
+# European XFEL runs read through the extra_data package (available on their
+# systems): a scan over a motor alias with an area detector alias.
+name: euxfel_extra_data
+engine: extra_data
+description: European XFEL MID runs via extra_data (proposal/run), rocking scans binned per step.
+
+layout:
+  proposal: null                 # set in the beamtime profile
+  detector_alias: zyla2
+  detector_key: "MID_EXP_IMG/CAM/ZYLA_2:daqOutput"
+  image_key: data.image.pixels
+  scan_alias: ssry
+  scan_resolution: 8.0e-4
+  dark_run: null
+
+convention: euxfel_mid

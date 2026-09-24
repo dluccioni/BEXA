@@ -1,0 +1,19 @@
+# Reduced cubes written by the legacy PAL-XFEL scripts (runN.h5 and
+# runA-BCombined.h5): one mean frame per motor point for laser on and off.
+name: bexa_cube_legacy
+engine: array_cube
+description: Legacy runN.h5 cubes from Aaron_allscan_cube_parallel.py and Scan_Combiner.py.
+
+fingerprint:
+  h5_paths: [jungfrau_on, jungfrau_off]
+
+layout:
+  frames_on: jungfrau_on
+  frames_off: jungfrau_off
+  i0_on: signals_on
+  i0_off: signals_off
+  axes: [delays, phi, chi, th, tth, laser_v, laser_h, index]
+
+axis_priority: [delays, phi, chi, th, tth, laser_v, laser_h, index]
+
+convention: pal_fourc

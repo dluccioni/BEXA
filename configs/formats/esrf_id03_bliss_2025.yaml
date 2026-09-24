@@ -1,0 +1,13 @@
+# ESRF ID03, July 2025 (hc6043): strain/mosaicity fscan2d scans, topography z-layers
+# on samz, near-field scans on nfx/nfy/nfz.
+name: esrf_id03_bliss_2025
+extends: esrf_bliss_base
+description: ESRF ID03 BLISS layout as recorded in July 2025 (hc6043).
+
+motors:
+  known: [mu, chi, phi, samz, ffz, ffx, nfx, nfy, nfz, ccmth]
+  default_axes: [chi, mu]
+
+detectors:
+  pco_ff: {pixel_size_um: 6.5, shape: [2160, 2560], effective_pixel_nm: 235}
+  pco_nf: {pixel_size_um: 6.5, shape: [2160, 2560], effective_pixel_nm: 47}

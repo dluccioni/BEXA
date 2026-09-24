@@ -1,0 +1,15 @@
+# ESRF ID03, January 2026 (hc6293): fscan2d chi x mu mosaicity scans, energy series
+# through ccmth, sample-position maps on ux/uy/uz, near- and far-field PCO cameras.
+name: esrf_id03_bliss_2026
+extends: esrf_bliss_base
+description: ESRF ID03 BLISS layout as recorded in January 2026 (hc6293).
+
+motors:
+  known: [mu, chi, phi, samz, ffz, ffx, nfx, nfy, nfz, ux, uy, uz, ccmth]
+  default_axes: [chi, mu]
+
+detectors:
+  pco_ff: {pixel_size_um: 6.5, shape: [2160, 2560], effective_pixel_nm: 235}
+  pco_nf: {pixel_size_um: 6.5, shape: [2160, 2560], effective_pixel_nm: 235}
+  mpx: {pixel_size_um: 55.0}
+  eiger: {pixel_size_um: 75.0}

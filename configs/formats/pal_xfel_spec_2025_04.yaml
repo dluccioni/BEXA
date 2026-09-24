@@ -1,0 +1,27 @@
+# PAL-XFEL, April 2025 (ue_250419_DFXM): one HDF5 per scan with a spec-like scan
+# command in the attributes, motor arrays and summed detector images.
+name: pal_xfel_spec_2025_04
+engine: spec_h5
+description: PAL-XFEL single-file scans with spec-like scanHistory attributes, April 2025.
+
+fingerprint:
+  h5_attrs:
+    "run/scan{scan:04d}": [scanMode, scanHistory]
+
+layout:
+  scan_file: "{raw_root}/type=measurement/run={run:03d}/scan={scan:03d}/p{shot:04d}.h5"
+  scan_group: "run/scan{scan:04d}"
+  motor_group: "run/scan{scan:04d}/motor"
+  det_group: "run/scan{scan:04d}/det"
+  i0_dataset: ohqbpm2_totalsum
+
+keys:
+  laser_flag: [event_info.FIFTEEN_HERTZ]
+  scan_mode: [scanMode]
+  scan_command: [scanHistory]
+
+options:
+  one_motor_commands: [a1scan, sscan]
+  two_motor_commands: [a2scan]
+
+convention: pal_fourc
