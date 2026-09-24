@@ -119,6 +119,11 @@ def combine_runs(
         ds.drop_vars([v for v in ds.variables if str(v) not in common_vars | common_coords])
         for ds in datasets
     ]
+    shapes = {tuple(ds["frames"].shape[-2:]) for ds in trimmed if "frames" in ds}
+    if len(shapes) > 1:
+        raise ValueError(
+            f"the runs have different frame shapes {sorted(shapes)}; build them with the same ROI"
+        )
     merged = xr.concat(trimmed, dim=dim, combine_attrs="drop", coords="minimal")
     values = np.asarray(merged[dim].values, dtype=float)
     rounded = np.round(values, decimals)

@@ -12,6 +12,10 @@ is drawn when the effective pixel size is known.
 - :mod:`bexa.viz.interactive`: sliders and ROI pickers for notebooks and scripts.
 - :mod:`bexa.viz.animation`: GIF and MP4 from any stack.
 - :mod:`bexa.viz.style`: screen and paper themes.
+- :mod:`bexa.viz.napari_app`: optional napari launchers (imported on demand).
+
+``projections_panel``, ``isosurface`` and ``rlp_scatter`` accept ``backend="plotly"``
+for interactive figures.
 """
 
 from bexa.viz import animation, curves, images, interactive, maps, style, volume

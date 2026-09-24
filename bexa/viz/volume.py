@@ -36,14 +36,14 @@ def projections_panel(
     log: bool = False,
     cmap: str | None = None,
     figsize: tuple[float, float] | None = None,
-) -> tuple[Any, np.ndarray]:
+    backend: str = "mpl",
+) -> Any:
     """Panel of every projection of a volume: ``xy``, motor-vs-pixel and motor-vs-motor maps.
 
     Accepts a volume ``(motors..., y, x)`` or the result dict of the
-    :class:`bexa.core.reductions.Projections` accumulator.
+    :class:`bexa.core.reductions.Projections` accumulator. Returns
+    ``(fig, axes)``; with ``backend="plotly"`` an interactive plotly figure.
     """
-    import matplotlib.pyplot as plt
-
     projections = (
         _projections_from_volume(data, method) if isinstance(data, xr.DataArray) else dict(data)
     )
@@ -53,6 +53,10 @@ def projections_panel(
     n = len(projections)
     cols = min(3, n) or 1
     rows = int(np.ceil(n / cols))
+    if backend == "plotly":
+        return _projections_plotly(projections, rows, cols, log, cmap)
+    import matplotlib.pyplot as plt
+
     fig, axes = plt.subplots(rows, cols, figsize=figsize or (4.2 * cols, 3.6 * rows), squeeze=False)
     for ax, (name, arr) in zip(axes.ravel(), projections.items(), strict=False):
         values = as_array(arr)
@@ -80,6 +84,43 @@ def projections_panel(
     return fig, axes
 
 
+def _projections_plotly(
+    projections: Mapping[str, xr.DataArray], rows: int, cols: int, log: bool, cmap: str | None
+) -> Any:
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    fig = make_subplots(rows=rows, cols=cols, subplot_titles=list(projections))
+    for i, (name, arr) in enumerate(projections.items()):
+        values = as_array(arr)
+        if log:
+            values = np.log10(1.0 + np.clip(values, 0, None))
+        vmin, vmax = resolve_clim(values, ("p", 1, 99))
+        d0, d1 = arr.dims
+        x = np.asarray(arr.coords[d1].values) if d1 in arr.coords else None
+        y = np.asarray(arr.coords[d0].values) if d0 in arr.coords else None
+        fig.add_trace(
+            go.Heatmap(
+                z=values,
+                x=x,
+                y=y,
+                zmin=vmin,
+                zmax=vmax,
+                colorscale=cmap or "Viridis",
+                name=name,
+                showscale=i == 0,
+            ),
+            row=i // cols + 1,
+            col=i % cols + 1,
+        )
+        fig.update_xaxes(title_text=dim_label(arr, d1), row=i // cols + 1, col=i % cols + 1)
+        fig.update_yaxes(
+            title_text=dim_label(arr, d0), autorange="reversed", row=i // cols + 1, col=i % cols + 1
+        )
+    fig.update_layout(height=320 * rows, width=380 * cols)
+    return fig
+
+
 def slices_grid(
     volume: xr.DataArray, axis: str | int = 0, n: int = 9, per_row: int = 3, **kwargs: Any
 ) -> tuple[Any, np.ndarray]:
@@ -98,18 +139,13 @@ def isosurface(
     color: str = "cyan",
     alpha: float = 0.6,
     figsize: tuple[float, float] = (8, 8),
-) -> tuple[Any, Any]:
-    """3-D isosurface of a volume (needs scikit-image).
+    backend: str = "mpl",
+) -> Any:
+    """3-D isosurface of a volume (needs scikit-image; plotly with ``backend="plotly"``).
 
     ``threshold`` defaults to the 90th percentile of the finite values.
+    Returns ``(fig, ax)`` for matplotlib or the plotly figure.
     """
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-
-    try:
-        from skimage.measure import marching_cubes
-    except ImportError as exc:
-        raise ImportError("isosurface needs scikit-image: pip install scikit-image") from exc
     data = as_array(volume)
     if data.ndim != 3:
         data = data.reshape(-1, *data.shape[-2:])
@@ -118,6 +154,24 @@ def isosurface(
     finite = data[np.isfinite(data)]
     if threshold is None:
         threshold = float(np.percentile(finite, 90))
+    if backend == "plotly":
+        import plotly.graph_objects as go
+
+        z, y, x = np.mgrid[0 : data.shape[0], 0 : data.shape[1], 0 : data.shape[2]]
+        return go.Figure(
+            go.Isosurface(
+                x=x.ravel(), y=y.ravel(), z=z.ravel(), value=np.nan_to_num(data).ravel(),
+                isomin=threshold, isomax=float(finite.max()), surface_count=2,
+                opacity=alpha, caps={"x_show": False, "y_show": False, "z_show": False},
+            )
+        )  # fmt: skip
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
+    try:
+        from skimage.measure import marching_cubes
+    except ImportError as exc:
+        raise ImportError("isosurface needs scikit-image: pip install scikit-image") from exc
     verts, faces, _, _ = marching_cubes(np.nan_to_num(data), level=threshold)
     if ax is None:
         fig = plt.figure(figsize=figsize)
