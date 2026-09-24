@@ -1,0 +1,28 @@
+# LCLS smalldata HDF5 (smalldata_tools): one file per run, one row per event.
+# Per-event images are stored only for detectors the producer configured.
+name: lcls_smalldata
+engine: smalldata
+description: LCLS smalldata run file (per-event scalars, optional per-event images, run sums).
+
+fingerprint:
+  h5_paths: [lightStatus, event_time]
+
+keys:
+  laser_flag: [lightStatus/laser]
+  xray_flag: [lightStatus/xray]
+  i0: [ipm4/sum, ipm2/sum, ipm5/sum]
+  scanvar: [scan/var0, scan/lxt, scan/delay, scan/lxt_ttc]
+  delay: [scan/lxt, scan/lxt_ttc, scan/delay]
+  photon_energy: [ebeam/photon_energy, epics/photon_energy]
+  event_time: [event_time]
+  fiducials: [fiducials]
+
+axis_priority: [delay, scanvar]
+
+detectors:
+  jungfrau1M: {frames_path: jungfrau1M/ROI_0_area, pixel_size_um: 75.0}
+  jungfrau4M: {frames_path: jungfrau4M/ROI_0_area, pixel_size_um: 75.0}
+  epix10k2M: {frames_path: epix10k2M/ROI_0_area, pixel_size_um: 100.0}
+  zyla: {frames_path: zyla/ROI_0_area, pixel_size_um: 6.5}
+
+convention: lcls_xcs

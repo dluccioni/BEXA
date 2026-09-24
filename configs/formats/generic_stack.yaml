@@ -1,0 +1,8 @@
+# Plain frame stacks with no beamline layout: .npy, .npz, tiff stacks or a single
+# HDF5 dataset addressed as file.h5::/path. Never sniffed; used through
+# bexa.open(path, format="generic_stack") or the "file.h5::/path" shortcut.
+name: generic_stack
+engine: generic
+description: Frame stack from a plain array file, tiff stack or one HDF5 dataset.
+
+axis_priority: [axis, axis0, axis1]

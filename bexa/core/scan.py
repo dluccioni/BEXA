@@ -330,8 +330,9 @@ def open(
     energy_keV
         Override the energy derived from the monochromator.
     """
-    path = Path(path)
-    spec = _resolve_spec(path, format, overrides)
+    if format is None and "::" in str(path):  # file.h5::/dataset shortcut
+        format = "generic_stack"
+    spec = _resolve_spec(Path(str(path).split("::")[0]), format, overrides)
     if energy_keV is not None:
         kwargs["energy_keV"] = energy_keV
     source = open_source(spec, path, scan=scan, detector=detector, **kwargs)
