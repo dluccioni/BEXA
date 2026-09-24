@@ -9,6 +9,16 @@
 - :mod:`bexa.io.darfix`: interoperability with the darfix package (extra).
 """
 
+from bexa._log import get_logger
+
+try:  # registers the Bitshuffle, LZ4 and Blosc filters of ESRF and XFEL detector files with HDF5
+    import hdf5plugin  # noqa: F401
+except ImportError:  # pragma: no cover - listed in requirements.txt
+    get_logger(__name__).warning(
+        "hdf5plugin is not installed: compressed detector frames cannot be read "
+        "(pip install hdf5plugin)"
+    )
+
 from bexa.io.base import BaseSource, FrameBatch, Source
 from bexa.io.formats import FormatSpec, list_specs, load_spec, match_spec
 

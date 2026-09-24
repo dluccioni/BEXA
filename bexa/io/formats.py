@@ -238,6 +238,8 @@ def _fingerprint_checks(spec: FormatSpec, path: Path) -> list[bool]:
     """One boolean per fingerprint item."""
     fp = spec.fingerprint
     results: list[bool] = []
+    if path.is_dir() and fnmatch.fnmatch(path.name, fp.get("scan_dir_glob", "")):
+        path = path.parent  # a scanNNNN folder is recognised through its dataset folder
     is_dir = path.is_dir()
 
     masters: list[Path] = []
