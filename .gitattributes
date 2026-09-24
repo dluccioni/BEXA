@@ -1,0 +1,8 @@
+# Normalise line endings to LF in the repository so the same files work on the
+# Windows lab PC and on Linux beamline machines.
+* text=auto eol=lf
+*.cmd text eol=crlf
+*.pdf binary
+*.png binary
+*.npy binary
+*.h5 binary

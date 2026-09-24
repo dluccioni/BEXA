@@ -1,0 +1,19 @@
+# Core dependencies of bexa. Install into your environment with
+#   pip install -r requirements.txt
+# Optional groups (GPU, GUI, fitting, ...) are in requirements-optional.txt.
+numpy>=1.24
+scipy>=1.10
+pandas>=2.0
+xarray>=2023.1
+h5py>=3.8
+hdf5plugin>=4.0
+tables>=3.8
+zarr>=2.14,<3
+matplotlib>=3.7
+matplotlib-scalebar>=0.8
+pyyaml>=6.0
+pydantic>=2.0
+typer>=0.9
+tqdm>=4.60
+psutil>=5.9
+imageio>=2.30

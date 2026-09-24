@@ -1,0 +1,52 @@
+# Tool configuration only. bexa version 1 is a plain repository: no build
+# metadata, no install step. Packaging is planned for a later release
+# (PLAN.md, section 20).
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers"
+markers = [
+    "slow: long-running tests (parity on real data, benchmarks)",
+    "gpu: needs a CUDA device and CuPy",
+    "legacy: needs the legacy Scripts folder (BEXA_LEGACY_SCRIPTS)",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:tables",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["bexa", "tests", "benchmarks", "examples"]
+extend-exclude = ["docs", "configs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "N", "SIM", "RUF"]
+ignore = [
+    "N803", "N806",  # physics names such as Q, UB, H, W are clearer capitalised
+    "N802",          # methods named after quantities (Q_to_hkl)
+    "N815",          # attributes carry their unit: energy_keV, distance_mm
+    "B008",          # typer.Option(...) defaults in signatures
+    "RUF012",        # mutable class attributes on pydantic models
+    "SIM108",        # explicit if/else reads better than nested ternaries
+    "E741",          # l as a Miller index
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["bexa"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.10"
+files = ["bexa/core", "bexa/io", "bexa/config"]
+ignore_missing_imports = true
+warn_unused_ignores = false
+check_untyped_defs = true
+no_implicit_optional = true
