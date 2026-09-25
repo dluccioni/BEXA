@@ -316,16 +316,27 @@ class Hdf5StackSource(BaseSource):
             title_path = f"{self._entry}/title"
             title = str(_decode(f[title_path][()])) if title_path in f else ""
 
+        # A motor the beamline renamed (mu -> mu_new1) keeps its logical name everywhere:
+        # in the per-frame channels, the positioners and the motors the scan declares. A
+        # physical name the spec lists under ``known`` is a motor of its own (``samz`` with
+        # its legacy alias ``z1``), so only unknown names are renamed.
         aliases = self.spec.motors.get("aliases", {}) or {}
+        known = set(self.spec.known_motors())
+        logical_name: dict[str, str] = {}
         for logical, physical in aliases.items():
             for name in [physical] if isinstance(physical, str) else physical:
+                if name not in known:
+                    logical_name[name] = logical
                 if name in per_frame and logical not in per_frame:
                     per_frame[logical] = per_frame[name]
+                if name in scalars and logical not in scalars:
+                    scalars[logical] = scalars[name]
 
         order: list[str] | None = None
         scan_type = "list"
         if declared:
             scan_type, names, _counts = declared
+            names = [logical_name.get(n, n) for n in names]
             order = [n for n in names if n in per_frame]
             if len(order) != len(names):
                 log.warning(
