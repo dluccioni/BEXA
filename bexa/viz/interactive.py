@@ -41,6 +41,14 @@ def _in_notebook() -> bool:
         return False
 
 
+def _static_backend() -> bool:
+    """True when figures are pictures (the inline backend): they cannot change once shown."""
+    import matplotlib
+
+    backend = matplotlib.get_backend().lower()
+    return "inline" in backend or backend in ("agg", "pdf", "svg", "ps", "cairo")
+
+
 def _format(value: Any) -> str:
     """``0.1234`` for numbers, the plain text otherwise (a quantity name, for example)."""
     if isinstance(value, (int, float, np.integer, np.floating)):
@@ -63,6 +71,7 @@ class _SliderPanel:
 
     def _init_sliders(self, widgets: bool | None) -> None:
         self._sliders: list[Any] = []
+        self._output: Any = None  # the output area that holds the figure with a static backend
         use_widgets = _in_notebook() if widgets is None else widgets
         if use_widgets:
             self._ipywidgets()
@@ -89,7 +98,18 @@ class _SliderPanel:
         self.index.update({k: int(v) for k, v in index.items()})
         self.redraw()
         self.title.set_text(self._title())
-        self.fig.canvas.draw_idle()
+        if self._output is not None:
+            self._show()
+        else:
+            self.fig.canvas.draw_idle()
+
+    def _show(self) -> None:
+        """Draw the figure again into its output area (static backends)."""
+        from IPython.display import display
+
+        with self._output:
+            self._output.clear_output(wait=True)
+            display(self.fig)
 
     def _ipywidgets(self) -> None:
         try:
@@ -98,16 +118,25 @@ class _SliderPanel:
         except ImportError:
             self._mpl_sliders()
             return
+        static = _static_backend()  # a picture per move is slow: redraw on release there
         sliders = {
             d: widgets.IntSlider(
-                min=0, max=self.volume.sizes[d] - 1, description=d, continuous_update=True
+                min=0, max=self.volume.sizes[d] - 1, description=d, continuous_update=not static
             )
             for d in self.motor_dims
         }
         for name, slider in sliders.items():
             slider.observe(lambda change, n=name: self.update(**{n: change["new"]}), names="value")
         self._sliders = list(sliders.values())
-        display(widgets.VBox(self._sliders))
+        if static:  # inline figures are pictures: show them in an output area and redraw there
+            import matplotlib.pyplot as plt
+
+            self._output = widgets.Output()
+            plt.close(self.fig)  # no second copy when the cell ends
+            display(widgets.VBox([*self._sliders, self._output]))
+            self._show()
+        else:
+            display(widgets.VBox(self._sliders))
 
     def _mpl_sliders(self) -> None:
         from matplotlib.widgets import Slider
