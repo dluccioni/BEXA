@@ -1,17 +1,39 @@
 #!/usr/bin/env bash
 # One-time setup of bexa on the ESRF cluster, from a JupyterLab terminal (jupyter-slurm.esrf.fr)
-# or an ssh session:
+# or an ssh session. Clone the code first, then run this script:
 #
-#     bash ~/bexa/bin/esrf_setup.sh
+#     git clone https://github.com/dluccioni/BEXA.git ~/bexa
+#     bash ~/bexa/bin/esrf_setup.sh          # the script inside the checkout
+#     bash ~/esrf_setup.sh ~/bexa            # or the script uploaded on its own, with the checkout
 #
-# It creates a virtualenv next to the checkout that also sees the packages of the system Python,
+# Without an argument the checkout is the folder above this script when the script sits in a
+# checkout's bin/, and ~/bexa otherwise.
+#
+# It creates a virtualenv (~/bexa-env) that also sees the packages of the system Python,
 # installs the requirements into it, registers the environment as a Jupyter kernel called
 # "Python (bexa)", makes the checkout importable from that kernel (a .pth file, nothing is
 # installed or copied), and writes the shell variables to ~/.bexa_env for terminal use.
 # Nothing here needs root. Re-running is safe.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -n "${1:-}" ]; then
+    if [ ! -d "$1" ]; then
+        echo "error: $1 is not a folder"
+        exit 1
+    fi
+    root="$(cd "$1" && pwd)"
+elif [ -f "$here/../bexa/__init__.py" ]; then
+    root="$(cd "$here/.." && pwd)"
+else
+    root="$HOME/bexa"
+fi
+if [ ! -f "$root/bexa/__init__.py" ]; then
+    echo "error: no bexa checkout at $root"
+    echo "clone it first (git clone https://github.com/dluccioni/BEXA.git ~/bexa) or pass its path:"
+    echo "    bash $0 /path/to/bexa"
+    exit 1
+fi
 env_dir="${BEXA_ENV:-$HOME/bexa-env}"
 python_bin="${PYTHON:-python3}"
 
@@ -54,3 +76,10 @@ echo "  terminal:   source ~/.bexa_env && bexa settings"
 echo "  notebook:   choose the kernel 'Python (bexa)', then: import bexa; bexa.settings()"
 echo "  smoke test: bexa.demo('mosa').info()   (writes a synthetic scan to /tmp and opens it)"
 echo "  profile:    cp $root/configs/beamtimes/example_esrf_id03.yaml $root/configs/beamtimes/<proposal>.yaml"
+if [ ! -f "$root/bexa/core/resources.py" ]; then
+    echo
+    echo "warning: this checkout sizes its batches from the node's free memory, not from the SLURM"
+    echo "  job's allocation, so a large reduction can get the session killed. Update the checkout"
+    echo "  (git pull) once the memory fix is on GitHub; until then keep reductions small (an ROI,"
+    echo "  downsample) or set BEXA_MEMORY_FRACTION to about job memory / node free memory."
+fi
