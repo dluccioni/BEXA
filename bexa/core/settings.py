@@ -59,12 +59,16 @@ def settings() -> dict[str, Any]:
             "resolved": resolved,
             "source": "BEXA_DEVICE" if "BEXA_DEVICE" in env else "default",
             "cpu_count": info.get("cpu_count"),
+            "cpu_source": info.get("cpu_source"),
             "gpu": info.get("gpu_name") if info.get("cuda") else None,
         },
         "memory": {
             "fraction": fraction,
             "source": "BEXA_MEMORY_FRACTION" if "BEXA_MEMORY_FRACTION" in env else "default",
             "available_gb": info.get("ram_available_gb"),
+            "limit_gb": info.get("ram_total_gb"),
+            "limit_source": info.get("memory_source"),
+            "slurm_job": env.get("SLURM_JOB_ID"),
             "gpu_free_gb": info.get("gpu_free_gb"),
             "budget_gb": round(memory_budget(resolved, fraction) / 1e9, 2),
         },
@@ -94,10 +98,13 @@ def describe() -> str:
     lines = [
         f"bexa {s['version']} from {s['repository']}",
         f"device: {dev['resolved']} (requested {dev['requested']}, from {dev['source']})"
-        + (f", GPU {dev['gpu']}" if dev["gpu"] else f", {dev['cpu_count']} CPU cores"),
+        + (f", GPU {dev['gpu']}" if dev["gpu"] else "")
+        + f", {dev['cpu_count']} CPU cores (from {dev['cpu_source']})",
         f"memory: budget {mem['budget_gb']} GB = fraction {mem['fraction']} (from {mem['source']})"
         f" of {mem['available_gb']} GB available"
         + (f" and {mem['gpu_free_gb']} GB free on the GPU" if mem["gpu_free_gb"] else ""),
+        f"  limit: {mem['limit_gb']} GB from the {mem['limit_source']}"
+        + (f" (SLURM job {mem['slurm_job']})" if mem["slurm_job"] else ""),
         f"cache: {cache['dir']} (from {cache['source']})",
         f"profile: {prof['name'] or 'none'} (from {prof['source']})"
         + (f"; error: {prof['error']}" if prof["error"] else ""),

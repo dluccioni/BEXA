@@ -37,8 +37,14 @@ def pin_blas_threads(n: int = 1) -> None:
 
 
 def default_workers(kind: str = "io") -> int:
-    """Sensible worker counts: 8 threads for I/O, all but one core for processes."""
-    cpus = os.cpu_count() or 4
+    """Sensible worker counts: 8 threads for I/O, all but one usable core for processes.
+
+    The usable cores are the ones this process may run on (a SLURM job's allocation on a
+    cluster), not the cores of the node.
+    """
+    from bexa.core.resources import usable_cpus
+
+    cpus, _ = usable_cpus()
     if kind == "io":
         return max(1, min(8, cpus))
     return max(1, cpus - 1)

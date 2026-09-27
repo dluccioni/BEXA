@@ -14,7 +14,6 @@ import types
 from typing import Any, Literal
 
 import numpy as np
-import psutil
 
 from bexa._log import get_logger
 
@@ -137,12 +136,16 @@ def to_host(obj: Any) -> Any:
 def memory_budget(device: str | None = "cpu", fraction: float | None = None) -> int:
     """Bytes a single operation may use on ``device``.
 
-    The budget is ``fraction`` of the available host memory (default 0.5, or
-    ``BEXA_MEMORY_FRACTION``), further limited by free GPU memory on CUDA.
+    The budget is ``fraction`` of the memory this process may still use (default 0.5, or
+    ``BEXA_MEMORY_FRACTION``): the SLURM job's allocation on a cluster, the free memory of
+    the machine elsewhere (see :func:`bexa.core.resources.memory_info`), further limited by
+    free GPU memory on CUDA.
     """
+    from bexa.core.resources import memory_info
+
     if fraction is None:
         fraction = float(os.environ.get("BEXA_MEMORY_FRACTION", DEFAULT_MEMORY_FRACTION))
-    budget = psutil.virtual_memory().available * fraction
+    budget = memory_info().available * fraction
     if resolve_device(device) == "cuda":
         import cupy
 
@@ -198,12 +201,18 @@ def free_device_memory() -> None:
 
 
 def device_info() -> dict[str, Any]:
-    """Describe the machine: CPUs, RAM, and the GPU when present."""
-    vm = psutil.virtual_memory()
+    """Describe what this process may use: CPUs, memory (the job's inside SLURM) and the GPU."""
+    from bexa.core.resources import memory_info, usable_cpus
+
+    memory = memory_info()
+    cpus, cpu_source = usable_cpus()
     info: dict[str, Any] = {
-        "cpu_count": os.cpu_count(),
-        "ram_total_gb": round(vm.total / 1e9, 1),
-        "ram_available_gb": round(vm.available / 1e9, 1),
+        "cpu_count": cpus,
+        "cpu_source": cpu_source,
+        "cpu_count_machine": os.cpu_count(),
+        "ram_total_gb": round(memory.total / 1e9, 1),
+        "ram_available_gb": round(memory.available / 1e9, 1),
+        "memory_source": memory.source,
         "cuda": cupy_available(),
     }
     if info["cuda"]:

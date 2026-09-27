@@ -23,7 +23,10 @@ from bexa.core.units import energy_to_mono_angle
 try:  # ESRF detector files are compressed with bitshuffle+lz4
     import hdf5plugin
 
-    _ESRF_COMPRESSION: dict[str, Any] = dict(hdf5plugin.Bitshuffle(nelems=0, lz4=True))
+    try:  # hdf5plugin 4.2 renamed the lz4 flag
+        _ESRF_COMPRESSION: dict[str, Any] = dict(hdf5plugin.Bitshuffle(nelems=0, cname="lz4"))
+    except TypeError:  # pragma: no cover - older hdf5plugin, as on some cluster images
+        _ESRF_COMPRESSION = dict(hdf5plugin.Bitshuffle(nelems=0, lz4=True))
 except ImportError:  # pragma: no cover
     _ESRF_COMPRESSION = {"compression": "gzip", "compression_opts": 1}
 
