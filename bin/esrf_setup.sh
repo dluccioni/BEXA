@@ -135,6 +135,24 @@ export BEXA_MEMORY_FRACTION=0.3
 ENV
 chmod +x "$root/bin/bexa" 2>/dev/null || true
 
+# JupyterLab loads front-end extensions from the user's data folder as well as the server's.
+# When the server lacks the widgets, ipympl or plotly front ends ("Error displaying widget", a
+# blank plotly figure), BEXA_LINK_LABEXTENSIONS=1 offers the ones this environment brought.
+if [ -n "${BEXA_LINK_LABEXTENSIONS:-}" ]; then
+    ext_src="$("$py" -c 'import sys; print(sys.prefix)')/share/jupyter/labextensions"
+    ext_dst="${JUPYTER_DATA_DIR:-$HOME/.local/share/jupyter}/labextensions"
+    mkdir -p "$ext_dst"
+    for ext in "$ext_src"/*/ "$ext_src"/@*/*/; do
+        [ -f "$ext/package.json" ] || continue
+        name="${ext#"$ext_src"/}"
+        name="${name%/}"
+        mkdir -p "$(dirname "$ext_dst/$name")"
+        [ -e "$ext_dst/$name" ] || ln -s "${ext%/}" "$ext_dst/$name"
+        echo "linked front-end extension $name"
+    done
+    echo "reload the JupyterLab page; to undo, remove the links in $ext_dst"
+fi
+
 echo
 echo "checking the environment"
 # from a neutral folder, so a checkout in the current folder cannot shadow the real package
