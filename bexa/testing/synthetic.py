@@ -50,8 +50,9 @@ def _peak_frames(
     """Frames whose curve in each motor is a Gaussian (or a blurred step) at a per-pixel centre.
 
     ``centers`` gives the centre of a motor's curve, one value or an ``(H, W)`` map, and
-    ``widths`` its sigma the same way; a sigma narrower than half the scan step is widened
-    to that, so coarse scans still sample every curve. Without them the centre of the first
+    ``widths`` its sigma the same way; a peak narrower than half the scan step is widened to
+    that and lowered to keep its area, as a continuous scan integrates a narrow curve into
+    one step, so coarse scans still sample every curve. Without them the centre of the first
     motor varies linearly along x, the second along y, with a sigma of 12 % of the range.
     ``curve="edge"`` gives an error-function step instead of a peak, as a knife-edge or
     sample-height scan does. Returns the float frames ``(n, H, W)`` and the centre maps.
@@ -74,7 +75,10 @@ def _peak_frames(
             frac = (xx / max(W - 1, 1)) if i % 2 == 0 else (yy / max(H - 1, 1))
             centre = lo + span * (0.2 + 0.6 * frac)
         if widths is not None and name in widths:
-            sigma = np.maximum(np.asarray(widths[name], dtype=float), 0.5 * step)
+            given = np.asarray(widths[name], dtype=float)
+            sigma = np.maximum(given, 0.5 * step)
+            if curve != "edge":  # a step integrates a narrower peak: same area, lower and wider
+                weight *= given / sigma
         else:
             sigma = np.asarray(0.12 * span)
         truth[f"{name}_center"] = centre
