@@ -640,19 +640,29 @@ def make_esrf_zstack(
     first_scan: int = 1,
     n_files: int = 1,
     seed: int = 0,
+    energy_scan: str = "rocking",
     **kwargs: Any,
 ) -> SyntheticZStack:
-    """One mosaicity scan plus one energy series per sample height (``samz``).
+    """A mosaicity scan and an energy series per sample height (``samz``), in one dataset.
 
-    The scans of every layer share one dataset: the mosaicity scan comes first,
-    the energy series (one ``energy_motor`` scan per energy) right after it, so
+    Two ways of scanning the energy, chosen with ``energy_scan``:
+
+    - ``"rocking"``: at every height one ``mosa`` scan (chi x mu) at the nominal energy,
+      followed by one ``energy_motor`` scan (a mu rocking curve) per energy;
+    - ``"mosa"``: at every height the full ``mosa`` scan is repeated at every energy, so
+      energy, chi and mu lie on one grid and the series opens with dims
+      ``(energy, chi, mu, y, x)``. The scan at the energy nearest the mean is the
+      height's ``mosa_scans`` entry.
+
     ``bexa.open(dataset, scan=mosa_scans[k])`` and
-    ``bexa.open(dataset, scan=energy_scans[k])`` open layer ``k``. A bright
-    grain (a disc) drifts across the field of view with the height, and its
-    energy centre varies along ``x`` and with the height, so the stacked maps
-    show a tilted grain and a strain gradient. The planted values are in
-    ``truth`` (``grain_center`` per layer, ``energy_center`` maps).
+    ``bexa.open(dataset, scan=energy_scans[k])`` open layer ``k``. A bright grain (a
+    disc) drifts across the field of view with the height, and its energy centre varies
+    along ``x`` and with the height, so the stacked maps show a tilted grain and a strain
+    gradient. The planted values are in ``truth`` (``grain_center`` per layer,
+    ``energy_center`` maps).
     """
+    if energy_scan not in ("rocking", "mosa"):
+        raise ValueError(f"energy_scan must be 'rocking' or 'mosa', not {energy_scan!r}")
     root = Path(root)
     height, width = frame_shape
     yy, xx = np.mgrid[0:height, 0:width]
@@ -673,33 +683,35 @@ def make_esrf_zstack(
         grain = 0.15 + np.exp(-0.5 * ((yy - cy) ** 2 + (xx - cx) ** 2) / radius**2)
         grain_centres[k] = (cy, cx)
         fixed = {"samz": float(z)}
-        made = make_esrf_scan(
-            root,
-            dataset=dataset,
-            scan=scan,
-            motors=mosa,
-            frame_shape=frame_shape,
-            n_files=n_files,
-            amplitude=4000.0 * grain,
-            positioners=fixed,
-            seed=seed + scan,
-            **kwargs,
-        )
-        layers.append(made)
-        mosa_scans.append(scan)
-        scan += 1
+        if energy_scan == "rocking":  # the mosaicity scan at the nominal energy comes first
+            made = make_esrf_scan(
+                root,
+                dataset=dataset,
+                scan=scan,
+                motors=mosa,
+                frame_shape=frame_shape,
+                n_files=n_files,
+                amplitude=4000.0 * grain,
+                positioners=fixed,
+                seed=seed + scan,
+                **kwargs,
+            )
+            layers.append(made)
+            mosa_scans.append(scan)
+            scan += 1
         centre = e_array.mean() + e_span * (
             0.25 * (xx / max(width - 1, 1) - 0.5) + 0.2 * (frac - 0.5)
         )
         energy_centres[k] = centre
         first = scan
-        for energy in e_array:
+        nominal = int(np.argmin(np.abs(e_array - e_array.mean())))
+        for j, energy in enumerate(e_array):
             weight = np.exp(-0.5 * ((energy - centre) / (0.3 * e_span)) ** 2)
-            make_esrf_scan(
+            made = make_esrf_scan(
                 root,
                 dataset=dataset,
                 scan=scan,
-                motors=(energy_motor,),
+                motors=mosa if energy_scan == "mosa" else (energy_motor,),
                 frame_shape=frame_shape,
                 n_files=n_files,
                 energy_keV=float(energy),
@@ -708,6 +720,9 @@ def make_esrf_zstack(
                 seed=seed + scan,
                 **kwargs,
             )
+            if energy_scan == "mosa" and j == nominal:
+                layers.append(made)
+                mosa_scans.append(scan)
             scan += 1
         energy_scans.append((first, scan - 1))
     return SyntheticZStack(
