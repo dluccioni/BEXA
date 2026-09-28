@@ -388,9 +388,9 @@ def show_plotly(
         return page
     from IPython.display import HTML, display
 
-    frame = HTML(
-        f'<iframe srcdoc="{html_module.escape(page, quote=True)}" width="100%" '
-        f'height="{height + 24}" style="border:0" allowfullscreen></iframe>'
+    frame = HTML(  # inside a div: IPython treats a bare iframe as a link to a page
+        f'<div><iframe srcdoc="{html_module.escape(page, quote=True)}" width="100%" '
+        f'height="{height + 24}" style="border:0" allowfullscreen></iframe></div>'
     )
     display(frame)
     return frame
