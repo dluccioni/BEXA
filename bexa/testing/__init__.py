@@ -6,6 +6,7 @@ layout exactly, with a planted signal whose centre of mass is known.
 
 from bexa.testing.synthetic import (
     SAMPLE_REGIONS,
+    Microstructure,
     Region,
     SampleModel,
     SyntheticEsrfScan,
@@ -21,10 +22,12 @@ from bexa.testing.synthetic import (
     make_legacy_cube,
     make_pal_run,
     make_pal_spec_scan,
+    polycrystal,
 )
 
 __all__ = [
     "SAMPLE_REGIONS",
+    "Microstructure",
     "Region",
     "SampleModel",
     "SyntheticEsrfScan",
@@ -40,4 +43,5 @@ __all__ = [
     "make_legacy_cube",
     "make_pal_run",
     "make_pal_spec_scan",
+    "polycrystal",
 ]

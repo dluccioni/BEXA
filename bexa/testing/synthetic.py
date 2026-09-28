@@ -17,6 +17,7 @@ from typing import Any
 
 import h5py
 import numpy as np
+from scipy import ndimage
 from scipy.special import erf
 
 from bexa.core.units import energy_to_mono_angle
@@ -637,23 +638,60 @@ def make_legacy_cube(
 # ------------------------------------------------------------------------ ESRF z-stack
 @dataclass(frozen=True)
 class Region:
-    """One diffracting region of the synthetic sample: orientation, peak widths, strain."""
+    """One kind of diffracting region of the synthetic sample: orientation, widths, strain."""
 
     label: int
-    tilt: tuple[float, float]  # (chi, mu) centre of the rocking curve, deg
+    tilt: tuple[float, float] | None  # (chi, mu) centre of the rocking curve, deg; None: per grain
     width: tuple[float, float]  # (chi, mu) sigma of the rocking curve, deg
     brightness: float  # integrated intensity of the rocking curve relative to the brightest
     energy_offset: float  # centre of the energy curve relative to the nominal energy, keV
 
 
 SAMPLE_REGIONS: dict[str, Region] = {
-    "matrix": Region(0, (0.0, 0.0), (0.10, 0.15), 0.05, 0.0),
+    "others": Region(0, None, (0.08, 0.12), 0.4, 0.0),
     "domain_a1": Region(1, (-0.06, -0.14), (0.06, 0.09), 1.0, -0.004),
     "domain_a2": Region(2, (0.06, 0.10), (0.06, 0.09), 0.85, 0.004),
-    "grain_b": Region(3, (0.22, 0.50), (0.08, 0.12), 0.7, 0.006),
+    "grain_b": Region(3, (0.22, 0.50), (0.08, 0.12), 0.75, 0.006),
 }
 """The regions of :func:`dfxm_sample`: grain A split into two domains whose chi and mu differ
-by one to two peak widths, grain B several widths away, and a faint matrix around them."""
+by one to two peak widths, its neighbour grain B several widths away, and the other grains of
+the polycrystal, each with its own orientation far outside the scans, so they stay dark."""
+
+
+@dataclass
+class Microstructure:
+    """A 3-D polycrystal in a box of ``(depth, H, W)`` pixels: Voronoi grains around seeds.
+
+    :func:`polycrystal` builds one and :meth:`slice` cuts it at a height, which is what the
+    beam plane of one DFXM layer sees. Grain ``grain_a`` is seeded in the middle of the box
+    and a wall with normal ``wall_normal`` through its seed splits it into two domains;
+    ``grain_b`` is its neighbour. ``tilts`` holds (chi, mu) per grain, ``gradients`` the
+    orientation gradient of every grain (d(chi, mu) / d(y, x), deg per pixel) and ``texture``
+    a smooth random field at a quarter of the resolution for the intensity variations
+    inside the grains.
+    """
+
+    shape: tuple[int, int, int]
+    seeds: np.ndarray  # (n, 3) as (z, y, x)
+    tilts: np.ndarray  # (n, 2)
+    gradients: np.ndarray  # (n, 2, 2)
+    wall_normal: np.ndarray  # (3,) unit vector (z, y, x)
+    texture: np.ndarray  # (depth / 4, H / 4, W / 4)
+    grain_a: int = 0
+    grain_b: int = 1
+
+    def slice(self, z: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The grain of every pixel, the side of the domain wall and the texture at height ``z``."""
+        _, H, W = self.shape
+        yy, xx = np.mgrid[0:H, 0:W]
+        points = np.stack(
+            [np.full(H * W, float(z)), yy.ravel().astype(float), xx.ravel().astype(float)], axis=1
+        )
+        squared = ((points[:, None, :] - self.seeds[None, :, :]) ** 2).sum(axis=2)
+        grains = squared.argmin(axis=1).reshape(H, W)
+        side = ((points - self.seeds[self.grain_a]) @ self.wall_normal > 0).reshape(H, W)
+        texture = ndimage.map_coordinates(self.texture, points.T / 4.0, order=1, mode="nearest")
+        return grains, side, texture.reshape(H, W)
 
 
 @dataclass
@@ -665,7 +703,9 @@ class SampleModel:
     widths: dict[str, np.ndarray]  # chi and mu sigma per pixel (deg)
     energy_offset: np.ndarray  # energy centre per pixel relative to the nominal energy (keV)
     labels: np.ndarray  # the :class:`Region` label of every pixel
-    grain_center: tuple[float, float]  # (row, column) of the centre of grain A
+    grain_center: tuple[float, float]  # (row, column) of the centre of grain A (NaN if absent)
+    grains: np.ndarray  # the grain of every pixel (an index into the seeds of the microstructure)
+    microstructure: Microstructure  # the polycrystal the slice was cut from
 
     @property
     def scan_kwargs(self) -> dict[str, Any]:
@@ -673,41 +713,85 @@ class SampleModel:
         return {"amplitude": self.amplitude, "centers": self.centers, "widths": self.widths}
 
 
-def _disc(yy: np.ndarray, xx: np.ndarray, cy: float, cx: float, radius: float) -> np.ndarray:
-    """A disc with a soft edge about one pixel wide: 1 inside, 0 outside."""
-    distance = np.hypot(yy - cy, xx - cx)
-    return 0.5 * (1.0 + erf((radius - distance) / 1.1))
+def polycrystal(
+    frame_shape: tuple[int, int],
+    depth: int | None = None,
+    seed: int = 0,
+    regions: dict[str, Region] = SAMPLE_REGIONS,
+) -> Microstructure:
+    """A polycrystal filling a box ``depth`` pixels deep behind an ``(H, W)`` field of view.
+
+    Grain A is seeded in the middle of the box, grain B beside it and a little higher, and a
+    jittered grid of seeds fills the rest, so every grain is an irregular polyhedron whose
+    section changes with the height. The other grains draw an orientation outside the scans
+    (|chi| above 1 deg or |mu| above 1.6 deg). ``depth`` defaults to 1.2 times the smaller
+    side of the field; the same ``seed`` gives the same polycrystal.
+    """
+    H, W = frame_shape
+    D = int(depth) if depth is not None else round(1.2 * min(H, W))
+    rng = np.random.default_rng(seed)
+    a1, a2, b = (regions[k] for k in ("domain_a1", "domain_a2", "grain_b"))
+    assert a1.tilt is not None and a2.tilt is not None and b.tilt is not None
+    seeds = [np.array([0.5 * D, 0.5 * H, 0.42 * W]), np.array([0.6 * D, 0.36 * H, 0.72 * W])]
+    cell = np.array([0.5 * D, 0.5 * H, W / 3.0])
+    for index in np.ndindex(2, 2, 3):
+        point = (np.asarray(index) + 0.5 + rng.uniform(-0.3, 0.3, size=3)) * cell
+        if all(np.linalg.norm(point - s) > 0.5 * cell.min() for s in seeds[:2]):
+            seeds.append(point)
+    seed_array = np.array(seeds)
+    n = len(seed_array)
+    tilts = np.zeros((n, 2))
+    tilts[0] = np.mean([a1.tilt, a2.tilt], axis=0)
+    tilts[1] = b.tilt
+    for i in range(2, n):  # far from the Bragg condition of a chi +-0.5, mu +-1 deg scan
+        while True:
+            chi, mu = rng.uniform(-2.5, 2.5), rng.uniform(-4.0, 4.0)
+            if abs(chi) > 1.0 or abs(mu) > 1.6:
+                break
+        tilts[i] = (chi, mu)
+    gradients = rng.normal(0.0, 0.0008, size=(n, 2, 2))
+    angle = np.radians(30.0)  # the domain wall runs across the field, inclined to the beam
+    wall_normal = np.array([0.2, np.sin(angle), np.cos(angle)])
+    wall_normal /= np.linalg.norm(wall_normal)
+    coarse = rng.standard_normal((max(D // 4, 2), max(H // 4, 2), max(W // 4, 2)))
+    texture = ndimage.gaussian_filter(coarse, 1.0)
+    texture /= float(texture.std()) or 1.0
+    return Microstructure((D, H, W), seed_array, tilts, gradients, wall_normal, texture)
 
 
 def dfxm_sample(
     frame_shape: tuple[int, int],
-    drift: float = 0.0,
+    z: float | None = None,
+    *,
+    microstructure: Microstructure | None = None,
+    seed: int = 0,
     peak: float = 4000.0,
     regions: dict[str, Region] = SAMPLE_REGIONS,
 ) -> SampleModel:
-    """Two grains in the field of view, as per-pixel orientation, width and strain maps.
+    """The polycrystal sliced at height ``z``, as per-pixel maps for :func:`make_esrf_scan`.
 
-    Grain A is a disc that a wall splits into two domains whose chi and mu differ slightly
-    (``domain_a1``, ``domain_a2``); grain B is a smaller disc at a clearly different
-    orientation; the faint matrix around them is bent a little across the field. ``drift``
-    from 0 to 1 walks through a z-stack: grain A slides across the field (a grain inclined
-    to the beam) and grain B shrinks (a grain that ends). The default tilts sit well inside
-    scans of chi +-0.5 and mu +-1 deg, so such scans record every region.
+    The slice through :func:`polycrystal` (or the given ``microstructure``) shows grain A,
+    split by its wall into two domains whose chi and mu differ slightly (``domain_a1``,
+    ``domain_a2``), its neighbour grain B at a clearly different orientation, and the other
+    grains, which stay dark in scans of chi +-0.5 and mu +-1 deg. Inside a grain the
+    orientation varies by a few hundredths of a degree and the intensity by about ten per
+    cent. ``z`` is in pixels from the top of the box and defaults to the middle, where
+    grains A and B are largest.
     """
     H, W = frame_shape
-    yy, xx = np.mgrid[0:H, 0:W].astype(float)
-    size = float(min(H, W))
-    matrix, a1, a2, b = (regions[k] for k in ("matrix", "domain_a1", "domain_a2", "grain_b"))
+    micro = microstructure
+    if micro is None:
+        micro = polycrystal(frame_shape, seed=seed, regions=regions)
+    if micro.shape[1:] != (H, W):
+        raise ValueError(f"the microstructure is {micro.shape[1:]}, not {frame_shape}")
+    grains, side, texture = micro.slice(micro.shape[0] / 2 if z is None else z)
+    others, a1, a2, b = (regions[k] for k in ("others", "domain_a1", "domain_a2", "grain_b"))
+    assert a1.tilt is not None and a2.tilt is not None
 
-    cy, cx = H * (0.62 - 0.17 * drift), W * (0.32 + 0.23 * drift)  # grain A slides up and right
-    in_a = _disc(yy, xx, cy, cx, 0.22 * size)
-    angle = np.radians(30.0)  # the domain wall through the centre of grain A
-    wall = (xx - cx) * np.cos(angle) + (yy - cy) * np.sin(angle) > 0
-    in_b = _disc(yy, xx, 0.25 * H, 0.78 * W, 0.14 * size * (1.1 - 0.6 * drift))
-
-    labels = np.full((H, W), matrix.label, dtype=np.int64)
-    labels[in_a > 0.5] = np.where(wall, a2.label, a1.label)[in_a > 0.5]
-    labels[in_b > 0.5] = b.label
+    labels = np.full((H, W), others.label, dtype=np.int64)
+    labels[(grains == micro.grain_a) & ~side] = a1.label
+    labels[(grains == micro.grain_a) & side] = a2.label
+    labels[grains == micro.grain_b] = b.label
 
     def per_pixel(value: Callable[[Region], float]) -> np.ndarray:
         out = np.zeros((H, W))
@@ -715,26 +799,33 @@ def dfxm_sample(
             out[labels == region.label] = value(region)
         return out
 
-    bend_chi = 0.03 * (xx / max(W - 1, 1) - 0.5)  # the whole field is bent a little
-    bend_mu = 0.04 * (yy / max(H - 1, 1) - 0.5)
-    brightness = (  # integrated intensity, blended at the edges of the grains
-        matrix.brightness * (1 - in_a) * (1 - in_b)
-        + np.where(wall, a2.brightness, a1.brightness) * in_a * (1 - in_b)
-        + b.brightness * in_b
-    )
+    # every grain's own orientation and gradient; the domains of grain A sit either side of its mean
+    yy, xx = np.mgrid[0:H, 0:W]
+    away = (yy - micro.seeds[grains, 1], xx - micro.seeds[grains, 2])
+    gradient = micro.gradients[grains]  # (H, W, 2, 2)
+    mean_a = np.mean([a1.tilt, a2.tilt], axis=0)
+    centers = {}
+    for j, name in enumerate(("chi", "mu")):
+        centre = micro.tilts[grains, j] + gradient[..., j, 0] * away[0]
+        centre += gradient[..., j, 1] * away[1]
+        centre[labels == a1.label] += a1.tilt[j] - mean_a[j]
+        centre[labels == a2.label] += a2.tilt[j] - mean_a[j]
+        centers[name] = centre
     widths = {"chi": per_pixel(lambda r: r.width[0]), "mu": per_pixel(lambda r: r.width[1])}
+    brightness = per_pixel(lambda r: r.brightness) * np.clip(1.0 + 0.1 * texture, 0.7, 1.3)
     # the same integrated intensity makes a lower peak where the curve is wider
     height = peak * brightness * (a1.width[0] * a1.width[1]) / (widths["chi"] * widths["mu"])
+    rows, cols = np.nonzero((labels == a1.label) | (labels == a2.label))
+    centre_a = (float(rows.mean()), float(cols.mean())) if rows.size else (np.nan, np.nan)
     return SampleModel(
         amplitude=height,
-        centers={
-            "chi": per_pixel(lambda r: r.tilt[0]) + bend_chi,
-            "mu": per_pixel(lambda r: r.tilt[1]) + bend_mu,
-        },
+        centers=centers,
         widths=widths,
         energy_offset=per_pixel(lambda r: r.energy_offset),
         labels=labels,
-        grain_center=(cy, cx),
+        grain_center=centre_a,
+        grains=grains,
+        microstructure=micro,
     )
 
 
@@ -759,7 +850,7 @@ class SyntheticZStack:
 def make_esrf_zstack(
     root: str | Path,
     dataset: str = "synth_zstack",
-    z_values: tuple[float, ...] = (-0.02, -0.01, 0.0, 0.01, 0.02),
+    z_values: tuple[float, ...] = (-0.002, -0.001, 0.0, 0.001, 0.002),
     mosa: tuple[tuple[str, int], ...] = (("chi", 6), ("mu", 15)),
     energies: tuple[float, ...] = (16.98, 16.99, 17.0, 17.01, 17.02),
     energy_motor: tuple[str, int] = ("mu", 8),
@@ -768,6 +859,7 @@ def make_esrf_zstack(
     n_files: int = 1,
     seed: int = 0,
     energy_scan: str = "rocking",
+    layer_px: float = 4.0,
     **kwargs: Any,
 ) -> SyntheticZStack:
     """A mosaicity scan and an energy series per sample height (``samz``), in one dataset.
@@ -782,12 +874,14 @@ def make_esrf_zstack(
       height's ``mosa_scans`` entry.
 
     ``bexa.open(dataset, scan=mosa_scans[k])`` and
-    ``bexa.open(dataset, scan=energy_scans[k])`` open layer ``k``. The sample is
-    :func:`dfxm_sample` at a drift that grows with the height: grain A, split into two
-    domains, slides across the field of view and grain B shrinks. The energy centre of
-    every region is offset by its strain, on top of a gradient along ``x`` and with the
-    height. The planted values are in ``truth``: ``grain_center`` (row, column of grain A)
-    per layer and the ``energy_center``, ``chi_center``, ``mu_center`` and ``labels`` maps.
+    ``bexa.open(dataset, scan=energy_scans[k])`` open layer ``k``. The sample is the
+    :func:`polycrystal` of :func:`dfxm_sample` sliced at every height, ``layer_px`` pixels
+    of depth per layer step (1 um layers and a 0.24 um pixel give about 4) and centred on
+    the middle of the box, so the sections of grain A (two domains) and grain B change from
+    layer to layer. The energy centre of every region is offset by its strain, on top of a
+    gradient along ``x`` and with the height. The planted values are in ``truth``:
+    ``grain_center`` (row, column of grain A) per layer and the ``energy_center``,
+    ``chi_center``, ``mu_center``, ``labels`` and ``grains`` maps.
     """
     if energy_scan not in ("rocking", "mosa"):
         raise ValueError(f"energy_scan must be 'rocking' or 'mosa', not {energy_scan!r}")
@@ -805,14 +899,19 @@ def make_esrf_zstack(
     energy_centres = np.zeros((n_z, height, width))
     tilt_centres = {name: np.zeros((n_z, height, width)) for name in ("chi", "mu")}
     labels = np.zeros((n_z, height, width), dtype=np.int64)
+    grains = np.zeros((n_z, height, width), dtype=np.int64)
+    micro = polycrystal(frame_shape, seed=seed)
+    z_step = (float(np.diff(z_array).mean()) if n_z > 1 else 0.0) or 1.0
     scan = first_scan
     for k, z in enumerate(z_array):
         frac = k / max(n_z - 1, 1)
-        sample = dfxm_sample(frame_shape, drift=frac)
+        z_px = micro.shape[0] / 2 + (z - z_array.mean()) / z_step * layer_px
+        sample = dfxm_sample(frame_shape, z_px, microstructure=micro)
         grain_centres[k] = sample.grain_center
         for name in tilt_centres:
             tilt_centres[name][k] = sample.centers[name]
         labels[k] = sample.labels
+        grains[k] = sample.grains
         fixed = {"samz": float(z)}
         if energy_scan == "rocking":  # the mosaicity scan at the nominal energy comes first
             made = make_esrf_scan(
@@ -875,5 +974,6 @@ def make_esrf_zstack(
             "chi_center": tilt_centres["chi"],
             "mu_center": tilt_centres["mu"],
             "labels": labels,
+            "grains": grains,
         },
     )
