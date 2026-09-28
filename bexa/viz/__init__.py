@@ -19,6 +19,7 @@ is drawn when the effective pixel size is known.
 for interactive figures.
 """
 
+from bexa.core import accessor as _accessor  # noqa: F401  (registers the .bexa accessors)
 from bexa.viz import animation, auto, curves, images, interactive, maps, style, volume
 
 __all__ = ["animation", "auto", "curves", "images", "interactive", "maps", "style", "volume"]

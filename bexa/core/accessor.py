@@ -57,6 +57,18 @@ class ArrayAccessor:
         """An ROI given in this array's pixel indices, expressed in full-resolution pixels."""
         return ROI.from_indices(self._obj, y=y, x=x)
 
+    def render(self, **kwargs: Any) -> Any:
+        """A plotly volume rendering: colour and opacity follow the intensity."""
+        from bexa.viz.volume import render
+
+        return render(self._obj, **kwargs)
+
+    def browse_render(self, **kwargs: Any) -> Any:
+        """Sliders for the extra dims that re-render the volume when released."""
+        from bexa.viz.interactive import browse_render
+
+        return browse_render(self._obj, **kwargs)
+
     def save(self, path: str | Path, **kwargs: Any) -> Path:
         """Write the array with :func:`bexa.save`."""
         from bexa.io.cube import save

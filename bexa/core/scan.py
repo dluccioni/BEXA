@@ -18,6 +18,7 @@ import xarray as xr
 from bexa._log import get_logger
 from bexa.config import BeamtimeProfile, cache_root, load_profile
 from bexa.config.paths import CACHE_DIR_ENV
+from bexa.core import accessor as _accessor  # noqa: F401  (registers the .bexa accessors)
 from bexa.core.cache import Cache
 from bexa.core.registry import engines
 from bexa.core.roi import ROI

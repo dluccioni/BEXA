@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -11,7 +11,7 @@ import xarray as xr
 from bexa.viz.images import tiles
 from bexa.viz.style import as_array, dim_label, resolve_clim
 
-__all__ = ["isosurface", "projections_panel", "rlp_scatter", "slices_grid"]
+__all__ = ["isosurface", "projections_panel", "render", "rlp_scatter", "show_plotly", "slices_grid"]
 
 
 def _projections_from_volume(volume: xr.DataArray, method: str) -> dict[str, xr.DataArray]:
@@ -248,3 +248,149 @@ def rlp_scatter(
     ax.set_zlabel(names[2])
     fig.colorbar(sc, ax=ax, shrink=0.6, label="log10 intensity" if log else "intensity")
     return fig, ax
+
+
+_RENDER_MODES: dict[str, dict[str, Any]] = {
+    # opacityscale maps the normalised value to an opacity factor; opacity scales all of them
+    "translucent": {
+        "opacityscale": [[0.0, 0.0], [0.3, 0.05], [0.7, 0.4], [1.0, 1.0]],
+        "opacity": 0.6,
+        "surface_count": 17,
+    },
+    "mip": {
+        "opacityscale": [[0.0, 0.0], [0.6, 0.0], [0.8, 0.5], [1.0, 1.0]],
+        "opacity": 0.9,
+        "surface_count": 15,
+    },
+    "iso": {"opacityscale": "uniform", "opacity": 0.6, "surface_count": 1},
+}
+
+
+def render(
+    volume: Any,
+    mode: str = "translucent",
+    log: bool = False,
+    clim: Any = ("p", 5, 99.5),
+    cmap: str = "viridis",
+    scale: Sequence[float] = (1.0, 1.0, 1.0),
+    downsample: int | None = None,
+    max_voxels: int = 300_000,
+    surface_count: int | None = None,
+    opacity: float | None = None,
+    title: str | None = None,
+) -> Any:
+    """Render a ``(z, y, x)`` stack with plotly: colour and opacity follow the intensity.
+
+    ``mode``: ``"translucent"`` fades dim voxels out and lets bright ones glow, like napari's
+    translucent rendering and the Slices-to-Voxels app; ``"mip"`` keeps only the brightest
+    voxels visible, like a maximum-intensity projection; ``"iso"`` draws one surface at the
+    upper colour limit. ``scale`` is the voxel size ``(z, y, x)`` relative to a pixel, as
+    napari's ``scale``. Stacks with more than ``max_voxels`` voxels are block-averaged in
+    ``y`` and ``x`` first (``downsample`` sets the factor by hand); the browser cannot rotate
+    much more than that. The figure rotates and zooms in the browser; in a notebook show it
+    with :func:`show_plotly`.
+    """
+    import plotly.graph_objects as go
+
+    from bexa.core.reductions import block_reduce
+
+    if mode not in _RENDER_MODES:
+        raise ValueError(f"unknown mode {mode!r}; use translucent, mip or iso")
+    names = [str(d) for d in getattr(volume, "dims", ("z", "y", "x"))[-3:]]
+    data = np.asarray(as_array(volume), dtype=np.float32)
+    if data.ndim != 3:
+        data = data.reshape(-1, *data.shape[-2:])
+    factor = downsample or max(1, int(np.ceil(np.sqrt(data.size / max_voxels))))
+    if factor > 1:
+        data = block_reduce(data, factor, factor, "mean")
+    if log:
+        data = np.log10(1.0 + np.clip(data, 0, None))
+    vmin, vmax = resolve_clim(data, clim)
+    if vmin is None or vmax is None or not vmax > vmin:
+        finite = data[np.isfinite(data)]
+        vmin, vmax = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)
+    sz, sy, sx = (float(s) for s in scale)
+    nz, ny, nx = data.shape
+    zz, yy, xx = np.meshgrid(
+        np.arange(nz) * sz, np.arange(ny) * sy * factor, np.arange(nx) * sx * factor, indexing="ij"
+    )
+    settings = dict(_RENDER_MODES[mode])
+    if surface_count is not None:
+        settings["surface_count"] = int(surface_count)
+    if opacity is not None:
+        settings["opacity"] = float(opacity)
+    if mode == "iso":  # one surface, at the upper colour limit
+        vmin = vmax
+    label = "log10(1 + I)" if log else str(getattr(volume, "name", "") or "intensity")
+    trace = go.Volume(
+        x=xx.ravel(),
+        y=yy.ravel(),
+        z=zz.ravel(),
+        value=np.nan_to_num(data, nan=vmin).ravel(),
+        isomin=vmin,
+        isomax=vmax,
+        colorscale=cmap,
+        caps={"x_show": False, "y_show": False, "z_show": False},
+        colorbar={"title": {"text": label}},
+        **settings,
+    )
+    fig = go.Figure(trace)
+    fig.update_layout(
+        title=title,
+        margin={"l": 0, "r": 0, "t": 40 if title else 10, "b": 0},
+        scene={
+            "xaxis_title": names[2],
+            "yaxis_title": names[1],
+            "zaxis_title": names[0],
+            "aspectmode": "data",
+        },
+    )
+    return fig
+
+
+def show_plotly(
+    fig: Any, how: str = "auto", height: int = 600, include_plotlyjs: str | bool = "cdn"
+) -> Any:
+    """Show a plotly figure in a notebook without needing the plotly JupyterLab extension.
+
+    ``how``: ``"iframe"`` embeds the figure as a self-contained inline frame, which works in
+    any JupyterLab (``include_plotlyjs="cdn"`` loads plotly.js from the web, so the browser
+    needs internet; ``True`` embeds the 3 MB library and works offline); ``"native"`` uses
+    plotly's own display, which needs the extension; ``"browser"`` opens a browser tab;
+    ``"html"`` returns the page as text. ``"auto"`` is ``"iframe"`` in IPython, ``"html"``
+    when ``BEXA_HEADLESS`` is set and ``"browser"`` otherwise.
+    """
+    import html as html_module
+    import os
+
+    from bexa._log import in_ipython
+
+    if how == "auto":
+        if in_ipython():
+            how = "iframe"
+        else:
+            how = "html" if os.environ.get("BEXA_HEADLESS") else "browser"
+    if how == "browser":
+        fig.show(renderer="browser")
+        return None
+    if how == "native":
+        fig.show()
+        return None
+    if how not in ("iframe", "html"):
+        raise ValueError(f"unknown how {how!r}; use auto, iframe, native, browser or html")
+    page = fig.to_html(
+        include_plotlyjs=include_plotlyjs,
+        full_html=True,
+        default_width="100%",
+        default_height=f"{height}px",
+    )
+    if how == "html":
+        return page
+    from IPython.display import HTML, display
+
+    frame = HTML(
+        f'<iframe srcdoc="{html_module.escape(page, quote=True)}" width="100%" '
+        f'height="{height + 24}" style="border:0" allowfullscreen></iframe>'
+    )
+    display(frame)
+    return frame

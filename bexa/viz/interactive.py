@@ -22,9 +22,11 @@ from bexa.viz.style import as_array, resolve_clim
 
 __all__ = [
     "Browser",
+    "RenderBrowser",
     "RoiPicker",
     "VolumeBrowser",
     "browse",
+    "browse_render",
     "browse_volume",
     "compare",
     "pick_roi",
@@ -416,3 +418,87 @@ def pick_roi(image: Any, block: bool = False, **kwargs: Any) -> RoiPicker:
 
         plt.show(block=True)
     return picker
+
+
+class RenderBrowser(_SliderPanel):
+    """Sliders for the leading dims of a volume; the ``(z, y, x)`` block is rendered on release.
+
+    Each condition is drawn with :func:`bexa.viz.volume.render` (plotly: colour and opacity
+    follow the intensity) into an output area under the sliders. Every move costs one
+    rendering, so the sliders act when released. Needs ipywidgets; without it, call
+    ``render(volume.isel(...))`` for one condition at a time.
+
+    Parameters
+    ----------
+    volume
+        DataArray ``(conditions..., z, y, x)``, for example previews stacked on ``samz``.
+    height
+        Height of the rendering in pixels.
+    **render_kwargs
+        Passed to :func:`bexa.viz.volume.render` (``mode``, ``log``, ``scale``, ...).
+    """
+
+    def __init__(self, volume: xr.DataArray, height: int = 600, **render_kwargs: Any) -> None:
+        try:
+            import ipywidgets as widgets
+            from IPython.display import display
+        except ImportError as exc:
+            raise ImportError(
+                "browse_render needs ipywidgets; without it, render(volume.isel(...)) shows one "
+                "condition at a time"
+            ) from exc
+        if volume.ndim < 3:
+            raise ValueError(f"a volume needs at least three dims; got {tuple(volume.dims)}")
+        self.volume = volume
+        self.motor_dims = [str(d) for d in volume.dims[:-3]]
+        self.index = {d: 0 for d in self.motor_dims}
+        self.height = height
+        self.render_kwargs = render_kwargs
+        self.figure: Any = None
+        self._syncing = False
+        self.output = widgets.Output()
+        self.sliders = {
+            d: widgets.IntSlider(
+                min=0, max=volume.sizes[d] - 1, description=d, continuous_update=False
+            )
+            for d in self.motor_dims
+        }
+        for name, slider in self.sliders.items():
+            slider.observe(lambda change, n=name: self._moved(n, change["new"]), names="value")
+        display(widgets.VBox([*self.sliders.values(), self.output]))
+        self.update()
+
+    def _moved(self, name: str, value: int) -> None:
+        if not self._syncing:
+            self.update(**{name: value})
+
+    def current(self) -> xr.DataArray:
+        """The ``(z, y, x)`` block at the current slider positions."""
+        return self.volume.isel(self.index)
+
+    def update(self, **index: int) -> None:
+        """Move to new indices (``update(chi=2, mu=5)``), render and show the block."""
+        from bexa.viz.volume import render
+
+        self.index.update({k: int(v) for k, v in index.items()})
+        self._syncing = True  # the knobs follow a call from code without rendering twice
+        try:
+            for name, value in self.index.items():
+                self.sliders[name].value = value
+        finally:
+            self._syncing = False
+        self.figure = render(self.current(), title=self._title(), **self.render_kwargs)
+        self.show(self.figure)
+
+    def show(self, fig: Any) -> None:
+        """Draw ``fig`` into the output area under the sliders."""
+        from bexa.viz.volume import show_plotly
+
+        with self.output:
+            self.output.clear_output(wait=True)
+            show_plotly(fig, how="iframe", height=self.height)
+
+
+def browse_render(volume: xr.DataArray, **kwargs: Any) -> RenderBrowser:
+    """Open a :class:`RenderBrowser` for ``volume``."""
+    return RenderBrowser(volume, **kwargs)

@@ -8,8 +8,8 @@
   variable; a cube with ``frames(laser, ...)`` is the laser on/off figure.
 
 ``kind`` overrides the guess: ``image``, ``com``, ``width``, ``curve``,
-``rocking``, ``tiles``, ``browse``, ``projections``, ``volume``, ``on_off``
-or ``grid``.
+``rocking``, ``tiles``, ``browse``, ``projections``, ``volume``, ``on_off``,
+``grid`` or ``render`` (a plotly volume rendering).
 """
 
 from __future__ import annotations
@@ -36,6 +36,7 @@ KINDS = (
     "volume",
     "on_off",
     "grid",
+    "render",
 )
 _MAP_PREFIXES = ("com_", "argmax_")
 _WIDTH_PREFIXES = ("width_", "skew_", "kurtosis_")
@@ -97,6 +98,8 @@ def plot(obj: Any, kind: str | None = None, **kwargs: Any) -> Any:
         return curves.on_off_diff(obj, **kwargs)
     if kind == "grid":
         return grid(obj, **kwargs)
+    if kind == "render":
+        return volume.render(_as_dataarray(obj), **kwargs)
     raise ValueError(f"unknown kind {kind!r}; choose from {KINDS}")
 
 
