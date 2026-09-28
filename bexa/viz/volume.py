@@ -273,6 +273,8 @@ def render(
     clim: Any = ("p", 5, 99.5),
     cmap: str = "viridis",
     scale: Sequence[float] = (1.0, 1.0, 1.0),
+    spacing: Sequence[float] | None = None,
+    units: str = "um",
     downsample: int | None = None,
     max_voxels: int = 300_000,
     surface_count: int | None = None,
@@ -284,11 +286,18 @@ def render(
     ``mode``: ``"translucent"`` fades dim voxels out and lets bright ones glow, like napari's
     translucent rendering and the Slices-to-Voxels app; ``"mip"`` keeps only the brightest
     voxels visible, like a maximum-intensity projection; ``"iso"`` draws one surface at the
-    upper colour limit. ``scale`` is the voxel size ``(z, y, x)`` relative to a pixel, as
-    napari's ``scale``. Stacks with more than ``max_voxels`` voxels are block-averaged in
-    ``y`` and ``x`` first (``downsample`` sets the factor by hand); the browser cannot rotate
-    much more than that. The figure rotates and zooms in the browser; in a notebook show it
-    with :func:`show_plotly`.
+    upper colour limit.
+
+    The axes are in pixels and layers unless a voxel size is given: ``spacing`` is the size of
+    one voxel ``(z, y, x)`` in ``units`` (the layer thickness, the pixel height and the pixel
+    width; for a z-stack the ``samz`` step and the camera's effective pixel), and the axes then
+    read in those units. Without ``spacing``, ``scale`` stretches the axes relative to a pixel,
+    as napari's ``scale`` does.
+
+    Stacks with more than ``max_voxels`` voxels are block-averaged in ``y`` and ``x`` first
+    (``downsample`` sets the factor by hand); the browser cannot rotate much more than that.
+    The averaged voxels keep the pixel size, so the axes stay right. The figure rotates and
+    zooms in the browser; in a notebook show it with :func:`show_plotly`.
     """
     import plotly.graph_objects as go
 
@@ -309,7 +318,14 @@ def render(
     if vmin is None or vmax is None or not vmax > vmin:
         finite = data[np.isfinite(data)]
         vmin, vmax = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)
-    sz, sy, sx = (float(s) for s in scale)
+    if spacing is not None:
+        if len(spacing) != 3:
+            raise ValueError("spacing needs three sizes: (z, y, x)")
+        sz, sy, sx = (float(s) for s in spacing)
+        axis_labels = [f"{name} ({units})" for name in names]
+    else:
+        sz, sy, sx = (float(s) for s in scale)
+        axis_labels = names
     nz, ny, nx = data.shape
     zz, yy, xx = np.meshgrid(
         np.arange(nz) * sz, np.arange(ny) * sy * factor, np.arange(nx) * sx * factor, indexing="ij"
@@ -339,9 +355,9 @@ def render(
         title=title,
         margin={"l": 0, "r": 0, "t": 40 if title else 10, "b": 0},
         scene={
-            "xaxis_title": names[2],
-            "yaxis_title": names[1],
-            "zaxis_title": names[0],
+            "xaxis_title": axis_labels[2],
+            "yaxis_title": axis_labels[1],
+            "zaxis_title": axis_labels[0],
             "aspectmode": "data",
         },
     )
