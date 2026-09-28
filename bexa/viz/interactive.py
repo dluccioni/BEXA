@@ -95,15 +95,40 @@ class _SliderPanel:
         """Redraw the artists for the current indices (implemented by the subclasses)."""
         raise NotImplementedError
 
+    _syncing = False  # True while the code moves the knobs, so they do not call back
+
     def update(self, **index: int) -> None:
-        """Move to new indices (``update(mu=12)``) and redraw only what changed."""
+        """Move to new indices (``update(mu=12)``), put the knobs there and redraw."""
         self.index.update({k: int(v) for k, v in index.items()})
+        self._sync_sliders()
         self.redraw()
         self.title.set_text(self._title())
         if self._output is not None:
             self._show()
         else:
             self.fig.canvas.draw_idle()
+
+    def _sync_sliders(self) -> None:
+        """Move the knobs to the current indices, so dragging one away and back returns here."""
+        sliders = getattr(self, "_sliders", None)
+        if not sliders:
+            return
+        self._syncing = True
+        try:
+            for dim, slider in zip(self.motor_dims, sliders, strict=True):
+                value = self.index[dim]
+                if hasattr(slider, "set_val"):  # matplotlib
+                    if int(slider.val) != value:
+                        slider.set_val(value)
+                elif slider.value != value:  # ipywidgets
+                    slider.value = value
+        finally:
+            self._syncing = False
+
+    def _moved(self, dim: str, value: float) -> None:
+        """A knob moved: follow it, unless the code is moving the knobs."""
+        if not self._syncing:
+            self.update(**{dim: int(value)})
 
     def _show(self) -> None:
         """Draw the figure again into its output area (static backends)."""
@@ -128,7 +153,7 @@ class _SliderPanel:
             for d in self.motor_dims
         }
         for name, slider in sliders.items():
-            slider.observe(lambda change, n=name: self.update(**{n: change["new"]}), names="value")
+            slider.observe(lambda change, n=name: self._moved(n, change["new"]), names="value")
         self._sliders = list(sliders.values())
         if static:  # inline figures are pictures: show them in an output area and redraw there
             import matplotlib.pyplot as plt
@@ -152,7 +177,7 @@ class _SliderPanel:
 
     def _slider_callback(self, dim: str) -> Callable[[float], None]:
         def moved(value: float) -> None:
-            self.update(**{dim: int(value)})
+            self._moved(dim, value)
 
         return moved
 
@@ -468,9 +493,9 @@ class RenderBrowser(_SliderPanel):
         display(widgets.VBox([*self.sliders.values(), self.output]))
         self.update()
 
-    def _moved(self, name: str, value: int) -> None:
+    def _moved(self, name: str, value: float) -> None:
         if not self._syncing:
-            self.update(**{name: value})
+            self.update(**{name: int(value)})
 
     def current(self) -> xr.DataArray:
         """The ``(z, y, x)`` block at the current slider positions."""
