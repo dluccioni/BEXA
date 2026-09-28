@@ -5,11 +5,15 @@ layout exactly, with a planted signal whose centre of mass is known.
 """
 
 from bexa.testing.synthetic import (
+    SAMPLE_REGIONS,
+    Region,
+    SampleModel,
     SyntheticEsrfScan,
     SyntheticLclsCube,
     SyntheticPalRun,
     SyntheticSpecScan,
     SyntheticZStack,
+    dfxm_sample,
     make_esrf_energy_series,
     make_esrf_scan,
     make_esrf_zstack,
@@ -20,11 +24,15 @@ from bexa.testing.synthetic import (
 )
 
 __all__ = [
+    "SAMPLE_REGIONS",
+    "Region",
+    "SampleModel",
     "SyntheticEsrfScan",
     "SyntheticLclsCube",
     "SyntheticPalRun",
     "SyntheticSpecScan",
     "SyntheticZStack",
+    "dfxm_sample",
     "make_esrf_energy_series",
     "make_esrf_scan",
     "make_esrf_zstack",

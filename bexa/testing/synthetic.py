@@ -10,6 +10,7 @@ the way the legacy scripts computed them, for parity tests.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -43,13 +44,17 @@ def _peak_frames(
     rng: np.random.Generator,
     noise: float,
     curve: str = "gaussian",
+    centers: Mapping[str, float | np.ndarray] | None = None,
+    widths: Mapping[str, float | np.ndarray] | None = None,
 ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
     """Frames whose curve in each motor is a Gaussian (or a blurred step) at a per-pixel centre.
 
-    The centre of the first motor varies linearly along x, the second along y.
-    ``curve="edge"`` gives an error-function step instead of a peak, as a
-    knife-edge or sample-height scan does. Returns the float frames
-    ``(n, H, W)`` and the centre maps.
+    ``centers`` gives the centre of a motor's curve, one value or an ``(H, W)`` map, and
+    ``widths`` its sigma the same way; a sigma narrower than half the scan step is widened
+    to that, so coarse scans still sample every curve. Without them the centre of the first
+    motor varies linearly along x, the second along y, with a sigma of 12 % of the range.
+    ``curve="edge"`` gives an error-function step instead of a peak, as a knife-edge or
+    sample-height scan does. Returns the float frames ``(n, H, W)`` and the centre maps.
     """
     names = list(motor_values)
     n = len(next(iter(motor_values.values())))
@@ -61,10 +66,17 @@ def _peak_frames(
         values = np.asarray(motor_values[name], dtype=float)
         lo, hi = float(values.min()), float(values.max())
         span = hi - lo if hi > lo else 1.0
-        # keep centres inside the inner 60% of the scanned range so the curves are sampled
-        frac = (xx / max(W - 1, 1)) if i % 2 == 0 else (yy / max(H - 1, 1))
-        centre = lo + span * (0.2 + 0.6 * frac)
-        sigma = 0.12 * span
+        unique = np.unique(values)
+        step = float(np.diff(unique).min()) if len(unique) > 1 else span
+        if centers is not None and name in centers:
+            centre = np.array(np.broadcast_to(np.asarray(centers[name], dtype=float), (H, W)))
+        else:  # keep centres inside the inner 60% of the scanned range so the curves are sampled
+            frac = (xx / max(W - 1, 1)) if i % 2 == 0 else (yy / max(H - 1, 1))
+            centre = lo + span * (0.2 + 0.6 * frac)
+        if widths is not None and name in widths:
+            sigma = np.maximum(np.asarray(widths[name], dtype=float), 0.5 * step)
+        else:
+            sigma = np.asarray(0.12 * span)
         truth[f"{name}_center"] = centre
         offset = (values[:, None, None] - centre[None]) / sigma
         if curve == "edge":
@@ -128,6 +140,8 @@ def make_esrf_scan(
     dtype: Any = np.uint16,
     positioners: dict[str, float] | None = None,
     curve: str = "gaussian",
+    centers: Mapping[str, float | np.ndarray] | None = None,
+    widths: Mapping[str, float | np.ndarray] | None = None,
 ) -> SyntheticEsrfScan:
     """Write one ESRF BLISS scan (master file plus detector files).
 
@@ -145,6 +159,10 @@ def make_esrf_scan(
     curve
         ``"gaussian"`` (a peak) or ``"edge"`` (a blurred step across the range,
         as a knife-edge or sample-height scan records).
+    centers, widths
+        Centre and sigma of the curve per motor, one value or an ``(H, W)`` map
+        each, as :func:`dfxm_sample` provides (``**sample.scan_kwargs``); without
+        them the centres form a smooth gradient across the field of view.
     layout
         ``"2026"``/``"2025"`` write ``fscan_parameters``; ``"2024"`` omits them
         so the grid must be detected from readbacks (and adds ``obpitch``).
@@ -175,7 +193,9 @@ def make_esrf_scan(
     n_frames = n_total - partial
     per_frame = {n: v[:n_frames] for n, v in per_frame_full.items()}
 
-    frames, truth = _peak_frames(per_frame, frame_shape, amplitude, background, rng, noise, curve)
+    frames, truth = _peak_frames(
+        per_frame, frame_shape, amplitude, background, rng, noise, curve, centers, widths
+    )
     stored = np.clip(np.rint(frames), 0, np.iinfo(dtype).max).astype(dtype)
 
     dataset_dir = root / dataset
@@ -611,6 +631,109 @@ def make_legacy_cube(
 
 
 # ------------------------------------------------------------------------ ESRF z-stack
+@dataclass(frozen=True)
+class Region:
+    """One diffracting region of the synthetic sample: orientation, peak widths, strain."""
+
+    label: int
+    tilt: tuple[float, float]  # (chi, mu) centre of the rocking curve, deg
+    width: tuple[float, float]  # (chi, mu) sigma of the rocking curve, deg
+    brightness: float  # integrated intensity of the rocking curve relative to the brightest
+    energy_offset: float  # centre of the energy curve relative to the nominal energy, keV
+
+
+SAMPLE_REGIONS: dict[str, Region] = {
+    "matrix": Region(0, (0.0, 0.0), (0.10, 0.15), 0.05, 0.0),
+    "domain_a1": Region(1, (-0.06, -0.14), (0.06, 0.09), 1.0, -0.004),
+    "domain_a2": Region(2, (0.06, 0.10), (0.06, 0.09), 0.85, 0.004),
+    "grain_b": Region(3, (0.22, 0.50), (0.08, 0.12), 0.7, 0.006),
+}
+"""The regions of :func:`dfxm_sample`: grain A split into two domains whose chi and mu differ
+by one to two peak widths, grain B several widths away, and a faint matrix around them."""
+
+
+@dataclass
+class SampleModel:
+    """A field of view of the synthetic sample, as per-pixel maps for :func:`make_esrf_scan`."""
+
+    amplitude: np.ndarray  # peak height per pixel (counts); the brightest domain reaches ``peak``
+    centers: dict[str, np.ndarray]  # chi and mu centre per pixel (deg)
+    widths: dict[str, np.ndarray]  # chi and mu sigma per pixel (deg)
+    energy_offset: np.ndarray  # energy centre per pixel relative to the nominal energy (keV)
+    labels: np.ndarray  # the :class:`Region` label of every pixel
+    grain_center: tuple[float, float]  # (row, column) of the centre of grain A
+
+    @property
+    def scan_kwargs(self) -> dict[str, Any]:
+        """``amplitude``, ``centers`` and ``widths`` for :func:`make_esrf_scan`."""
+        return {"amplitude": self.amplitude, "centers": self.centers, "widths": self.widths}
+
+
+def _disc(yy: np.ndarray, xx: np.ndarray, cy: float, cx: float, radius: float) -> np.ndarray:
+    """A disc with a soft edge about one pixel wide: 1 inside, 0 outside."""
+    distance = np.hypot(yy - cy, xx - cx)
+    return 0.5 * (1.0 + erf((radius - distance) / 1.1))
+
+
+def dfxm_sample(
+    frame_shape: tuple[int, int],
+    drift: float = 0.0,
+    peak: float = 4000.0,
+    regions: dict[str, Region] = SAMPLE_REGIONS,
+) -> SampleModel:
+    """Two grains in the field of view, as per-pixel orientation, width and strain maps.
+
+    Grain A is a disc that a wall splits into two domains whose chi and mu differ slightly
+    (``domain_a1``, ``domain_a2``); grain B is a smaller disc at a clearly different
+    orientation; the faint matrix around them is bent a little across the field. ``drift``
+    from 0 to 1 walks through a z-stack: grain A slides across the field (a grain inclined
+    to the beam) and grain B shrinks (a grain that ends). The default tilts sit well inside
+    scans of chi +-0.5 and mu +-1 deg, so such scans record every region.
+    """
+    H, W = frame_shape
+    yy, xx = np.mgrid[0:H, 0:W].astype(float)
+    size = float(min(H, W))
+    matrix, a1, a2, b = (regions[k] for k in ("matrix", "domain_a1", "domain_a2", "grain_b"))
+
+    cy, cx = H * (0.62 - 0.17 * drift), W * (0.32 + 0.23 * drift)  # grain A slides up and right
+    in_a = _disc(yy, xx, cy, cx, 0.22 * size)
+    angle = np.radians(30.0)  # the domain wall through the centre of grain A
+    wall = (xx - cx) * np.cos(angle) + (yy - cy) * np.sin(angle) > 0
+    in_b = _disc(yy, xx, 0.25 * H, 0.78 * W, 0.14 * size * (1.1 - 0.6 * drift))
+
+    labels = np.full((H, W), matrix.label, dtype=np.int64)
+    labels[in_a > 0.5] = np.where(wall, a2.label, a1.label)[in_a > 0.5]
+    labels[in_b > 0.5] = b.label
+
+    def per_pixel(value: Callable[[Region], float]) -> np.ndarray:
+        out = np.zeros((H, W))
+        for region in regions.values():
+            out[labels == region.label] = value(region)
+        return out
+
+    bend_chi = 0.03 * (xx / max(W - 1, 1) - 0.5)  # the whole field is bent a little
+    bend_mu = 0.04 * (yy / max(H - 1, 1) - 0.5)
+    brightness = (  # integrated intensity, blended at the edges of the grains
+        matrix.brightness * (1 - in_a) * (1 - in_b)
+        + np.where(wall, a2.brightness, a1.brightness) * in_a * (1 - in_b)
+        + b.brightness * in_b
+    )
+    widths = {"chi": per_pixel(lambda r: r.width[0]), "mu": per_pixel(lambda r: r.width[1])}
+    # the same integrated intensity makes a lower peak where the curve is wider
+    height = peak * brightness * (a1.width[0] * a1.width[1]) / (widths["chi"] * widths["mu"])
+    return SampleModel(
+        amplitude=height,
+        centers={
+            "chi": per_pixel(lambda r: r.tilt[0]) + bend_chi,
+            "mu": per_pixel(lambda r: r.tilt[1]) + bend_mu,
+        },
+        widths=widths,
+        energy_offset=per_pixel(lambda r: r.energy_offset),
+        labels=labels,
+        grain_center=(cy, cx),
+    )
+
+
 @dataclass
 class SyntheticZStack:
     """What :func:`make_esrf_zstack` wrote: a mosaicity scan and an energy series per height."""
@@ -633,7 +756,7 @@ def make_esrf_zstack(
     root: str | Path,
     dataset: str = "synth_zstack",
     z_values: tuple[float, ...] = (-0.02, -0.01, 0.0, 0.01, 0.02),
-    mosa: tuple[tuple[str, int], ...] = (("chi", 4), ("mu", 10)),
+    mosa: tuple[tuple[str, int], ...] = (("chi", 6), ("mu", 15)),
     energies: tuple[float, ...] = (16.98, 16.99, 17.0, 17.01, 17.02),
     energy_motor: tuple[str, int] = ("mu", 8),
     frame_shape: tuple[int, int] = (40, 48),
@@ -655,17 +778,18 @@ def make_esrf_zstack(
       height's ``mosa_scans`` entry.
 
     ``bexa.open(dataset, scan=mosa_scans[k])`` and
-    ``bexa.open(dataset, scan=energy_scans[k])`` open layer ``k``. A bright grain (a
-    disc) drifts across the field of view with the height, and its energy centre varies
-    along ``x`` and with the height, so the stacked maps show a tilted grain and a strain
-    gradient. The planted values are in ``truth`` (``grain_center`` per layer,
-    ``energy_center`` maps).
+    ``bexa.open(dataset, scan=energy_scans[k])`` open layer ``k``. The sample is
+    :func:`dfxm_sample` at a drift that grows with the height: grain A, split into two
+    domains, slides across the field of view and grain B shrinks. The energy centre of
+    every region is offset by its strain, on top of a gradient along ``x`` and with the
+    height. The planted values are in ``truth``: ``grain_center`` (row, column of grain A)
+    per layer and the ``energy_center``, ``chi_center``, ``mu_center`` and ``labels`` maps.
     """
     if energy_scan not in ("rocking", "mosa"):
         raise ValueError(f"energy_scan must be 'rocking' or 'mosa', not {energy_scan!r}")
     root = Path(root)
     height, width = frame_shape
-    yy, xx = np.mgrid[0:height, 0:width]
+    _, xx = np.mgrid[0:height, 0:width]
     z_array = np.asarray(z_values, dtype=float)
     e_array = np.asarray(energies, dtype=float)
     n_z = len(z_array)
@@ -675,13 +799,16 @@ def make_esrf_zstack(
     energy_scans: list[tuple[int, int]] = []
     grain_centres = np.zeros((n_z, 2))
     energy_centres = np.zeros((n_z, height, width))
+    tilt_centres = {name: np.zeros((n_z, height, width)) for name in ("chi", "mu")}
+    labels = np.zeros((n_z, height, width), dtype=np.int64)
     scan = first_scan
     for k, z in enumerate(z_array):
         frac = k / max(n_z - 1, 1)
-        cy, cx = height * (0.35 + 0.3 * frac), width * (0.3 + 0.4 * frac)
-        radius = 0.22 * min(height, width)
-        grain = 0.15 + np.exp(-0.5 * ((yy - cy) ** 2 + (xx - cx) ** 2) / radius**2)
-        grain_centres[k] = (cy, cx)
+        sample = dfxm_sample(frame_shape, drift=frac)
+        grain_centres[k] = sample.grain_center
+        for name in tilt_centres:
+            tilt_centres[name][k] = sample.centers[name]
+        labels[k] = sample.labels
         fixed = {"samz": float(z)}
         if energy_scan == "rocking":  # the mosaicity scan at the nominal energy comes first
             made = make_esrf_scan(
@@ -691,16 +818,19 @@ def make_esrf_zstack(
                 motors=mosa,
                 frame_shape=frame_shape,
                 n_files=n_files,
-                amplitude=4000.0 * grain,
                 positioners=fixed,
                 seed=seed + scan,
+                **sample.scan_kwargs,
                 **kwargs,
             )
             layers.append(made)
             mosa_scans.append(scan)
             scan += 1
-        centre = e_array.mean() + e_span * (
-            0.25 * (xx / max(width - 1, 1) - 0.5) + 0.2 * (frac - 0.5)
+        # the matrix is bent along x and the strain drifts with the height; each region adds its own
+        centre = (
+            e_array.mean()
+            + e_span * (0.1 * (xx / max(width - 1, 1) - 0.5) + 0.2 * (frac - 0.5))
+            + sample.energy_offset
         )
         energy_centres[k] = centre
         first = scan
@@ -715,7 +845,9 @@ def make_esrf_zstack(
                 frame_shape=frame_shape,
                 n_files=n_files,
                 energy_keV=float(energy),
-                amplitude=4000.0 * grain * weight,
+                amplitude=sample.amplitude * weight,
+                centers=sample.centers,
+                widths=sample.widths,
                 positioners=fixed,
                 seed=seed + scan,
                 **kwargs,
@@ -733,5 +865,11 @@ def make_esrf_zstack(
         energy_scans=energy_scans,
         energies=e_array,
         layers=layers,
-        truth={"grain_center": grain_centres, "energy_center": energy_centres},
+        truth={
+            "grain_center": grain_centres,
+            "energy_center": energy_centres,
+            "chi_center": tilt_centres["chi"],
+            "mu_center": tilt_centres["mu"],
+            "labels": labels,
+        },
     )
