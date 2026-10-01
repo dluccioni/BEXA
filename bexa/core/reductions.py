@@ -15,6 +15,7 @@ over the frame axis so that no array of the full stack size is ever created.
 
 from __future__ import annotations
 
+import copy
 import math
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -49,6 +50,7 @@ __all__ = [
     "Min",
     "MotorCOM",
     "OnOffSplit",
+    "PerRoi",
     "Plan",
     "Preview",
     "Projections",
@@ -100,6 +102,7 @@ class Plan:
     frame_ids: np.ndarray  # frames to read, sorted
     grid_shape: tuple[int, ...]  # motor grid after downsampling
     coords: dict[str, np.ndarray] = field(default_factory=dict)  # downsampled motor coords
+    grid: Structure | None = None  # the downsampled grid itself, for plans within this one
 
     @property
     def motor_dims(self) -> tuple[str, ...]:
@@ -200,7 +203,7 @@ def make_plan(
     kept = sub.sub(keep)
     frame_ids = kept.frame_ids()
     coords = {d: kept.coords[d] for d in kept.motor_dims}
-    return Plan(sub, window, motor_factors, frame_ids, kept.motor_shape, coords)
+    return Plan(sub, window, motor_factors, frame_ids, kept.motor_shape, coords, grid=kept)
 
 
 def block_reduce(frames: Any, dy: int, dx: int, method: str = "mean") -> Any:
@@ -864,6 +867,108 @@ class OnOffSplit(Accumulator):
                 out.update({f"{key}_{k}": v for k, v in res.items()})
             else:
                 out[f"{key}_{res.name}"] = res
+        return out
+
+
+def _same_coords(a: Any, b: Any) -> bool:
+    if a is None or b is None:
+        return False
+    a, b = np.asarray(a), np.asarray(b)
+    return a.shape == b.shape and bool(np.allclose(a, b))
+
+
+@register_accumulator("per_roi")
+class PerRoi(Accumulator):
+    """Run accumulators on several regions of one scan in the same pass: results per ROI.
+
+    ``rois`` maps a name to a :class:`bexa.core.roi.ROI` that may restrict any
+    motor dims and the pixel window; ``accumulators`` (classes or instances,
+    copied as built for every region) run on each. Every result is named
+    ``<roi>_<result>`` (``grainA_sum``, ``grainA_com_mu``). A dim an ROI
+    restricts is renamed ``<roi>_<dim>`` (``grainA_chi``), so regions of
+    different sizes live in one Dataset; a dim it leaves whole keeps its name,
+    so the maps of a motor ROI stay ``(y, x)``. Pixel ranges snap to the pixel
+    grid of the pass's own window and downsampling, motor ranges to its grid.
+    One pass over the frames serves every region; a region that selects no
+    frame raises.
+
+    Examples
+    --------
+    >>> rois = {"grainA": ROI(chi=(0.1, 0.3), mu=(-0.2, 0.2)), "edge": ROI(x=(0, 800))}
+    >>> scan.reduce([PerRoi(rois, [Sum(), MotorCOM(axes=("mu",))])])
+    """
+
+    name = "per_roi"
+
+    def __init__(self, rois: Mapping[str, ROI], accumulators: Iterable[Any]) -> None:
+        template = _instantiate(accumulators)
+        super().__init__(
+            rois={str(k): {d: list(r) for d, r in v.ranges.items()} for k, v in rois.items()},
+            inner=[a.describe() for a in template],
+        )
+        self.rois = {str(k): v for k, v in rois.items()}
+        self.template = template
+        self.live_copies = 1 + max((a.live_copies for a in template), default=0)
+
+    def _allocate(self) -> None:
+        plan, w = self.plan, self.plan.window
+        grid = plan.grid if plan.grid is not None else plan.structure
+        ny, nx = w.shape
+        self.parts: dict[str, tuple[Plan, list[Accumulator], tuple[int, int, int, int]]] = {}
+        for name, roi in self.rois.items():
+            motors = ROI({d: r for d, r in roi.ranges.items() if d not in PIXEL_DIMS})
+            inner = make_plan(grid, motors, (1,) * len(plan.motor_dims) + (w.ds_y, w.ds_x))
+            if inner.frame_ids.size == 0:
+                raise ValueError(f"ROI {name!r} selects no frame of this scan")
+            # the region's pixel window on the pixel grid of the pass's window (downsampled)
+            y0, y1, x0, x1 = roi.pixel_window(plan.structure.frame_shape)
+            iy0 = min(max(y0 - w.y.start, 0) // w.ds_y, ny)
+            iy1 = min(max(min(y1, w.y.stop) - w.y.start, 0) // w.ds_y, ny)
+            ix0 = min(max(x0 - w.x.start, 0) // w.ds_x, nx)
+            ix1 = min(max(min(x1, w.x.stop) - w.x.start, 0) // w.ds_x, nx)
+            if iy1 <= iy0 or ix1 <= ix0:
+                raise ValueError(f"ROI {name!r} selects no pixel of the window {w.full_shape}")
+            inner.window = Window(
+                slice(w.y.start + w.ds_y * iy0, w.y.start + w.ds_y * iy1),
+                slice(w.x.start + w.ds_x * ix0, w.x.start + w.ds_x * ix1),
+                w.ds_y,
+                w.ds_x,
+            )
+            accs = [copy.deepcopy(a) for a in self.template]  # as built: fresh totals per region
+            for acc in accs:
+                acc.start(inner, self.xp, self.dtype)
+            self.parts[name] = (inner, accs, (iy0, iy1, ix0, ix1))
+
+    def update(self, frames: Any, frame_ids: np.ndarray) -> None:
+        xp = self.xp
+        for inner, accs, (iy0, iy1, ix0, ix1) in self.parts.values():
+            mask = np.isin(frame_ids, inner.frame_ids)
+            if not mask.any():
+                continue
+            chosen = frames if mask.all() else frames[xp.asarray(mask)]
+            ids = frame_ids if mask.all() else frame_ids[mask]
+            block = chosen[..., iy0:iy1, ix0:ix1]
+            for acc in accs:
+                acc.update(block, ids)
+        self.n_frames_seen += len(frame_ids)
+
+    def result(self) -> dict[str, xr.DataArray]:
+        out: dict[str, xr.DataArray] = {}
+        outer = self.plan.all_coords()
+        for name, (inner, accs, _) in self.parts.items():
+            inside = inner.all_coords()
+            renamed = {
+                d: f"{name}_{d}"
+                for d in inner.dims
+                if not _same_coords(outer.get(d), inside.get(d))
+            }
+            for acc in accs:
+                res = acc.result()
+                items = list(res.items()) if isinstance(res, dict) else [(str(res.name), res)]
+                for key, arr in items:
+                    out[f"{name}_{key}"] = arr.rename(
+                        {d: renamed[d] for d in arr.dims if d in renamed}
+                    )
         return out
 
 
