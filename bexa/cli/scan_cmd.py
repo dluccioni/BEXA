@@ -23,9 +23,12 @@ def parse_roi(text: str | None) -> ROI | None:
 
 
 def parse_downsample(text: str | None) -> Any:
-    """``"4"`` -> 4, ``"1,1,4,4"`` -> (1, 1, 4, 4)."""
+    """``"4"`` -> 4, ``"1,1,4,4"`` -> (1, 1, 4, 4), ``"mu=2,y=4"`` -> {"mu": 2, "y": 4}."""
     if not text:
         return None
+    if "=" in text:
+        pairs = [p.split("=", 1) for p in text.split(",") if p.strip()]
+        return {name.strip(): int(value) for name, value in pairs}
     parts = [int(p) for p in text.split(",") if p.strip()]
     return parts[0] if len(parts) == 1 else tuple(parts)
 

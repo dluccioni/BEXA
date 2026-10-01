@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -143,12 +143,17 @@ class Plan:
 
 
 def parse_downsample(
-    downsample: int | Sequence[int] | None, structure: Structure
+    downsample: int | Sequence[int] | Mapping[str, int] | None, structure: Structure
 ) -> tuple[tuple[int, ...], tuple[int, int]]:
     """Split a downsample request into motor factors and ``(ds_y, ds_x)``.
 
     Accepts the forms the v9 module accepted: an int or a 2-tuple for the
-    pixel axes only, or one factor per dim ``(motor0, ..., ds_y, ds_x)``.
+    pixel axes only, or one factor per dim ``(motor0, ..., ds_y, ds_x)``; or a
+    mapping by name, ``{"mu": 2, "y": 4, "x": 4}``, every second point of
+    ``mu`` and the pixels binned 4 x 4, with names the scan does not have
+    ignored, so one setting serves scans of different motors. A motor factor
+    keeps every k-th grid point (k times fewer frames are read); a pixel
+    factor bins blocks of pixels.
     """
     n_motors = len(structure.motor_dims)
     if downsample is None:
@@ -156,6 +161,12 @@ def parse_downsample(
     if isinstance(downsample, (int, np.integer)):
         f = int(downsample)
         return (1,) * n_motors, (f, f)
+    if isinstance(downsample, Mapping):
+        by_name = {str(k): int(v) for k, v in downsample.items()}
+        if any(v < 1 for v in by_name.values()):
+            raise ValueError(f"downsample factors must be positive, got {downsample!r}")
+        motors = tuple(by_name.get(d, 1) for d in structure.motor_dims)
+        return motors, (by_name.get(PIXEL_DIMS[0], 1), by_name.get(PIXEL_DIMS[1], 1))
     factors = tuple(int(v) for v in downsample)
     if len(factors) == 2:
         return (1,) * n_motors, (factors[0], factors[1])
@@ -168,7 +179,9 @@ def parse_downsample(
 
 
 def make_plan(
-    structure: Structure, roi: ROI | None = None, downsample: int | Sequence[int] | None = None
+    structure: Structure,
+    roi: ROI | None = None,
+    downsample: int | Sequence[int] | Mapping[str, int] | None = None,
 ) -> Plan:
     """Resolve ROI and downsampling against a structure."""
     roi = roi or ROI()
@@ -942,7 +955,7 @@ def reduce(
     target: Any,
     accumulators: Iterable[Any],
     roi: ROI | None = None,
-    downsample: int | Sequence[int] | None = None,
+    downsample: int | Sequence[int] | Mapping[str, int] | None = None,
     device: str | None = "auto",
     batch_frames: int | None = None,
     dtype: Any = np.float32,
