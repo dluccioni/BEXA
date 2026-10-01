@@ -29,7 +29,7 @@ from bexa.core.backend import DEFAULT_MEMORY_FRACTION, resolve_device
 from bexa.core.parallel import default_workers, process_pool
 from bexa.core.provenance import build_attrs, fingerprint, to_json
 from bexa.core.resources import usable_cpus
-from bexa.core.scan import Scan, _resolve_cache, combine_sources, list_scans
+from bexa.core.scan import Scan, _resolve_cache, _resolve_spec, combine_sources, list_scans
 from bexa.core.scan import open as open_scan
 from bexa.core.structure import ENERGY_DIM, _group_values
 
@@ -174,12 +174,16 @@ class Dataset:
             self.cache = _resolve_cache(cache, cache_root())
             for p in paths:
                 folder = _folder_of(p)
+                # the layout is sniffed once per folder, here: a folder that cannot be read (a
+                # BLISS dataset copied without its master, say) fails where it is named, and
+                # the scans are opened by the spec's name without sniffing again
+                spec_name = _resolve_spec(folder, format, None).name
                 options = {
                     **self._open_kwargs,
-                    "format": format,
+                    "format": spec_name,
                     "cache": self.cache if self.cache is not None else False,
                 }
-                listing = {"format": format, "detector": detector}
+                listing = {"format": spec_name, "detector": detector}
                 folders.append(_Folder(folder, folder.name, options, listing))
         self._folders = folders
         self.paths = [f.path for f in folders]
@@ -626,6 +630,7 @@ def stack(
     attrs["stack_dim"] = dims[0] if len(dims) == 1 else to_json(dims)
     attrs["scan_names"] = [scan.name for scan in scans]
     attrs["scan_ids"] = [int(getattr(scan.source, "scan", i)) for i, scan in enumerate(scans)]
+    attrs["datasets"] = ", ".join(dict.fromkeys(scan.name for scan in scans))  # where it came from
     attrs["accumulators"] = names
     if not dims:  # one scan, nothing to stack on
         result = scans[0].reduce(accumulators, **reduce_kwargs)

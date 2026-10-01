@@ -352,6 +352,15 @@ def _resolve_spec(
     if spec is None:
         scored = match_spec(path)
         hint = ", ".join(f"{s.name} ({sc:.0%})" for sc, s in scored[:3]) or "none"
+        folder = path if path.is_dir() else path.parent
+        scan_dirs = [p for p in folder.glob("scan[0-9][0-9][0-9][0-9]") if p.is_dir()]
+        if scan_dirs and not any(p.is_file() for p in folder.glob("*.h5")):
+            # a BLISS dataset copied without its master: the scan folders alone say nothing
+            # about motors, so no spec can match
+            raise ValueError(
+                f"{folder} holds {len(scan_dirs)} scan folders but no master file "
+                f"({folder.name}.h5 is missing: copy it from the dataset folder of RAW_DATA)"
+            )
         raise ValueError(
             f"no format spec matches {path}; closest: {hint}. "
             "Run 'bexa profile sniff' to draft one."
