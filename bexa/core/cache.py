@@ -24,19 +24,20 @@ from bexa.core.provenance import fingerprint
 
 log = get_logger(__name__)
 
-DEFAULT_MEMORY_BYTES = 2 * 1024**3  # the memory level never grows past this
-MEMORY_SHARE = 0.1  # ... nor past this share of the memory the process may use
+DEFAULT_MEMORY_BYTES = 32 * 1024**3  # the memory level never grows past this
+MEMORY_SHARE = 0.25  # ... nor past this share of the memory the process may use
 FILE_COMPRESSION = (
     "lzf"  # cache files are bexa's own: lzf writes a preview in a tenth of gzip's time
 )
 
 
 def default_memory_bytes() -> int:
-    """Budget of the in-memory level: a tenth of the usable memory, at most 2 GiB.
+    """Budget of the in-memory level: a quarter of the usable memory, at most 32 GiB.
 
-    A dataset of many scans shares one cache, so the level must stay small next
-    to the results themselves; on a 64 GB session it is 2 GiB, on a 4 GB laptop
-    about 400 MB.
+    Results read back from this level cost nothing, so it takes what a session
+    can spare: 16 GiB on a 64 GB session, 32 GiB on a 400 GB node, 1 GB on a
+    4 GB laptop. It is an LRU, so it never holds more than that whatever the
+    dataset.
     """
     from bexa.core.resources import memory_info
 

@@ -1017,8 +1017,25 @@ def iter_batches(
             yield FrameBatch(frames, ids, w.y, w.x)
 
     if prefetch and ids_all.size > size:
-        return iter(Prefetcher(generate(), depth=2))
+        h, width = w.full_shape
+        depth = prefetch_depth(size * h * width * np.dtype(dtype).itemsize)
+        return iter(Prefetcher(generate(), depth=depth))
     return generate()
+
+
+PREFETCH_SHARE = 0.1  # the batches read ahead may hold this share of the memory budget ...
+MAX_PREFETCH = 8  # ... up to this many batches
+
+
+def prefetch_depth(batch_bytes: int) -> int:
+    """Batches to read ahead of the computation: 2 to ``MAX_PREFETCH``, by the memory budget.
+
+    A deeper queue rides out the pauses of a network file system while the
+    frames keep being processed; it costs ``depth`` batches of host memory,
+    kept under ``PREFETCH_SHARE`` of the budget.
+    """
+    allowed = PREFETCH_SHARE * backend.memory_budget("cpu") // max(int(batch_bytes), 1)
+    return int(min(MAX_PREFETCH, max(2, allowed)))
 
 
 def _instantiate(accumulators: Iterable[Any]) -> list[Accumulator]:

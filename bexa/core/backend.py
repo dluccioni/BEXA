@@ -21,7 +21,9 @@ from bexa._log import get_logger
 log = get_logger(__name__)
 
 Device = Literal["cpu", "cuda"]
-DEFAULT_MEMORY_FRACTION = 0.5
+# one operation may take this much of the memory the process can still use; the rest is
+# headroom for the pipeline's temporaries, the other variables of a session and the system
+DEFAULT_MEMORY_FRACTION = 0.8
 # the batch itself is capped: bigger batches are no faster (the frames are processed in one
 # streaming pass either way) and every temporary of the pipeline is batch-sized
 MAX_BATCH_BYTES = 256 * 2**20
