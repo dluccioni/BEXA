@@ -217,7 +217,11 @@ def memory_budget(device: str | None = "cpu", fraction: float | None = None) -> 
 
     if fraction is None:
         fraction = float(os.environ.get("BEXA_MEMORY_FRACTION", DEFAULT_MEMORY_FRACTION))
-    budget = memory_info().available * fraction
+    fixed = os.environ.get("BEXA_MEMORY_BYTES", "")
+    if fixed.isdigit():  # a share handed down by the parent of a worker process
+        budget = float(fixed)
+    else:
+        budget = memory_info().available * fraction
     if resolve_device(device) == "cuda":
         import cupy
 
@@ -226,8 +230,16 @@ def memory_budget(device: str | None = "cpu", fraction: float | None = None) -> 
     return int(budget)
 
 
+class BudgetError(MemoryError):
+    """A request larger than the memory budget, refused before anything was allocated.
+
+    A ``MemoryError`` for callers, but not an out-of-memory condition: the
+    streaming engine does not retry with smaller batches on it.
+    """
+
+
 def check_fits(nbytes: int, what: str, device: str | None = "cpu", hint: str = "") -> int:
-    """Raise ``MemoryError`` when ``nbytes`` exceeds the budget of ``device``; return the budget.
+    """Raise ``BudgetError`` when ``nbytes`` exceeds the budget of ``device``; return the budget.
 
     The message names the size, the budget and, with ``hint``, the way out
     (an ROI, a larger downsample, ``store=``), so a result that cannot fit
@@ -235,7 +247,7 @@ def check_fits(nbytes: int, what: str, device: str | None = "cpu", hint: str = "
     """
     budget = memory_budget(device)
     if nbytes > budget:
-        raise MemoryError(
+        raise BudgetError(
             f"{what} needs {nbytes / 1e9:.2f} GB but the memory budget is {budget / 1e9:.2f} GB"
             + (f"; {hint}" if hint else "")
             + " (BEXA_MEMORY_FRACTION raises the budget)"

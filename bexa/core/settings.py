@@ -64,7 +64,11 @@ def settings() -> dict[str, Any]:
         },
         "memory": {
             "fraction": fraction,
-            "source": "BEXA_MEMORY_FRACTION" if "BEXA_MEMORY_FRACTION" in env else "default",
+            "source": "BEXA_MEMORY_BYTES"
+            if env.get("BEXA_MEMORY_BYTES", "").isdigit()
+            else "BEXA_MEMORY_FRACTION"
+            if "BEXA_MEMORY_FRACTION" in env
+            else "default",
             "available_gb": info.get("ram_available_gb"),
             "limit_gb": info.get("ram_total_gb"),
             "limit_source": info.get("memory_source"),

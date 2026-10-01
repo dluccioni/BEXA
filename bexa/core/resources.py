@@ -88,8 +88,9 @@ def cgroup_memory(
 ) -> tuple[int, int, str] | None:
     """``(limit, used, version)`` of the tightest memory limit on this process, or None.
 
-    ``used`` leaves out the inactive file cache, which the kernel reclaims before it
-    kills anything. Returns None outside Linux and when no level sets a limit.
+    ``used`` leaves out the file cache, active and inactive, which the kernel
+    reclaims before it kills anything. Returns None outside Linux and when no
+    level sets a limit.
     """
     try:
         text = proc_cgroup.read_text()
@@ -102,7 +103,13 @@ def cgroup_memory(
         nonlocal best
         if limit is None or limit >= UNLIMITED:
             return
-        used = max((usage or 0) - stat.get("inactive_file", stat.get("total_inactive_file", 0)), 0)
+        # the page cache, active or inactive, is clean file data the kernel drops under pressure
+        # before it kills anything: after a pass over a few hundred GB of frames it fills the
+        # job's accounting, yet none of it is in the way
+        cache = sum(
+            stat.get(key, stat.get(f"total_{key}", 0)) for key in ("active_file", "inactive_file")
+        )
+        used = max((usage or 0) - cache, 0)
         if best is None or limit - used < best[0] - best[1]:
             best = (limit, used, version)
 

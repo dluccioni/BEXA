@@ -1199,7 +1199,8 @@ def reduce(
             )
             break
         except Exception as exc:
-            if not backend.is_oom_error(exc):
+            # a refusal by the budget is deterministic: smaller batches would not help
+            if isinstance(exc, backend.BudgetError) or not backend.is_oom_error(exc):
                 raise
             attempts += 1
             backend.free_device_memory()

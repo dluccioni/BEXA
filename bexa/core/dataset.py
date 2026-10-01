@@ -12,7 +12,6 @@ z-stack becomes ``(samz, y, x)`` maps and a z-stack at several energies
 
 from __future__ import annotations
 
-import os
 import warnings
 from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from concurrent.futures import as_completed
@@ -25,7 +24,7 @@ import pandas as pd
 import xarray as xr
 
 from bexa._log import get_logger, interactive_session, progress
-from bexa.core.backend import DEFAULT_MEMORY_FRACTION, resolve_device
+from bexa.core.backend import memory_budget, resolve_device
 from bexa.core.parallel import default_workers, process_pool
 from bexa.core.provenance import build_attrs, fingerprint, to_json
 from bexa.core.reductions import make_plan
@@ -953,10 +952,9 @@ def _reduced(
         jobs.append((scan.recipe, None if root is None else str(root), scan.cache_reductions))
     # one progress bar over the scans, here; the workers share the GPU when there is one
     kwargs = {**reduce_kwargs, "show_progress": False, "device": device}
-    fraction = float(os.environ.get("BEXA_MEMORY_FRACTION", DEFAULT_MEMORY_FRACTION))
     cpus, _ = usable_cpus()
-    env = {  # the workers share the job's memory and cores
-        "BEXA_MEMORY_FRACTION": f"{fraction / n_workers:.6g}",
+    env = {  # the workers share this process's memory budget and the job's cores
+        "BEXA_MEMORY_BYTES": str(max(memory_budget("cpu") // n_workers, 64 * 2**20)),
         "BEXA_THREADS": str(max(1, min(8, cpus // n_workers))),
     }
     log.info("reducing %d scans in %d processes", len(scans), n_workers)
