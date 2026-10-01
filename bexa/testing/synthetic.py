@@ -872,13 +872,16 @@ def make_esrf_zstack(
     energy_scan: str = "rocking",
     layer_px: float = 4.0,
     z_motor: str = "samz",
+    tilt_offset: Mapping[str, float] | None = None,
     **kwargs: Any,
 ) -> SyntheticZStack:
     """A mosaicity scan and an energy series per sample height, in one dataset.
 
     The height is the positioner ``z_motor`` (``samz``, or ``uz`` as at ma7352).
     One energy (``energies=(17.0,)``) gives heights only, one height
-    (``z_values=(0.0,)``) an energy series only. Two ways of scanning the
+    (``z_values=(0.0,)``) an energy series only. ``tilt_offset`` (``{"mu":
+    0.05}``, degrees) tilts the whole sample, the same grain measured again
+    after annealing, say, for difference maps. Two ways of scanning the
     energy, chosen with ``energy_scan``:
 
     - ``"rocking"``: at every height one ``mosa`` scan (chi x mu) at the nominal energy,
@@ -924,9 +927,12 @@ def make_esrf_zstack(
         frac = k / max(n_z - 1, 1)
         z_px = micro.shape[0] / 2 + (z - z_array.mean()) / z_step * layer_px
         sample = dfxm_sample(frame_shape, z_px, microstructure=micro)
+        # the sample tilted by ``tilt_offset``: every region's centre moves by the same angle
+        centers = {n: c + float((tilt_offset or {}).get(n, 0.0)) for n, c in sample.centers.items()}
+        scan_kwargs = {**sample.scan_kwargs, "centers": centers}
         grain_centres[k] = sample.grain_center
         for name in tilt_centres:
-            tilt_centres[name][k] = sample.centers[name]
+            tilt_centres[name][k] = centers[name]
         labels[k] = sample.labels
         grains[k] = sample.grains
         fixed = {z_motor: float(z)}
@@ -940,7 +946,7 @@ def make_esrf_zstack(
                 n_files=n_files,
                 positioners=fixed,
                 seed=seed + scan,
-                **sample.scan_kwargs,
+                **scan_kwargs,
                 **kwargs,
             )
             layers.append(made)
@@ -966,7 +972,7 @@ def make_esrf_zstack(
                 n_files=n_files,
                 energy_keV=float(energy),
                 amplitude=sample.amplitude * weight,
-                centers=sample.centers,
+                centers=centers,
                 widths=sample.widths,
                 positioners=fixed,
                 seed=seed + scan,

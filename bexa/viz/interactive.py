@@ -18,7 +18,7 @@ import numpy as np
 import xarray as xr
 
 from bexa.core.roi import ROI
-from bexa.core.stacks import brightest, shared_limits
+from bexa.core.stacks import brightest, shared_limits, total_volume
 from bexa.viz.style import as_array, resolve_clim
 
 __all__ = [
@@ -33,6 +33,7 @@ __all__ = [
     "compare",
     "pick_roi",
     "shared_limits",
+    "total_volume",
 ]
 
 

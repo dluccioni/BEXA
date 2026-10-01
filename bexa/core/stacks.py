@@ -10,6 +10,7 @@ missing or no longer match the array's dims (after a ``transpose``).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -17,7 +18,7 @@ import xarray as xr
 
 from bexa.core.backend import to_host
 
-__all__ = ["block_stats", "brightest", "is_lazy", "shared_limits"]
+__all__ = ["block_stats", "brightest", "is_lazy", "shared_limits", "total_volume"]
 
 IN_MEMORY_LIMIT = 256 * 1024**2  # arrays up to this size are simply loaded
 
@@ -98,6 +99,74 @@ def block_stats(volume: xr.DataArray, max_frames: int | None = None) -> dict[str
             out["total"][position] = float(finite.sum(dtype=np.float64))
             out["p1"][position], out["p99"][position] = np.percentile(finite, [1, 99])
     return out
+
+
+def total_volume(
+    volume: xr.DataArray,
+    keep: str | Sequence[str] | None = None,
+    downsample: int | Sequence[int] | None = None,
+    method: str = "mean",
+) -> xr.DataArray:
+    """The intensity summed over every leading dim but ``keep``, read one block at a time.
+
+    ``stacked["sum"]`` of a z-stack, ``(z, energy, y, x)`` say, gives with
+    ``keep="z"`` the total scattered intensity per voxel ``(z, y, x)``,
+    whatever was scanned; ``stacked["preview"]`` summed over the scan motors
+    gives the same from the binned frames. A lazy stack on disk is read one
+    kept position at a time, so the memory is one such block. ``downsample``
+    bins the pixels of the result (an int or ``(by, bx)``, block ``method``
+    ``"mean"``, ``"sum"`` or ``"max"``) with the full-resolution index of each
+    block's first pixel as coordinates, so a volume of summed images can take
+    the voxel size of the previews. Missing scans (NaN frames) count as zero.
+    The result is in memory, with attrs ``summed_over`` and ``binning``.
+    """
+    from bexa.core.reductions import block_reduce
+
+    lead = [str(d) for d in volume.dims[:-2]]
+    kept = (
+        [lead[0]]
+        if keep is None and lead
+        else [keep]
+        if isinstance(keep, str)
+        else list(keep or [])
+    )
+    unknown = [d for d in kept if d not in lead]
+    if unknown:
+        raise ValueError(f"{unknown} are not leading dims of the volume {tuple(volume.dims)}")
+    kept = [d for d in lead if d in kept]  # in the volume's order
+    summed = [d for d in lead if d not in kept]
+    if isinstance(downsample, (int, np.integer)):
+        by = bx = int(downsample)
+    elif downsample is not None:
+        by, bx = (int(v) for v in downsample)
+    else:
+        by = bx = 1
+    py, px = (str(d) for d in volume.dims[-2:])
+    ny, nx = volume.shape[-2] // by, volume.shape[-1] // bx
+    kept_shape = tuple(volume.sizes[d] for d in kept)
+    out = np.zeros((*kept_shape, ny, nx), dtype=np.float64)
+    for flat in range(int(np.prod(kept_shape)) if kept else 1):
+        position = np.unravel_index(flat, kept_shape) if kept else ()
+        block = _as_array(volume.isel(dict(zip(kept, position, strict=True))))
+        with np.errstate(all="ignore"):
+            image = np.nansum(block.reshape(-1, *block.shape[-2:]), axis=0, dtype=np.float64)
+        out[position] = block_reduce(image, by, bx, method)
+    coords: dict[str, Any] = {d: volume.coords[d].values for d in kept if d in volume.coords}
+    for name, n, factor, size in ((py, ny, by, volume.shape[-2]), (px, nx, bx, volume.shape[-1])):
+        start = float(volume.coords[name].values[0]) if name in volume.coords else 0.0
+        step = (
+            float(volume.coords[name].values[1] - volume.coords[name].values[0])
+            if name in volume.coords and size > 1
+            else 1.0
+        )
+        coords[name] = start + step * factor * np.arange(n)
+    return xr.DataArray(
+        out,
+        dims=(*kept, py, px),
+        coords=coords,
+        name=f"total_{volume.name}" if volume.name else "total",
+        attrs={"summed_over": summed, "binning": [by, bx], "method": method},
+    )
 
 
 def brightest(volume: Any, over: Any = None, name: str | None = None) -> dict[str, int]:
