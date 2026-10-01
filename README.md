@@ -1657,6 +1657,7 @@ Names of the results:
 | `FrameStats`, `scan.stats` | `frame_sum`, `frame_mean`, `frame_max`, `frame_com_y`, `frame_com_x` (motors) |
 | `Histogram` | `histogram` (value) |
 | `OnOffSplit(Sum)` | `on_sum`, `off_sum` |
+| `PerRoi({"grainA": roi}, [Sum, MotorCOM])` | `grainA_sum`, `grainA_com_<axis>`, ...: every inner result per region; a dim the region restricts becomes `grainA_<dim>` |
 | `bexa.stack(..., dim="auto")` | every variable of the accumulators with the dims that vary between the scans in front (`samz`, `energy`, ...), NaN where no scan sits; per-frame statistics (`block_total`, `block_p1`, `block_p99`) in the attrs of every image variable |
 
 ```python
@@ -1873,6 +1874,27 @@ pal = bexa.open(make_pal_run("pal_data", run=42).measurement_dir)
 res = pal.reduce([bexa.acc.OnOffSplit(bexa.acc.Sum, flag="laser_flag")])   # on_sum, off_sum
 ```
 
+#### `PerRoi`
+`bexa.core.reductions.PerRoi(rois, accumulators)`
+
+Run accumulators on several regions of one scan in the same pass, one set of results per
+region. `rois` maps a name to an `ROI` that may restrict any motor dims and the pixel window;
+`accumulators` (classes or instances, copied as built for every region) run on each. Every
+result is named `<roi>_<result>` (`grainA_sum`, `grainA_com_mu`). A dim a region restricts is
+renamed `<roi>_<dim>` (`grainA_chi`), so regions of different sizes live in one Dataset, while a
+dim it leaves whole keeps its name, so the maps of a motor ROI stay `(y, x)`. Pixel ranges snap
+to the pixel grid of the pass's own window and downsampling, motor ranges to its grid; a region
+that selects no frame or no pixel raises. One pass over the frames serves every region, which is
+how `examples/13_esrf_dfxm_general.ipynb` gets the maps and curves of its `ROIS`. `describe()`
+records the regions and the inner accumulators, so cached results tell them apart.
+
+```python
+rois = {"edge": bexa.ROI(x=(0, 32)), "tight": bexa.ROI(chi=(-0.2, 0.2), mu=(-0.5, 0.5))}
+res = scan.reduce([bexa.acc.PerRoi(rois, [bexa.acc.Sum(), bexa.acc.FrameStats(), bexa.acc.MotorCOM(axes=("mu",), sigma=0)])])
+res["edge_sum"].dims, res["tight_frame_sum"].dims, res["tight_com_mu"].dims   # (('y', 'edge_x'), ('tight_chi', 'tight_mu'), ('y', 'x'))
+res["tight_frame_sum"].coords["tight_chi"].values           # the chi points inside the region
+```
+
 #### `Accumulator`
 `bexa.core.reductions.Accumulator(**params)`
 
@@ -1929,11 +1951,12 @@ plan.dims, plan.shape                         # ('chi', 'mu', 'y', 'x'), (6, 8, 
 ```
 
 #### `Plan`
-`bexa.core.reductions.Plan(structure, window, motor_factors, frame_ids, grid_shape, coords={})`
+`bexa.core.reductions.Plan(structure, window, motor_factors, frame_ids, grid_shape, coords={}, grid=None)`
 
 What `make_plan` returns: `structure` (after the motor ROI), `window` (a `Window`),
 `motor_factors`, `frame_ids` (sorted ids of the frames to read), `grid_shape` (the motor grid
-after downsampling) and `coords` (the downsampled motor coordinates).
+after downsampling), `coords` (the downsampled motor coordinates) and `grid`, the downsampled
+grid itself as a `Structure`, for plans within this one (`PerRoi`).
 
 - `motor_dims`, `dims`, `shape`: properties; `dims` and `shape` include `y` and `x`.
 - `grid_positions(frame_ids)`: the position of each frame in the downsampled grid.
