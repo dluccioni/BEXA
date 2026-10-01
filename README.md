@@ -1395,7 +1395,7 @@ never touched. Replaces the layer loop of `betterCOM_stitchingZ`.
   scan from `Scan.recipe` (a `Scan` built by hand has none: `ValueError`), receives the
   accumulators as built (`Accumulator` pickles its parameters, never its totals) and uses the
   device the parent would use (`device="auto"` is resolved here, so the workers share one GPU
-  when there is one), with `BEXA_MEMORY_FRACTION` divided by the number of workers and
+  when there is one), with its share of the parent's memory budget as `BEXA_MEMORY_BYTES` and
   `BEXA_THREADS` set to `min(8, cores // workers)`. Results arrive as the scans finish and are
   written straight into the stack, in memory or on disk, under one progress bar over the
   scans; an error in a worker reaches the caller and stops the pool. In a script, call it under
@@ -8009,8 +8009,11 @@ Bytes one operation may use: `fraction` (default `BEXA_MEMORY_FRACTION`, else 0.
 this process can still use (`bexa.core.resources.memory_info`: the SLURM job's limit on a
 cluster, the free memory elsewhere), and on CUDA at most `fraction` of the free GPU memory; the
 rest is headroom for the pipeline's temporaries, the session's other variables and the system.
-`scan.read`, previews, `bexa.stack` and `bexa.load` refuse anything larger (`check_fits`);
-batch sizes, the prefetch depth and the in-memory cache level follow from it.
+`BEXA_MEMORY_BYTES`, when set, is the budget itself: `bexa.stack(workers=)` hands every worker
+its share of the parent's budget that way, so a worker does not size itself from a job whose
+accounting the parent and the other workers fill. `scan.read`, previews, `bexa.stack` and
+`bexa.load` refuse anything larger (`check_fits`); batch sizes, the prefetch depth and the
+in-memory cache level follow from it.
 
 ```python
 backend.memory_budget("cpu") / 1e9              # GB: 0.8 of what this process can still use
@@ -8020,11 +8023,11 @@ backend.memory_budget("cuda", fraction=0.2)     # also at most 0.2 of the free G
 #### `check_fits`
 `bexa.core.backend.check_fits(nbytes, what, device="cpu", hint="")`
 
-Raise `MemoryError` when `nbytes` is more than `memory_budget(device)`, else return the budget.
-The message names `what`, the size and the budget in GB, the `hint` (the way out: an ROI, a
-larger downsample, `store=True`) and that `BEXA_MEMORY_FRACTION` raises the budget, so a result
-that cannot fit stops the call instead of the kernel. `scan.read`, `Preview`, the in-memory
-`bexa.stack` and `bexa.load` call it before allocating.
+Raise `BudgetError` (a `MemoryError`) when `nbytes` is more than `memory_budget(device)`, else
+return the budget. The message names `what`, the size and the budget in GB, the `hint` (the way
+out: an ROI, a larger downsample, `store=True`) and that `BEXA_MEMORY_FRACTION` raises the
+budget, so a result that cannot fit stops the call instead of the kernel. `scan.read`,
+`Preview`, the in-memory `bexa.stack` and `bexa.load` call it before allocating.
 
 ```python
 backend.check_fits(10**6, "a small array")                       # the budget in bytes: it fits
@@ -8130,11 +8133,26 @@ smooth = backend.gaussian_frames(frames, 3.0)                 # (8, 64, 80), smo
 backend.gaussian_frames(frames, 0) is frames                  # True
 ```
 
+#### `BudgetError`
+`bexa.core.backend.BudgetError`, a subclass of `MemoryError`
+
+The `MemoryError` subclass `check_fits` raises: a request larger than the budget, refused before
+anything was allocated. A `MemoryError` for callers (`except MemoryError` catches it), but not
+an out-of-memory condition, so `reduce` does not retry with smaller batches on it.
+
+```python
+try:
+    backend.check_fits(10**15, "a petabyte volume")
+except backend.BudgetError as exc:
+    str(exc)[:38]                                # 'a petabyte volume needs 1000000.00 GB'
+```
+
 #### `is_oom_error`
 `bexa.core.backend.is_oom_error(exc)`
 
 True for `MemoryError` (also raised by `scan.read` above the budget) and cupy out-of-memory
-errors. `reduce` uses it to halve the batch and retry, then to fall back to the CPU.
+errors. `reduce` uses it to halve the batch and retry, then to fall back to the CPU, except for
+a `BudgetError`, whose refusal would not change with smaller batches.
 
 ```python
 try:
@@ -8208,8 +8226,10 @@ resources.usable_cpus()                 # (16, 'machine') on the lab workstation
 Linux or without a limit. It walks from the process's cgroup (read from `/proc/self/cgroup`) up to
 the root, since SLURM sets the limit on the job and runs the process in a task below it: v2
 `memory.max` and `memory.current`, else v1 `memory.limit_in_bytes` and `memory.usage_in_bytes`.
-`"max"` and values of `UNLIMITED` or more mean no limit. `used` leaves out the inactive file
-cache (`inactive_file` of `memory.stat`), which the kernel reclaims before killing anything.
+`"max"` and values of `UNLIMITED` or more mean no limit. `used` leaves out the file cache,
+active and inactive (`active_file` and `inactive_file` of `memory.stat`, `total_...` in v1):
+clean file data the kernel reclaims before killing anything, which a pass over a few hundred GB
+of frames fills the job's accounting with.
 
 ```python
 resources.cgroup_memory()               # None on Windows and macOS, or on Linux without a limit
@@ -9180,6 +9200,7 @@ in a notebook, with `os.environ[...]` before the call that reads them.
 |---|---|---|---|
 | `BEXA_DEVICE` | Device for calls with `device=None`: `auto`, `cpu`, `cuda` (or `gpu`). Set by `bexa --device`. An explicit `device="auto"`, the default of `scan.reduce` and the scan verbs, does not read it. | `auto` | `bexa.core.backend.resolve_device`; shown by `bexa.core.settings.settings`, `bexa.config.loader.env_settings` |
 | `BEXA_MEMORY_FRACTION` | Fraction of the usable memory one operation may use (batch sizes, the `scan.read` limit). Set by `bexa --memory-fraction`; `~/.bexa_env` from `esrf_setup.sh` sets 0.3. | `0.8` | `bexa.core.backend.memory_budget`, `settings`, `env_settings` |
+| `BEXA_MEMORY_BYTES` | The memory budget itself, in bytes, instead of a fraction of what is available: `bexa.stack(..., workers=)` sets it in every worker process to its share of the parent's budget. | not set | `bexa.core.backend.memory_budget`, `settings` |
 | `BEXA_THREADS` | Threads for the CPU work of one process: the Gaussian smoothing of `MotorCOM` and `bexa.analysis.rocking` (`bexa.core.backend.gaussian_frames`). `bexa.stack(..., workers=)` sets it to `min(8, cores // workers)` in every worker process. | the usable cores, at most 8 | `bexa.core.parallel.compute_threads` |
 | `BEXA_CACHE_DIR` | Cache folder of previews and cached reductions; when set, scans opened through a profile cache their reductions. | `<processed_root>/bexa_cache`, else `~/.cache/bexa` | `bexa.config.paths.cache_root`, `bexa.core.scan.open_profile`, `settings`, `env_settings` |
 | `BEXA_PROFILE` | Profile used when none is given: `load_profile()`, `bexa.open(sample=...)`, `bexa.open_dataset(sample=...)`. | not set | `bexa.config.loader.load_profile`, `settings`, `env_settings` |
