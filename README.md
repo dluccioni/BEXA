@@ -1232,12 +1232,13 @@ ds.groups("samz", type="fscan2d")   # {-0.002: [1], -0.001: [7], 0.0: [13], 0.00
 ```
 
 #### `Dataset.varying`
-`bexa.core.dataset.Dataset.varying(scans=None, axes=None, **criteria)`
+`bexa.core.dataset.Dataset.varying(scans=None, axes=None, ignore=None, **criteria)`
 
 What differs between the chosen scans (selection as in `select_numbers`): `{dim: sorted
 values}` of the positioners, and of the energy as `"energy"` in keV, that are not the same in
 every scan, outer dim first; see `varying`. These are the dims `stack(..., dim="auto")` builds
-its grid on. `axes` names the dims by hand instead (see `varying`).
+its grid on. `axes` names the dims by hand instead, `ignore` names positioners that are never
+axes (see `varying`).
 
 ```python
 ds.varying(type="fscan2d")                       # {'samz': array([-0.002, -0.001, 0., 0.001, 0.002])}
@@ -1287,17 +1288,19 @@ ds.close()
 ```
 
 #### `varying`
-`bexa.core.dataset.varying(scans, tolerance=None, axes=None)`
+`bexa.core.dataset.varying(scans, tolerance=None, axes=None, ignore=None)`
 
 The positioners, and the energy, that differ between the given `Scan`s: `{dim: sorted values}`,
 the energy reported as `"energy"` in keV. Scanned motors are left out, and so is the
 monochromator motor the energy derives from (`ccmth`) when the energy itself varies, and a
 motor the spec also records under an alias (`z1` for `samz`), so nothing counts twice. A motor
-that another one drives (the spec's `motors.coupled`: at ID03 `uz` moves `samz` and `shexatz`)
-is not an axis of its own when its leader steps, and neither is any positioner that steps in
-lockstep with another one, whatever the spec says: of those, the leader, the energy, then the
-first in `motors.known` order is kept. Values closer than `tolerance` (default 1e-3 of their
-spread) are one grid point. The dims come slowest first: the one that changes least often from
+that another one drives (the spec's `motors.coupled`: at ID03 `ux`, `uy` and `uz` each move the
+stage readbacks `samx`, `samy`, `samz` and `shexatx`, `shexaty`, `shexatz`) is not an axis of
+its own when its leader steps, and neither is any positioner that steps in lockstep with
+another one, whatever the spec says: of those, the leader, the energy, then the first in
+`motors.known` order is kept. `ignore` names positioners that are never axes however they vary
+(a readback that drifts between scans; a follower of an ignored leader stays dropped). Values
+closer than `tolerance` (default 1e-3 of their spread) are one grid point. The dims come slowest first: the one that changes least often from
 scan to scan is the outer one, as the height is for a z-stack repeated at every energy. `axes`
 overrides all of this: these names, in this order, are the dims (positioners, `"energy"` or
 `"scan"`; `ValueError` for one a scan does not record), for when something else drifts between
@@ -1311,6 +1314,7 @@ varying(ds.select(type="fscan2d"))               # {'samz': array([-0.002, -0.00
 varying(ds[[2, 3, 4]])                           # {'energy': array([16.98, 16.99, 17.])}
 varying(ds[[2, 3, 4]], tolerance=0.05)           # {}: energies within 0.05 keV count as one
 varying(ds.select(type="fscan2d"), axes=["samz"])   # the same, named by hand (any positioner, varying or not)
+varying(ds.select(type="fscan1d"), ignore=["samz"])   # {'energy': ...}: the heights are not an axis here
 ```
 
 #### `common_grid`
@@ -1352,12 +1356,13 @@ bexa.regrid(curves["frame_sum"], {"mu": grid["mu"]}).dims       # ('chi', 'mu'):
 ```
 
 #### `stack`
-`bexa.core.dataset.stack(scans, accumulators, dim="auto", *, coords=None, store=None, dtype=None, tolerance=None, workers=None, grid="auto", **reduce_kwargs)`
+`bexa.core.dataset.stack(scans, accumulators, dim="auto", *, coords=None, store=None, dtype=None, tolerance=None, workers=None, grid="auto", ignore=None, **reduce_kwargs)`
 
 Reduce every scan with the same accumulators and stack the results on a grid of scans
 (top-level name `bexa.stack`). `dim` names the new dims: `"auto"` takes what `varying` finds (a
 z-stack becomes `(samz, y, x)` maps, a z-stack at several energies `(samz, energy, y, x)`; one
-scan gets no new dim, scans that differ in nothing are stacked on `"scan"`); one name
+scan gets no new dim, scans that differ in nothing are stacked on `"scan"`; `ignore` names
+positioners it must never take as axes however they vary); one name
 (`"samz"`) or a list (`["uz", "energy"]`) names them by hand, each read from every scan
 (`"energy"` is the energy in keV, `"scan"` the scan numbers), unless `coords` gives the values
 of a single dim. The grid is dense: NaN where no scan sits at a combination (a warning says how
@@ -2213,9 +2218,10 @@ formats.best_spec(pal.measurement_dir).name      # 'pal_xfel_points_2025_09'
 A parsed spec: a pydantic model, built by `load_spec`, with one attribute per YAML entry
 (`abstract` marks a base for `extends` only; `motors` holds the `per_frame`, `scalar` and
 `structure` templates, `known`, `aliases`, `units` and `coupled`, `{leader: [followers]}` for a
-motor that drives others, `uz: [samz, shexatz]` at ID03, so that `varying` and the compact
-table count a stepping leader once; `keys` maps a logical key to its alias list; `source_path`
-is the YAML file). Unknown entries are kept. Methods:
+motor that drives others, at ID03 `ux`, `uy` and `uz` each moving `samx`, `samy`, `samz` and
+`shexatx`, `shexaty`, `shexatz`, so that `varying` and the compact table count a stepping
+leader once; `keys` maps a logical key to its alias list; `source_path` is the YAML file).
+Unknown entries are kept. Methods:
 
 - `aliases(key)`: every name of the logical key, preferred first; `[key]` for a key the spec does not list.
 - `resolve_key(key, available)`: the first alias of `key` present in `available` (columns, HDF5 paths), or `None`.
