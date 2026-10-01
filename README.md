@@ -1165,10 +1165,10 @@ A pandas DataFrame with one row per scan: `id` (`dataset` next, for several fold
 `type` (`fscan1d`, `fscan2d`, ...), `title`, `motors` (`"chi x mu"`), `shape`, `ranges`,
 `frames`, `missing` (grid points without a frame), `energy_keV`, then one column per
 positioner recorded in the master file (`samz`, `ccmth`, `phi`, ...). Built once and kept;
-`refresh=True` rebuilds it. `compact=True` drops the positioner columns that never change, a
-motor also listed under an alias, the followers of a motor that steps (`samz` when `uz` does;
-the spec's `motors.coupled`) and the `missing` column when no scan has missing frames: what a
-notebook shows.
+`refresh=True` rebuilds it. `compact=True` drops the positioner columns that never change or
+change by less than the spec's `motors.min_step` (drift), a motor also listed under an alias,
+the followers of a motor that steps (`samz` when `uz` does; the spec's `motors.coupled`) and the
+`missing` column when no scan has missing frames: what a notebook shows.
 
 ```python
 ds.table()[["id", "type", "motors", "energy_keV", "samz"]]
@@ -1300,7 +1300,9 @@ that another one drives (the spec's `motors.coupled`: at ID03 `ux`, `uy` and `uz
 stage readbacks `samx`, `samy`, `samz` and `shexatx`, `shexaty`, `shexatz`) is not an axis of
 its own when its leader steps, and neither is any positioner that steps in lockstep with
 another one, whatever the spec says: of those, the leader, the energy, then the first in
-`motors.known` order is kept. `ignore` names positioners that are never axes however they vary
+`motors.known` order is kept. A change smaller than the spec's `motors.min_step` of a motor
+(0.5 um for the ID03 stage motors) is drift, not a step: a temperature series moves the stage
+readbacks by a tenth of a micron between its datasets, a z-stack by a micron per height. `ignore` names positioners that are never axes however they vary
 (a readback that drifts between scans; a follower of an ignored leader stays dropped). Values
 closer than `tolerance` (default 1e-3 of their spread) are one grid point. The dims come slowest first: the one that changes least often from
 scan to scan is the outer one, as the height is for a z-stack repeated at every energy. `axes`
@@ -2272,7 +2274,12 @@ formats.best_spec(pal.measurement_dir).name      # 'pal_xfel_points_2025_09'
 
 A parsed spec: a pydantic model, built by `load_spec`, with one attribute per YAML entry
 (`abstract` marks a base for `extends` only; `motors` holds the `per_frame`, `scalar` and
-`structure` templates, `known`, `aliases`, `units` and `coupled`, `{leader: [followers]}` for a
+`structure` templates, `known`, `aliases`, `units`, `scalars_from`, `{name: path template}` for
+values recorded elsewhere in the master that count as positioners of the scan (the mean of the
+channel: the furnace temperature `nanodac1_temp` that BLISS samples in the `<scan>.2`
+monitoring entry, in the autumn 2026 spec), `min_step`, `{motor: step}` below which a change
+between scans is drift rather than a step (0.5 um for the ID03 stage motors), and `coupled`,
+`{leader: [followers]}` for a
 motor that drives others, at ID03 `ux`, `uy` and `uz` each moving `samx`, `samy`, `samz` and
 `shexatx`, `shexaty`, `shexatz`, so that `varying` and the compact table count a stepping
 leader once; `keys` maps a logical key to its alias list; `source_path` is the YAML file).
@@ -2481,9 +2488,11 @@ loop is the outer one, and frames are placed on the grid by their values, so sna
 scans land in place. When the monochromator angle (`energy.from`, `ccmth`) is one of the scanned
 motors, an energy mosa, that dim is named `energy` and holds keV (`ENERGY_DIM`; the angle stays a
 per-frame channel), so `MotorCOM(axes=("energy",))` gives `com_energy` straight from the scan.
-`measurement` channels are per-frame channels, positioners scalars, renamed motors take their
-logical names from `motors.aliases`, and the energy is `energy_keV` or `ccmth` converted with the
-Si 111 d-spacing (the mean angle of an energy mosa). How the frames are split over the detector
+`measurement` channels are per-frame channels, positioners scalars (plus the mean of every
+channel `motors.scalars_from` names, the furnace temperature of the `<scan>.2` monitoring entry
+at ID03), renamed motors take their logical names from `motors.aliases`, and the energy is
+`energy_keV` or `ccmth` converted with the Si 111 d-spacing (the mean angle of an energy
+mosa). How the frames are split over the detector
 files comes from the master when it says (`layout.frames_total`, `acq_nb_frames`, and
 `layout.frames_per_file`, `saving_frame_per_file`, as LIMA records them; the frame shape and
 dtype from the virtual dataset `layout.master_frames` in the autumn 2026 layout), so opening a
@@ -6077,7 +6086,7 @@ work = Path(tempfile.mkdtemp())
 ```
 
 #### `make_esrf_scan`
-`bexa.testing.synthetic.make_esrf_scan(root, dataset="synth_dfxm", scan=1, detector="pco_ff", motors=(("chi", 4), ("mu", 12)), ranges=None, frame_shape=(48, 64), n_files=2, energy_keV=17.0, layout="2026", order="slow_major", partial=0, amplitude=4000.0, background=10.0, noise=0.0, seed=0, dtype=np.uint16, positioners=None, curve="gaussian", centers=None, widths=None)`
+`bexa.testing.synthetic.make_esrf_scan(root, dataset="synth_dfxm", scan=1, detector="pco_ff", motors=(("chi", 4), ("mu", 12)), ranges=None, frame_shape=(48, 64), n_files=2, energy_keV=17.0, layout="2026", order="slow_major", partial=0, amplitude=4000.0, background=10.0, noise=0.0, seed=0, dtype=np.uint16, positioners=None, curve="gaussian", centers=None, widths=None, monitors=None)`
 
 Writes one BLISS scan: the master `<root>/<dataset>/<dataset>.h5` (entry `<scan>.1` with
 `fscan_parameters`, per-frame motor values, positioners with `ccmth` for `energy_keV` on Si 111,
@@ -6098,7 +6107,10 @@ files). Read by `esrf_id03_bliss_2026` (`esrf_id03_bliss_2024` for `layout="2024
   fscan3d written with BLISS's `slow1_motor`/`slow2_motor`/`fast_motor`; `ccmth` among them makes
   an energy mosa that `bexa.open` reads with an `energy` dim in keV); `ranges`:
   `{motor: (start, stop)}`, default mu -1 to 1, chi -0.5 to 0.5, phi -0.3 to 0.3 deg, ccmth
-  0.005 deg either side of the angle of `energy_keV`, else 0 to 1;
+  0.005 deg either side of the angle of `energy_keV`, else 0 to 1; `monitors`: slow channels
+  sampled during the scan, `{"nanodac1_temp": 50.0}`, written to the monitoring sub-scan
+  `<scan>.2` as BLISS does for a furnace (200 samples around the value), which the autumn 2026
+  spec reads as positioners;
   `positioners`: fixed motor values such as `{"samz": 0.5}`; `layout`: `"2026"` or `"2025"` (with
   `fscan_parameters`, both read as 2026), `"2024"` (without, plus `obpitch`) or `"F2026"` (the
   2026 layout plus the frames linked into the master as a virtual dataset
