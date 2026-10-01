@@ -302,15 +302,21 @@ class Dataset:
             self._table = table
         table = self._table.copy()
         if compact and not table.empty:
-            constant = [
-                c
-                for c in table.columns
-                if c not in (*LEAD_COLUMNS, *FIXED_COLUMNS, "energy_keV")
-                and table[c].nunique(dropna=False) <= 1
+            positioners = [
+                c for c in table.columns if c not in (*LEAD_COLUMNS, *FIXED_COLUMNS, "energy_keV")
             ]
+            dropped = [c for c in positioners if table[c].nunique(dropna=True) <= 1]
+            spec = self.scan(self.scans[0]).spec  # a motor kept under a legacy name too: once
+            aliases = (spec.motors.get("aliases", {}) or {}) if spec is not None else {}
+            for logical, physical in aliases.items():
+                names = [physical] if isinstance(physical, str) else list(physical)
+                if logical in positioners and any(
+                    p in positioners and table[logical].equals(table[p]) for p in names
+                ):
+                    dropped.append(logical)
             if not table["missing"].any():
-                constant.append("missing")
-            table = table.drop(columns=constant)
+                dropped.append("missing")
+            table = table.drop(columns=sorted(set(dropped)))
         return table
 
     def info(self) -> str:
