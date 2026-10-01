@@ -24,6 +24,10 @@ motors:
   known: [mu, chi, phi, samz, ffz, ffx, nfx, nfy, nfz, ux, uy, uz, obpitch, ccmth]
   aliases:
     z1: [samz]
+  coupled:   # a motor that drives others: when it steps between scans they follow, and only it is an axis
+    ux: [samx, shexatx]
+    uy: [samy, shexaty]
+    uz: [samz, shexatz]
   units:
     mu: deg
     chi: deg

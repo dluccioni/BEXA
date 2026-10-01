@@ -936,6 +936,8 @@ def make_esrf_zstack(
         labels[k] = sample.labels
         grains[k] = sample.grains
         fixed = {z_motor: float(z)}
+        if z_motor == "uz":  # at ID03 uz drives the sample stage: samz follows, with its offset
+            fixed["samz"] = float(z) - 0.03
         if energy_scan == "rocking":  # the mosaicity scan at the nominal energy comes first
             made = make_esrf_scan(
                 root,

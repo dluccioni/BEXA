@@ -33,6 +33,7 @@ __all__ = [
     "__version__",
     "acc",
     "analysis",
+    "common_grid",
     "crystal",
     "demo",
     "geometry",
@@ -49,6 +50,7 @@ __all__ = [
     "plot",
     "profile",
     "reduce",
+    "regrid",
     "save",
     "settings",
     "stack",
@@ -66,6 +68,8 @@ _LAZY_ATTRS: dict[str, tuple[str, str]] = {
     "Dataset": ("bexa.core.dataset", "Dataset"),
     "open_dataset": ("bexa.core.dataset", "open_dataset"),
     "stack": ("bexa.core.dataset", "stack"),
+    "common_grid": ("bexa.core.dataset", "common_grid"),
+    "regrid": ("bexa.core.dataset", "regrid"),
     "settings": ("bexa.core.settings", "show"),
     "plot": ("bexa.viz.auto", "plot"),
     "demo": ("bexa.testing.demo", "demo"),
@@ -96,7 +100,7 @@ if TYPE_CHECKING:  # pragma: no cover - static analysis only
     from bexa._help import help
     from bexa._profiling import profile
     from bexa.core.backend import to_host
-    from bexa.core.dataset import Dataset, open_dataset, stack
+    from bexa.core.dataset import Dataset, common_grid, open_dataset, regrid, stack
     from bexa.core.reductions import reduce
     from bexa.core.roi import ROI
     from bexa.core.scan import Scan, list_scans, open, open_profile

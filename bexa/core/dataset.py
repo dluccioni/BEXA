@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 import warnings
-from collections.abc import Callable, Generator, Iterable, Sequence
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from concurrent.futures import as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,6 +28,7 @@ from bexa._log import get_logger, interactive_session, progress
 from bexa.core.backend import DEFAULT_MEMORY_FRACTION, resolve_device
 from bexa.core.parallel import default_workers, process_pool
 from bexa.core.provenance import build_attrs, fingerprint, to_json
+from bexa.core.reductions import make_plan
 from bexa.core.resources import usable_cpus
 from bexa.core.scan import Scan, _resolve_cache, _resolve_spec, combine_sources, list_scans
 from bexa.core.scan import open as open_scan
@@ -35,7 +36,7 @@ from bexa.core.structure import ENERGY_DIM, _group_values
 
 log = get_logger(__name__)
 
-__all__ = ["Dataset", "open_dataset", "stack", "varying"]
+__all__ = ["Dataset", "common_grid", "open_dataset", "regrid", "stack", "varying"]
 
 LEAD_COLUMNS = ("id", "dataset")
 FIXED_COLUMNS = ("scan", "type", "title", "motors", "shape", "ranges", "frames", "missing")
@@ -325,6 +326,9 @@ class Dataset:
                     p in positioners and table[logical].equals(table[p]) for p in names
                 ):
                     dropped.append(logical)
+            for leader, followers in _followers(spec).items():  # samz follows uz: once too
+                if leader in positioners and leader not in dropped:
+                    dropped.extend(f for f in followers if f in positioners)
             if not table["missing"].any():
                 dropped.append("missing")
             table = table.drop(columns=sorted(set(dropped)))
@@ -437,9 +441,11 @@ class Dataset:
             out[float(value)] = [int(n) for n in part["id"]]
         return out
 
-    def varying(self, scans: Any = None, **criteria: Any) -> dict[str, np.ndarray]:
-        """What differs between the chosen scans: see :func:`varying`."""
-        return varying(self.select(scans, **criteria))
+    def varying(
+        self, scans: Any = None, axes: str | Sequence[str] | None = None, **criteria: Any
+    ) -> dict[str, np.ndarray]:
+        """What differs between the chosen scans, or the ``axes`` named: see :func:`varying`."""
+        return varying(self.select(scans, **criteria), axes=axes)
 
 
 def open_dataset(path: str | Path | Sequence[str | Path] | None = None, **kwargs: Any) -> Dataset:
@@ -465,20 +471,56 @@ def _coordinate(scan: Scan, dim: str, index: int) -> float:
     raise ValueError(f"{scan.name} records no positioner {dim!r}; available: {available}")
 
 
-def varying(scans: Iterable[Scan], tolerance: float | None = None) -> dict[str, np.ndarray]:
+def _followers(spec: Any) -> dict[str, list[str]]:
+    """``{leader: [followers]}`` from the spec's ``motors.coupled`` (``uz`` drives ``samz``)."""
+    coupled = (spec.motors.get("coupled", {}) or {}) if spec is not None else {}
+    return {
+        str(leader): [names] if isinstance(names, str) else [str(n) for n in names]
+        for leader, names in coupled.items()
+    }
+
+
+def _same_partition(a: np.ndarray, b: np.ndarray) -> bool:
+    """True when two label arrays split the scans into the same groups (lockstep motors)."""
+    pairs = set(zip(a.tolist(), b.tolist(), strict=True))
+    return len(pairs) == len(set(a.tolist())) == len(set(b.tolist()))
+
+
+def varying(
+    scans: Iterable[Scan],
+    tolerance: float | None = None,
+    axes: str | Sequence[str] | None = None,
+) -> dict[str, np.ndarray]:
     """The positioners, and the energy, that differ between scans: ``{dim: sorted values}``.
 
     Scanned motors are left out, and so is the monochromator motor the format
     spec derives the energy from (``ccmth``) when the energy itself varies, so
     the same thing is not counted twice; the energy is reported as ``"energy"``
-    in keV. Values closer than ``tolerance`` (default 1e-3 of their spread)
+    in keV. A motor that another one drives (the spec's ``motors.coupled``:
+    ``uz`` moves ``samz`` at ID03) is not an axis of its own when its leader
+    steps, and neither is any positioner that steps in lockstep with another
+    one (the leader, then the first in the spec's ``motors.known`` order, is
+    kept). Values closer than ``tolerance`` (default 1e-3 of their spread)
     count as one. The dims come slowest first: the one that changes least often
     from scan to scan is the outer one, as ``uz`` is for a z-stack repeated at
     every energy.
+
+    ``axes`` overrides all of this: these names, in this order, are the dims
+    (positioners, ``"energy"`` or ``"scan"``), for when other positioners drift
+    or follow and the automatic choice is not the one measured.
     """
     scans = list(scans)
     if not scans:
         return {}
+    if axes is not None:
+        chosen = [axes] if isinstance(axes, str) else [str(a) for a in axes]
+        return {
+            d: _group_values(
+                np.array([_coordinate(s, d, i) for i, s in enumerate(scans)], dtype=float),
+                tolerance,
+            )[0]
+            for d in chosen
+        }
     rows: list[dict[str, float]] = []
     scanned: set[str] = set()
     for scan in scans:
@@ -489,7 +531,7 @@ def varying(scans: Iterable[Scan], tolerance: float | None = None) -> dict[str, 
             row[ENERGY_DIM] = float(s.energy_keV)
         rows.append(row)
     columns = [c for c in dict.fromkeys(k for r in rows for k in r) if c not in scanned]
-    found: dict[str, tuple[np.ndarray, int]] = {}
+    found: dict[str, tuple[np.ndarray, int, np.ndarray]] = {}
     for column in columns:
         if not all(column in r for r in rows):
             continue
@@ -498,7 +540,7 @@ def varying(scans: Iterable[Scan], tolerance: float | None = None) -> dict[str, 
             continue
         centers, labels = _group_values(values, tolerance)
         if len(centers) > 1:
-            found[column] = (centers, int(np.count_nonzero(np.diff(labels))))
+            found[column] = (centers, int(np.count_nonzero(np.diff(labels))), labels)
     spec = scans[0].spec
     energy_from = spec.energy.get("from") if spec is not None else None
     if ENERGY_DIM in found and energy_from in found:
@@ -510,8 +552,26 @@ def varying(scans: Iterable[Scan], tolerance: float | None = None) -> dict[str, 
         twins = [p for p in names if p in found and logical in found]
         if twins and np.array_equal(found[logical][0], found[twins[0]][0]):
             del found[logical]
-    order = sorted(found, key=lambda c: found[c][1])  # fewest changes first: the outer dims
-    return {c: found[c][0] for c in order}
+    # the motors a stepping leader drives follow it: not axes of their own
+    coupled = _followers(spec)
+    for leader, followers in coupled.items():
+        if leader in found:
+            for name in followers:
+                found.pop(name, None)
+    # nor is anything stepping in lockstep with another positioner: the leader, the energy or
+    # the first in the spec's known order is the axis
+    known = list(spec.known_motors()) if spec is not None else []
+
+    def rank(column: str) -> tuple[int, int, str]:
+        first = column in coupled or column == ENERGY_DIM
+        return (0 if first else 1, known.index(column) if column in known else len(known), column)
+
+    kept: dict[str, tuple[np.ndarray, int, np.ndarray]] = {}
+    for column in sorted(found, key=rank):
+        if not any(_same_partition(found[column][2], other[2]) for other in kept.values()):
+            kept[column] = found[column]
+    order = sorted(kept, key=lambda c: kept[c][1])  # fewest changes first: the outer dims
+    return {c: kept[c][0] for c in order}
 
 
 STATS_SAMPLE = 1 << 18  # pixels per frame that the percentiles look at (every k-th pixel)
@@ -553,6 +613,7 @@ def stack(
     dtype: Any = None,
     tolerance: float | None = None,
     workers: int | str | None = None,
+    grid: str | Mapping[str, Any] | bool | None = "auto",
     **reduce_kwargs: Any,
 ) -> xr.Dataset:
     """Reduce every scan with the same accumulators and stack the results on a grid of scans.
@@ -602,12 +663,36 @@ def stack(
     workers
         Scans reduced at the same time, in processes (default: one, in this
         process).
+    grid
+        What to do when the scans' motor grids differ (another range or step at
+        some heights): ``"auto"`` interpolates every result that has motor
+        dims (previews, per-frame statistics, curves) onto the grid of
+        :func:`common_grid`, the full range in the finest step; a
+        ``{dim: values}`` mapping names that grid; ``False`` requires one grid
+        and raises otherwise. Maps without motor dims are never touched.
     """
     scans = list(scans)
     if not scans:
         raise ValueError("no scans to stack")
     accumulators = list(accumulators)
     dims, centers, positions = _grid(scans, dim, coords, tolerance)
+    grid_coords: dict[str, np.ndarray] | None = None
+    if isinstance(grid, Mapping):
+        grid_coords = {str(d): np.asarray(v, dtype=float) for d, v in grid.items()}
+    elif grid == "auto" and len(scans) > 1:
+        planned = _planned_grids(scans, reduce_kwargs)
+        if all(g.keys() == planned[0].keys() for g in planned):
+            common, differs = _merge_grids(planned)
+            if differs:
+                grid_coords = common
+                log.info(
+                    "the motor grids of the scans differ; results with motor dims are "
+                    "interpolated onto the common grid %s",
+                    {
+                        d: f"{v.min():.5g}..{v.max():.5g} ({len(v)} points)"
+                        for d, v in common.items()
+                    },
+                )
     names = [
         type(acc).__name__ if not isinstance(acc, type) else acc.__name__ for acc in accumulators
     ]
@@ -623,6 +708,9 @@ def stack(
             if k in ("roi", "downsample", "method", "dtype")
         },
         "dtype": str(np.dtype(dtype)) if dtype is not None else None,
+        "grid": None
+        if grid_coords is None
+        else {d: [float(v[0]), float(v[-1]), len(v)] for d, v in grid_coords.items()},
     }
     key = fingerprint(records, request)
     attrs = build_attrs(files, {**request, "n_scans": len(scans)}, stack_dims=dims, stack_key=key)
@@ -667,6 +755,7 @@ def stack(
             dtype,
             reduce_kwargs,
             workers,
+            grid_coords,
         )
     return _build_in_memory(
         scans,
@@ -678,7 +767,109 @@ def stack(
         dtype,
         reduce_kwargs,
         workers,
+        grid_coords,
     )
+
+
+def _planned_grids(
+    scans: list[Scan], reduce_kwargs: Mapping[str, Any]
+) -> list[dict[str, np.ndarray]]:
+    """The motor coordinates each scan's pass will have, after the ROI and the downsampling."""
+    roi = reduce_kwargs.get("roi")
+    downsample = reduce_kwargs.get("downsample")
+    return [
+        {
+            str(d): np.asarray(c, dtype=float)
+            for d, c in make_plan(
+                s.structure, roi if roi is not None else s.roi, downsample
+            ).coords.items()
+        }
+        for s in scans
+    ]
+
+
+def _merge_grids(grids: list[dict[str, np.ndarray]]) -> tuple[dict[str, np.ndarray], bool]:
+    """One grid spanning every grid, in the finest step, and whether any grid differed."""
+    common: dict[str, np.ndarray] = {}
+    differs = False
+    for d in grids[0]:
+        arrays = [g[d] for g in grids]
+        first = arrays[0]
+        spread = max((float(np.ptp(a)) for a in arrays if a.size), default=0.0)
+        same = all(
+            a.shape == first.shape and np.allclose(a, first, rtol=0, atol=1e-3 * spread + 1e-12)
+            for a in arrays[1:]
+        )
+        if same:
+            common[d] = first
+            continue
+        differs = True
+        lo = min(float(a.min()) for a in arrays)
+        hi = max(float(a.max()) for a in arrays)
+        steps = [float(np.median(np.abs(np.diff(a)))) for a in arrays if a.size > 1]
+        step = min((s for s in steps if s > 0), default=0.0)
+        if step <= 0 or hi <= lo:
+            common[d] = np.unique(np.concatenate(arrays))
+        else:
+            # the full range in a step no coarser than the finest; it ends on the highest value
+            common[d] = np.linspace(lo, hi, int(np.ceil((hi - lo) / step - 1e-9)) + 1)
+    return common, differs
+
+
+def common_grid(
+    scans: Iterable[Scan],
+    dims: str | Sequence[str] | None = None,
+    roi: Any = None,
+    downsample: Any = None,
+) -> dict[str, np.ndarray]:
+    """One coordinate array per scanned motor spanning every scan, in the finest step used.
+
+    For scans whose grids differ (another range or step at some heights, two
+    datasets measured differently): from the lowest to the highest value of
+    each motor over the scans, with the smallest median step any scan used;
+    a motor whose grid is the same in every scan keeps it. ``dims`` limits the
+    answer to some motors (default: every scanned motor, which every scan must
+    have); ``roi`` and ``downsample``, as in :func:`stack`, restrict the ranges
+    the way the pass does. :func:`regrid` puts results onto this grid, and
+    :func:`stack` does so by itself (``grid="auto"``).
+    """
+    scans = list(scans)
+    if not scans:
+        return {}
+    grids = _planned_grids(scans, {"roi": roi, "downsample": downsample})
+    wanted = [dims] if isinstance(dims, str) else list(grids[0]) if dims is None else list(dims)
+    missing = [d for d in wanted if any(d not in g for g in grids)]
+    if missing:
+        raise ValueError(f"{missing} are not scanned by every scan: {[tuple(g) for g in grids]}")
+    common, _ = _merge_grids([{d: g[d] for d in wanted} for g in grids])
+    return common
+
+
+def regrid(
+    result: xr.Dataset | xr.DataArray, coords: Mapping[str, Any], method: str = "linear"
+) -> Any:
+    """``result`` with every variable on a dim of ``coords`` interpolated onto those values.
+
+    The result of a pass (or any xarray object): variables with one of the
+    named dims are interpolated along them (``method`` as in ``DataArray.interp``,
+    ``"nearest"`` for a dim with a single point), NaN outside their own range;
+    variables without those dims, the maps, are returned as they are.
+    """
+    targets = {str(d): np.asarray(v, dtype=float) for d, v in coords.items()}
+
+    def one(var: xr.DataArray) -> xr.DataArray:
+        wanted = {d: v for d, v in targets.items() if d in var.dims}
+        if not wanted or all(
+            d in var.coords and np.array_equal(var.coords[d].values, v) for d, v in wanted.items()
+        ):
+            return var
+        how: Any = method if all(var.sizes[d] > 1 for d in wanted) else "nearest"
+        out = var.interp(wanted, method=how, kwargs={"bounds_error": False, "fill_value": np.nan})
+        return out.assign_attrs(var.attrs)
+
+    if isinstance(result, xr.DataArray):
+        return one(result)
+    return result.map(one, keep_attrs=True)
 
 
 GPU_WORKERS = 3  # "auto" workers sharing one GPU: enough to keep it fed while others read
@@ -710,14 +901,22 @@ def _reduce_recipe(
 
 
 def _reduced(
-    scans: list[Scan], accumulators: list[Any], reduce_kwargs: dict[str, Any], workers: Any
+    scans: list[Scan],
+    accumulators: list[Any],
+    reduce_kwargs: dict[str, Any],
+    workers: Any,
+    grid: dict[str, np.ndarray] | None = None,
 ) -> Generator[tuple[int, xr.Dataset], None, None]:
-    """``(index, result)`` per scan: in this process in order, or from processes as they finish."""
+    """``(index, result)`` per scan: in this process in order, or from processes as they finish.
+
+    With ``grid`` every result is first put onto that motor grid (:func:`regrid`).
+    """
     device = resolve_device(reduce_kwargs.get("device", "auto"))  # what this process would use
     n_workers = _resolve_workers(workers, len(scans), device)
     if n_workers <= 1:
         for i, scan in enumerate(scans):
-            yield i, scan.reduce(accumulators, **reduce_kwargs)
+            result = scan.reduce(accumulators, **reduce_kwargs)
+            yield i, regrid(result, grid) if grid else result
         return
     jobs = []
     for scan in scans:
@@ -745,7 +944,8 @@ def _reduced(
         }
         show = reduce_kwargs.get("show_progress") is not False and interactive_session()
         for future in progress(as_completed(futures), len(futures), desc="scans", enabled=show):
-            yield futures[future], future.result()
+            result = future.result()
+            yield futures[future], regrid(result, grid) if grid else result
     except BaseException:
         pool.shutdown(wait=False, cancel_futures=True)  # scans still running finish on their own
         raise
@@ -838,6 +1038,7 @@ def _build_in_memory(
     dtype: Any,
     reduce_kwargs: dict[str, Any],
     workers: Any = None,
+    grid: dict[str, np.ndarray] | None = None,
 ) -> xr.Dataset:
     from bexa.core.backend import check_fits
 
@@ -847,7 +1048,7 @@ def _build_in_memory(
     layout: dict[str, tuple[tuple[str, ...], tuple[int, ...], np.dtype]] = {}
     inner_coords: dict[str, Any] = {}
     inner_attrs: dict[str, dict[str, Any]] = {}
-    results = _reduced(scans, accumulators, reduce_kwargs, workers)
+    results = _reduced(scans, accumulators, reduce_kwargs, workers, grid)
     try:
         for i, result in results:
             scan, position = scans[i], positions[i]
@@ -962,6 +1163,7 @@ def _build_store(
     dtype: Any,
     reduce_kwargs: dict[str, Any],
     workers: Any = None,
+    grid: dict[str, np.ndarray] | None = None,
 ) -> xr.Dataset:
     from bexa.io.cube import StoreWriter
 
@@ -969,7 +1171,7 @@ def _build_store(
     writer: StoreWriter | None = None
     layout: dict[str, tuple[tuple[str, ...], tuple[int, ...], np.dtype]] = {}
     reduce_kwargs = {"cache": False, **reduce_kwargs}  # the store is the cache of these results
-    results = _reduced(scans, accumulators, reduce_kwargs, workers)
+    results = _reduced(scans, accumulators, reduce_kwargs, workers, grid)
     try:
         for i, result in results:
             scan, position = scans[i], positions[i]
