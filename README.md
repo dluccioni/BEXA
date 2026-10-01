@@ -8,7 +8,8 @@ notebook and batch use.
 - Formats: ESRF ID03 BLISS (2024 to 2026 layouts), PAL-XFEL point files and spec-style files,
   LCLS XCS cubes and smalldata, EuXFEL through `extra_data`, legacy and bexa cubes, plain arrays.
 - Reductions: one pass per scan, batches sized from free memory, prefetching, cupy when a GPU is
-  present, results as xarray with provenance, cached on disk.
+  present, several scans at a time in worker processes, results as xarray with provenance,
+  cached on disk.
 - Analysis: dark and hot-pixel handling, alignment and stitching, rocking-curve statistics and
   lmfit fits, pump-probe binning and run combination, peak statistics, segmentation, strain
   fields, four-circle diffractometer solvers, zone axis and omega search, attenuation and Bragg
@@ -76,7 +77,7 @@ the rest stays the same.
 | `10_zstack_3d_conditions.py` | the z-stack as a 3-D volume stepped through (chi, mu) or (energy, mu); the Slices-to-Voxels model and GUI |
 | `11_roi_to_3d_rlp.py` | from a pixel ROI on the projections to the 3-D reciprocal-space view |
 | `12_esrf_dfxm_workflow.ipynb` | a notebook for an ID03 DFXM beamtime end to end: alignment scans, quick mosa scan, fine mosa scan, energy scan, z-stack, 3-D rendering with a slider per scanned motor |
-| `13_esrf_dfxm_general.ipynb` | one notebook for any ID03 dataset (a single mosaicity scan, a z-stack, an energy series, both, or several folders): it reads what varies between the scans and stacks on that; streaming, caching, stacks built on disk and browsed block by block |
+| `13_esrf_dfxm_general.ipynb` | one notebook for any ID03 dataset (a single mosaicity scan, a z-stack, an energy series, both, or several folders): it reads what varies between the scans and stacks on that; one streaming pass per scan (several scans at a time with `WORKERS`) gives the binned previews and the full-resolution maps, stacked into one file in the cache that every later cell reads block by block |
 
 ## Layout
 
@@ -149,7 +150,9 @@ Notes for the ESRF environment:
 - Memory: inside a SLURM job bexa reads the job's allocation from its cgroup and sizes every
   batch from that, not from the node's memory, so a Jupyter-SLURM session is not killed for
   going over its limit. `bexa settings` shows the limit and where it came from. The worker
-  counts follow the cores the job owns.
+  counts follow the cores the job owns: `bexa.stack(..., workers="auto")` reduces one scan per
+  core but one at the same time, each worker with its share of the job's memory, and the
+  Gaussian smoothing of the centre of mass runs in up to eight threads on the CPU.
 - Previews of full scans are gigabytes, so keep the result cache out of your home quota: set
   `processed_root` in the beamtime profile (the cache goes to `<processed_root>/bexa_cache`), or
   `export BEXA_CACHE_DIR=/data/visitor/<proposal>/id03/<date>/PROCESSED_DATA/bexa_cache` in the
@@ -372,8 +375,9 @@ images.show(res["roi_grain"], title="rocking curve of one grain (chi, mu)")
 ```
 
 The same on the GPU or CPU depends only on what is installed; pass `device="cpu"` to force the
-CPU. On the lab workstation the full-resolution centre of mass with smoothing runs at about
-115 frames per second on the GPU and 6 on the CPU (`docs/memory_and_speed.md`).
+CPU. On the lab workstation (16 cores, RTX 4090) Sum and MotorCOM with smoothing over 160
+frames of 1024 x 1024 take 1.6 s on the CPU, where the smoothing runs in eight threads, and
+0.6 s on the GPU (`docs/memory_and_speed.md`).
 
 The standard figure set (sum, max, projections, tiles, COM and width maps, bivariate map) and
 an HDF5 file with every array behind it come from one call or one command:
@@ -427,47 +431,81 @@ e = energy_com_from_stack(sums)                        # com_energy, width_energ
 ```
 
 Previews and browsing work as before (`series.preview(downsample=(1, 1, 1, 4, 4))` for a chi by
-mu series). If instead the energy was scanned inside one scan, bexa exposes the motor under
-its own name, `ccmth`, and `bexa.acc.MotorCOM(axes=("ccmth",))` gives the centre of mass in
-monochromator angle; `bexa.core.units.mono_angle_to_energy` converts it.
+mu series). If instead the energy was scanned inside one scan (an energy mosa: BLISS `fscan3d`
+with `ccmth` as the outer loop), that scan itself has an `energy` dim in keV next to `chi` and
+`mu`, so `bexa.acc.MotorCOM(axes=("energy",))` gives `com_energy` and `width_energy` straight
+from it (the angle stays in `scan.structure.per_frame["ccmth"]`); a 1-D mono scan likewise
+has an `energy` dim.
 
 ### 7. Case D: z-scan (layers on samz)
 
 Topography layers are recorded as one rocking scan per sample height, with `samz` fixed
-during each scan and reported among the scan's positioners. Reduce every layer with the same
-window and stack the maps on a `samz` dim; `dim="auto"` finds that dim by itself from what
-differs between the scans (`ds.varying`), `dim="samz"` names it by hand:
+during each scan and reported among the scan's positioners. One call reduces every layer with
+the same window and stacks the results on a `samz` dim; `dim="auto"` finds that dim by itself
+from what differs between the scans (`ds.varying`), `dim="samz"` names it by hand. Give it
+everything the rest of the session needs, in one pass per layer: the maps at full resolution
+and, next to them, a binned preview of every layer for the 3-D cells (`Preview(downsample=8)`
+bins this accumulator alone, so the maps keep their pixels; the binned pixel dims are `yb`,
+`xb`). `store=True` writes the results scan by scan into one HDF5 file in the cache and returns
+it opened lazily, so the kernel holds the results of a layer only until they are written and
+the next run of the same request reads the file instead of the data. `workers="auto"` reduces
+several layers at the same time, one per core of the job but one (three on a GPU), each in its
+own process, under one progress bar over the scans:
 
 ```python
 ds = bexa.open_dataset(profile="hc6293", sample="WS2G_100")
 layers = ds.select(scans=(13, 24))                     # scans 13 to 24, one per height; or by content:
 layers = ds.select(type="fscan1d", motors="mu", samz=(-0.1, 0.1))
 ds.varying(type="fscan1d", motors="mu")                # {"samz": [...]}: what differs between the layers
-stack = bexa.stack(                                    # reduce every layer, stack on the positioners that vary (samz here)
-    layers, [bexa.acc.Sum(), bexa.acc.MotorCOM(axes=("mu",), sigma=3.0)], dim="auto", roi=window
+stacked = bexa.stack(                                  # one pass per layer, several layers at a time
+    layers,
+    [
+        bexa.acc.Preview(downsample=8),                # the binned volume of every layer: (mu, yb, xb)
+        bexa.acc.Sum(),                                # the summed image at full resolution
+        bexa.acc.FrameStats(),                         # the total of every frame: the rocking curves
+        bexa.acc.MotorCOM(axes=("mu",), sigma=3.0),    # com_mu, width_mu, total at full resolution
+    ],
+    dim="auto", roi=window, store=True, workers="auto",
 )
-stack["com_mu"]                                        # (samz, y, x), samz read from every scan
-images.tiles(stack["com_mu"], axis="samz", n=12, per_row=4)   # one COM map per height
-stack["sum"].bexa.browse()                             # slider over samz
-stack["com_mu"].bexa.browse_volume()                   # the three projections of the (samz, y, x) volume
-bexa.save(stack, f"{out}/WS2G_100_zstack.h5")
+list(stacked.data_vars)                                # preview, sum, frame_sum, ..., total, com_mu, width_mu
+stacked["com_mu"]                                      # (samz, y, x), samz read from every scan; read block by block
+stacked["preview"]                                     # (samz, mu, yb, xb): the layers binned 8 x 8
+```
+
+Everything below reads from that stack and never touches the data again. One layer's results
+come out with `isel`, the maps of every height with a list of names:
+
+```python
+layer = stacked.isel(samz=5)                           # the sixth height: sum, frame_sum, com_mu, ... of that scan
+layer["sum"].bexa.plot(log=True)
+curves.rocking_curves({"height 5": layer["frame_sum"]})   # the rocking curve of the whole window
+zmaps = stacked[["sum", "com_mu", "width_mu", "total"]]   # the maps of every height
+images.tiles(zmaps["com_mu"], axis="samz", n=12, per_row=4)   # one COM map per height
+zmaps["sum"].bexa.browse()                             # slider over samz
+zmaps["com_mu"].bexa.browse_volume()                   # the three projections of the (samz, y, x) volume
+bexa.save(zmaps.load(), f"{out}/WS2G_100_zstack_maps.h5")   # the maps, loaded, in one file of their own
 ```
 
 A z-stack repeated at several energies gives a `(samz, energy, y, x)` grid from the same call,
-NaN where a combination was not measured. The previews of every layer make a 3-D volume that
-rarely fits in memory: `store=True` builds it scan by scan into one HDF5 file in the cache and
-returns it opened lazily, so the browsers read one block per slider move, and
-`interactive.brightest` finds the condition that lights the volume up from totals computed
-while stacking (the file is reused on the next run of the same request):
+NaN where a combination was not measured. The binned previews of the layers are the 3-D
+volume, which rarely fits in memory: the browsers read one block per slider move from the
+stack file, and `interactive.brightest` finds the condition that lights the volume up from
+totals computed while stacking:
 
 ```python
-stacked = bexa.stack(layers, [bexa.acc.Preview()], dim="auto", downsample=8, store=True)   # one file in the cache
-vol = stacked["preview"].transpose("mu", "samz", "y", "x")   # a slider for mu in front of the (samz, y, x) volume
+vol = stacked["preview"].transpose("mu", "samz", "yb", "xb")   # a slider for mu in front of the (samz, yb, xb) volume
 peak = interactive.brightest(vol, over=("mu",))               # {"mu": index}: the mu that lights up the whole stack
 view = vol.bexa.browse_volume(log=True)                       # the three projections, one block read per move
 view.update(**peak)
 vol.bexa.browse_render(mode="translucent", log=True, spacing=(1.0, 1.9, 1.9), units="um")   # plotly rendering, redrawn on release
 ```
+
+Without a cache, leave `store` out: the stack is then built in memory, allocated once and
+filled as the layers finish (a `MemoryError` names the size when it would not fit), and
+`workers` works the same way. Each worker reopens its scan from `scan.recipe`, gets the job's
+memory budget divided by the number of workers, and uses the device the notebook would use, so
+the workers share the GPU when there is one; `bexa.settings()` in the notebook shows the
+budget they divide.
 
 Layers that drift laterally between heights can be shifted before stacking with
 `bexa.analysis.registration.align_stack` (FFT correlation) or placed by hand with
@@ -546,9 +584,11 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | centre-of-mass (COM) and width maps, mosaicity | `Scan.com`, `MotorCOM`, `bexa.analysis.rocking.motor_com`, `bexa.analysis.rocking.moments` |
 | the energy centre of mass and strain of an energy scan | `Scan.energy_com`, `EnergyCOM`; from stacked sums `bexa.analysis.rocking.energy_com_from_stack` |
 | a downsampled preview of a whole scan | `Scan.preview` |
+| full-resolution maps and a binned volume from one pass (one pass, two resolutions) | `Preview(downsample=8)` next to `Sum`, `MotorCOM`, ... in `Scan.reduce` or `bexa.stack` |
 | the frames in memory | `Scan.read` (with cache=True the volume is kept for the next session), `Scan.to_dask`, `Scan.batches` |
 | several results from one pass over the files | `Scan.reduce`, `bexa.reduce` |
 | maps of every scan on the positioners that vary (a z-stack, an energy series, both) | `bexa.stack(..., dim="auto")` |
+| parallel scan loading: many scans reduced at once, each in its own process | `bexa.stack(..., workers="auto")` (every scan reopened from `Scan.recipe`), `bexa.core.parallel.process_pool` |
 | a stack too large for memory, built on disk and read block by block | `bexa.stack(..., store=True)`, `bexa.io.cube.open_lazy`, `bexa.io.cube.StoreWriter` |
 | the condition (chi, mu, energy) that lights up a stacked volume, shared colour limits | `bexa.viz.interactive.brightest`, `bexa.viz.interactive.shared_limits` |
 | a region of interest | `bexa.ROI`, `ROI.parse`, `da.bexa.roi(...)`, `bexa.viz.interactive.pick_roi` |
@@ -618,7 +658,8 @@ The everyday jobs and the functions that do them; each name has an entry in the
 |---|---|
 | know the device, memory budget, cache and profile in use | `bexa.settings()`, `bexa settings` |
 | force the CPU or the GPU | `device="cpu"` or `device="cuda"` on any reduction, verb, preview or report; `bexa.core.backend.resolve_device` |
-| use less memory per batch | `BEXA_MEMORY_FRACTION`, `bexa.core.backend.memory_budget`, `bexa.core.backend.choose_batch_frames` |
+| use less memory per batch | `BEXA_MEMORY_FRACTION`, `bexa.core.backend.memory_budget`, `bexa.core.backend.choose_batch_frames` (batches are capped at 256 MiB, `MAX_BATCH_BYTES`) |
+| threads for the CPU work of one process (the smoothing of the centre of mass) | `BEXA_THREADS`, `bexa.core.parallel.compute_threads`, `bexa.core.backend.gaussian_frames` |
 | know whether a result fits before computing it | `bexa.core.backend.check_fits` (what `Scan.read`, previews, `bexa.stack` and `bexa.load` refuse with) |
 | see or clear the result cache | `bexa cache ls`, `bexa cache clear`, `bexa.core.cache.Cache`, `Dataset.clear_cache` |
 | find where a result came from | `bexa.core.provenance.parameters_of`, the `attrs` of every result |
@@ -668,7 +709,7 @@ functions that need them. Each name is documented in full under the module that 
 | `bexa.open_profile` | open a scan from a beamtime profile and a sample name | `bexa.core.scan.open_profile` |
 | `bexa.list_scans` | scan numbers of a dataset folder | `bexa.core.scan.list_scans` |
 | `bexa.open_dataset` | every scan of a dataset folder (or of several folders), as a table | `bexa.core.dataset.open_dataset` |
-| `bexa.stack` | reduce several scans and stack the results on the positioners that vary between them (`samz`, `energy`), in memory or in one HDF5 file | `bexa.core.dataset.stack` |
+| `bexa.stack` | reduce several scans (several at a time with `workers=`) and stack the results on the positioners that vary between them (`samz`, `energy`), in memory or in one HDF5 file | `bexa.core.dataset.stack` |
 | `bexa.reduce` | run accumulators over a scan in one streaming pass | `bexa.core.reductions.reduce` |
 | `bexa.acc` | the accumulators: `bexa.acc.Sum()`, `bexa.acc.MotorCOM(...)`, ... (the module `bexa.core.reductions`) | `bexa.core.reductions` |
 | `bexa.ROI` | region of interest over pixels, motors and energy | `bexa.core.roi.ROI` |
@@ -733,6 +774,9 @@ the spec. Instead of a path, `profile` (a name, a YAML path or a `BeamtimeProfil
   a folder path (a cache there), a `Cache`, or `False`. Previews are cached by default;
   `cache_reductions=True` caches the results of `reduce` and of the verbs as well.
 - Other keywords go to the engine, for example `coords=` for a generic stack.
+- The scan remembers how it was opened in `Scan.recipe` (`path`, `scan`, the name of the
+  matched spec, `detector`, `overrides` and the extra keywords), so `bexa.open(**scan.recipe)`
+  opens it again without sniffing, in another process too.
 
 ```python
 scan7 = bexa.open(folder, scan=7)                              # one scan of a BLISS dataset
@@ -753,7 +797,9 @@ profile's geometry section all come from the YAML (top-level name `bexa.open_pro
 lives under the profile's `processed_root` unless `cache` names another folder (or a `Cache`, or
 `False` for none), and reductions are cached when the profile has a `processed_root` (or
 `BEXA_CACHE_DIR` is set) unless `cache_reductions=False`. The CIF of the sample, when given,
-becomes `scan.crystal`.
+becomes `scan.crystal`. The scan's `recipe` holds the profile (its YAML path, or the object
+when it was built in memory), `sample`, `dataset`, `scan`, `detector` and the extra keywords,
+so `bexa.open(**scan.recipe)` opens it again.
 
 ```python
 scan7 = bexa.open_profile("hc6293", sample="WS2G_100", scan=7)
@@ -827,8 +873,9 @@ Properties (metadata only, no frames are read):
 
 Attributes: `source` (the engine, for example `scan.source.shot_table()` for PAL point files),
 `spec` (the `FormatSpec`), `geometry` (a `DetectorGeometry`), `crystal`, `hkl_center`, `name`,
-`cache`, `cache_reductions`, `profile` (the `BeamtimeProfile` or `None`) and `roi`, the scan's
-default `ROI`, which every call without `roi=` uses.
+`cache`, `cache_reductions`, `profile` (the `BeamtimeProfile` or `None`), `roi`, the scan's
+default `ROI`, which every call without `roi=` uses, and `recipe`, how the scan was opened
+(see `Scan.recipe`).
 
 ```python
 scan.dims, scan.shape            # ('chi', 'mu', 'y', 'x'), (6, 16, 64, 80)
@@ -1020,6 +1067,28 @@ the block.
 
 ```python
 scan.close()
+```
+
+#### `Scan.recipe`
+`scan.recipe`
+
+Attribute: how the scan was opened, as the keywords of `bexa.open`, so that
+`bexa.open(**scan.recipe)` opens the same scan again, in another process too; `bexa.stack`
+reopens every scan this way in its worker processes. `bexa.open` records `path`, `scan`,
+`format` (the name of the matched spec, so the recipe never sniffs), `detector`, `overrides`
+and its extra keywords (`stack_dim`, `energy_keV`, ...); `open_profile` records `profile`
+(the YAML path, or the object when the profile was built in memory), `sample`, `dataset`,
+`scan`, `detector` and the extra keywords. The cache is not part of it: a worker takes the
+cache from the scan. `None` for a `Scan` built by hand around a source and for a series that
+spans several dataset folders (`Dataset.series` across folders), which `stack(..., workers=)`
+refuses with a `ValueError`; a series within one folder, from `bexa.open(path, scan=(20, 24))`
+or `Dataset.series`, has one.
+
+```python
+scan7 = bexa.open(folder, scan=7)
+scan7.recipe                     # {'path': '...WS2G_100_DFXM', 'scan': 7, 'format': 'esrf_id03_bliss_2026', 'detector': None, 'overrides': None}
+again = bexa.open(**scan7.recipe, cache=False)   # the same scan, no sniffing
+bexa.Scan(scan7.source, scan7.spec).recipe       # None: built by hand
 ```
 
 ### bexa.core.dataset: the scans of one folder or several
@@ -1230,7 +1299,7 @@ varying(ds[[2, 3, 4]], tolerance=0.05)           # {}: energies within 0.05 keV 
 ```
 
 #### `stack`
-`bexa.core.dataset.stack(scans, accumulators, dim="auto", *, coords=None, store=None, dtype=None, tolerance=None, **reduce_kwargs)`
+`bexa.core.dataset.stack(scans, accumulators, dim="auto", *, coords=None, store=None, dtype=None, tolerance=None, workers=None, **reduce_kwargs)`
 
 Reduce every scan with the same accumulators and stack the results on a grid of scans
 (top-level name `bexa.stack`). `dim` names the new dims: `"auto"` takes what `varying` finds (a
@@ -1248,15 +1317,34 @@ inner dims must have the same shape in every scan. Replaces the layer loop of
   halves the maps) and filled scan by scan, so peak memory is the result plus one scan; the
   result is checked against the memory budget first (`MemoryError` suggests `store=True`).
 - `store=True` writes the grid scan by scan into one HDF5 file in the scans' cache
-  (`stacks/<fingerprint>.h5`; a path names the file instead) and returns it opened with
+  (`stacks/<fingerprint>.h5`; a path names the file instead), compressed with lzf and byte
+  shuffle (`STORE_COMPRESSION`; a tenth of gzip's writing time), and returns it opened with
   `bexa.io.cube.open_lazy`: nothing is loaded until a block is indexed, which is how the
   previews of a dataset that does not fit in memory are browsed. A file built from the same
   scans with the same request is reused.
+- `workers` reduces several scans at the same time, each in its own spawned process: this is
+  how the reading and decompression of the frames run in parallel, since h5py lets one thread
+  at a time into HDF5 and threads cannot do it. `None` or `1` reduces the scans one after the
+  other in this process; an int is the number of processes; `"auto"` takes the usable cores
+  of the job but one, or `GPU_WORKERS` (3) when the device is the GPU. A worker reopens its
+  scan from `Scan.recipe` (a `Scan` built by hand has none: `ValueError`), receives the
+  accumulators as built (`Accumulator` pickles its parameters, never its totals) and uses the
+  device the parent would use (`device="auto"` is resolved here, so the workers share one GPU
+  when there is one), with `BEXA_MEMORY_FRACTION` divided by the number of workers and
+  `BEXA_THREADS` set to `min(8, cores // workers)`. Results arrive as the scans finish and are
+  written straight into the stack, in memory or on disk, under one progress bar over the
+  scans; an error in a worker reaches the caller and stops the pool. In a script, call it under
+  `if __name__ == "__main__":` as for any spawned pool.
 - Every result with a `(y, x)` image carries per-frame statistics in its attrs
   (`block_stats_dims`, `block_total`, `block_p1`, `block_p99`) for `bexa.core.stacks.brightest`
-  and the browsers' colour limits; the dataset attrs record `stack_dims`, `scan_ids`,
-  `scan_names`, `accumulators`, `stack_key` and, for a store, `lazy_file`. An `energy` dim has
-  the unit `keV`.
+  and the browsers' colour limits: the totals are exact, the 1st and 99th percentiles come
+  from a strided sample of at most `STATS_SAMPLE` (262144) pixels per frame. The dataset
+  attrs record `stack_dims`, `scan_ids`, `scan_names`, `accumulators`, `stack_key` and, for a
+  store, `lazy_file`. An `energy` dim has the unit `keV`.
+- One pass, two resolutions: a `Preview(downsample=8)` next to `Sum`, `FrameStats` and
+  `MotorCOM` gives the binned volume of every scan (pixel dims `yb`, `xb`) and the
+  full-resolution maps from the same pass, in one stack; `examples/13_esrf_dfxm_general.ipynb`
+  reads everything it shows from such a stack.
 
 ```python
 stack = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Sum(), bexa.acc.MotorCOM(axes=("mu",))], dim="auto")
@@ -1265,7 +1353,18 @@ grid = bexa.stack(ds.select(type="fscan1d"), [bexa.acc.Sum()], dim="auto")   # 2
 grid["sum"].dims, grid["sum"].attrs["block_total"].shape    # ('samz', 'energy', 'y', 'x'), (5, 5)
 stored = bexa.stack(both.select(type="fscan2d"), [bexa.acc.Preview()], downsample=2, store=True)   # one file in ./bexa_cache/stacks
 stored["preview"].dims, stored["preview"].isel(samz=3).values.shape    # ('samz', 'chi', 'mu', 'y', 'x'), (6, 15, 20, 24): one block read
+two = bexa.stack(ds.select(scans=[1, 7]), [bexa.acc.Sum(), bexa.acc.MotorCOM(axes=("mu",))], dim="auto", workers=2)   # two heights, one process each
+two["sum"].dims, two.attrs["scan_ids"]                     # ('samz', 'y', 'x'), [1, 7]: the same result, the scans read side by side
+one_pass = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Preview(downsample=2), bexa.acc.Sum()], dim="auto")
+one_pass["preview"].dims, one_pass["sum"].dims              # ('samz', 'chi', 'mu', 'yb', 'xb'), ('samz', 'y', 'x'): binned volume, full maps
 ```
+
+Constants:
+
+- `STORE_COMPRESSION`: `"lzf"`, the HDF5 compression (with byte shuffle) of stacks built with
+  `store=`. `GPU_WORKERS`: `3`, the processes `workers="auto"` starts when the device is the
+  GPU. `STATS_SAMPLE`: `262144`, the most pixels per frame the percentiles of the per-frame
+  statistics look at.
 
 ### bexa.core.stacks: statistics, brightest condition and colour limits of stacked volumes
 
@@ -1464,7 +1563,7 @@ Names of the results:
 | Accumulator or verb | Variables |
 |---|---|
 | `Sum`, `Mean`, `Max`, `Min`, `scan.sum`, `scan.max` | `sum`, `mean`, `max`, `min` (y, x) |
-| `Preview`, `scan.preview`, `scan.read` | `preview` (motors..., y, x) |
+| `Preview`, `scan.preview`, `scan.read` | `preview` (motors..., y, x); (motors..., yb, xb) for a `Preview(downsample=...)` binned on its own |
 | `Projections` | `xy` (y, x), `grid` (motors), `<motor>_y`, `<motor>_x`, `<motor_i>_<motor_j>` |
 | `RoiIntegral({"peak": roi})` | `roi_peak` on the motor grid; `scan.rocking_curve` gives `rocking_curve` |
 | `MotorCOM`, `scan.com` | `total`, `com_<axis>`, `width_<axis>`, `skew_<axis>`, `kurtosis_<axis>` (y, x) |
@@ -1549,17 +1648,28 @@ res = scan.reduce([bexa.acc.Min()])
 ```
 
 #### `Preview`
-`bexa.core.reductions.Preview(apply_log=False, fill=float("nan"))`
+`bexa.core.reductions.Preview(apply_log=False, fill=float("nan"), downsample=None, method="mean")`
 
 The (downsampled) volume itself, `(motors..., y, x)` with coordinates, named `preview`.
 `apply_log` stores `log10(1 + I)` (the v9 preview did); `fill` is the value of grid points
-without a frame in a partial scan. The volume is checked against the memory budget before it
-is allocated (`bexa.core.backend.check_fits`: a `MemoryError` names the size and suggests a
-larger downsample, an ROI or `bexa.stack(..., store=True)`). `scan.preview` and `scan.read`
-use it.
+without a frame in a partial scan. `downsample` (an int or `(by, bx)`) bins the pixels of this
+preview alone, on top of the pass's `downsample`, so the other accumulators of the pass keep
+the full frames: one pass gives full-resolution maps and a binned volume. Such a preview names
+its pixel dims `yb`, `xb` (`bexa.core.structure.BINNED_PIXEL_DIMS`: one xarray result holds
+one size per dim name), with the full-resolution index of each block's first pixel as
+coordinates, and records the factors in `attrs["binning"]`; `method` combines each block by
+`"mean"`, `"sum"` or `"max"`. The browsers, `bexa.viz.volume.projections_panel`,
+`bexa.viz.images.tiles` and `show` take the last two dims as the pixels whatever their names.
+`describe()` includes `downsample` and `method` only when binning, so an unbinned preview keeps
+its cache key. The volume is checked against the memory budget before it is allocated
+(`bexa.core.backend.check_fits`: a `MemoryError` names the size and suggests a larger
+downsample, an ROI or `bexa.stack(..., store=True)`). `scan.preview` and `scan.read` use it.
 
 ```python
 vol = scan.reduce([bexa.acc.Preview(apply_log=True)], downsample=(1, 1, 4, 4))["preview"]
+res = scan.reduce([bexa.acc.Preview(downsample=4), bexa.acc.Sum(), bexa.acc.MotorCOM(axes=("mu",))])   # one pass, two resolutions
+res["preview"].dims, res["preview"].shape, res["sum"].shape    # ('chi', 'mu', 'yb', 'xb'), (6, 16, 16, 20), (64, 80)
+res["preview"].coords["yb"].values[:3], res["preview"].attrs["binning"]   # [0 4 8], [4, 4]
 ```
 
 #### `Projections`
@@ -1603,7 +1713,15 @@ weight `w_f` of frame `f` at motor value `m_f`, per pixel:
 - `moments`: 1 gives `com_<axis>`; 2 adds `width_<axis>`; 3 adds `skew_<axis>`; 4 adds
   `kurtosis_<axis>` (excess kurtosis). `total`, the sum of the weights, is always returned.
 
-`scan.com` uses it. Replaces the per-pixel loops of the `betterCOM*` notebooks.
+The moments of a batch are formed about the middle of each motor axis, in the frames' dtype
+(float32 BLAS through `tensordot`, no float64 copy of the batch), and accumulated in float64
+across batches; the centre of mass gets the middle added back and the width, skew and kurtosis
+are unchanged by the shift, so the width of an energy series at 17 keV (a millionth of the
+value squared) keeps its precision. The smoothing goes through
+`bexa.core.backend.gaussian_frames`, in `BEXA_THREADS` threads on the CPU. On the lab
+workstation (16 cores, RTX 4090), Sum and MotorCOM(sigma=3) over 160 frames of 1024 x 1024
+take 1.6 s on the CPU (4.9 s before the threads and the dropped copy) and 0.6 s on the GPU
+(1.4 s before). `scan.com` uses it. Replaces the per-pixel loops of the `betterCOM*` notebooks.
 
 ```python
 res = scan.reduce([bexa.acc.MotorCOM(axes=("chi", "mu"), sigma=3.0, moments=4)], roi=window)
@@ -1684,6 +1802,12 @@ A subclass sets `name` (the key of its result) and `live_copies` (batch-sized te
 allocates, so the engine can size batches), and builds results with the helpers `_image`
 (`(y, x)` maps), `_grid` (values on the motor grid), `_volume` and `_zeros`. Register it with
 `bexa.core.registry.register_accumulator` so that pipelines can find it by name.
+
+An accumulator pickles as built (`__getstate__`, `__setstate__`): the attributes `__init__`
+set, never the totals, the plan or the array module of a pass, whether or not it has run. The
+worker processes of `bexa.stack(..., workers=)` receive accumulators this way, so a subclass
+keeps everything a fresh pass needs in attributes set by `__init__` (what `_allocate` makes is
+left out, and `xp` is numpy again after unpickling).
 
 ```python
 from bexa.core.registry import register_accumulator
@@ -1795,8 +1919,10 @@ for batch in iter_batches(scan.source, plan, batch_frames=16):
     break
 ```
 
-Constants: `PIXEL_DIMS = ("y", "x")`; `AUTO_PROGRESS_FRAMES = 200`, the pass length from
-which interactive sessions show a progress bar.
+Constants: `PIXEL_DIMS = ("y", "x")` and `BINNED_PIXEL_DIMS = ("yb", "xb")`, from
+`bexa.core.structure` (the pixel dims of a `Preview` binned on its own);
+`AUTO_PROGRESS_FRAMES = 200`, the pass length from which interactive sessions show a progress
+bar.
 
 ### bexa.core.accessor: .bexa on xarray objects
 
@@ -2207,12 +2333,17 @@ spec's first, `pco_ff`) in `scanNNNN/`, metadata from the master (`root/dataset/
 `master` is given); `FileNotFoundError` without detector files. It implements the `Source` members
 `files`, `frame_shape`, `n_frames`, `dtype`, `chunk_frames`, `energy_keV`, `read_frames`,
 `structure`, `refresh` and `close` (see `BaseSource`). The dims are the motors declared in
-`fscan_parameters` (fscan1d to fscan3d, slow first) or, in the 2024 layout, up to three varying
-motors of `motors.known`; frames are placed on the grid by their readbacks, so snake and partial
-scans land in place. `measurement` channels are per-frame channels, positioners scalars, renamed
-motors take their logical names from `motors.aliases`, and the energy is `energy_keV` or `ccmth`
-converted with the Si 111 d-spacing. Files are opened once per thread with a chunk cache;
-`refresh()` re-lists the files of a scan still being written. Also:
+`fscan_parameters` (`motor`, `slow_motor`/`fast_motor`, `slow1_motor`/`slow2_motor`/`fast_motor`
+as BLISS writes them for an fscan, fscan2d and fscan3d, or `outer`/`middle`/`inner`; `MOTOR_KEYS`)
+or, in the 2024 layout, up to three varying motors of `motors.known`; the readbacks decide which
+loop is the outer one, and frames are placed on the grid by their values, so snake and partial
+scans land in place. When the monochromator angle (`energy.from`, `ccmth`) is one of the scanned
+motors, an energy mosa, that dim is named `energy` and holds keV (`ENERGY_DIM`; the angle stays a
+per-frame channel), so `MotorCOM(axes=("energy",))` gives `com_energy` straight from the scan.
+`measurement` channels are per-frame channels, positioners scalars, renamed motors take their
+logical names from `motors.aliases`, and the energy is `energy_keV` or `ccmth` converted with the
+Si 111 d-spacing (the mean angle of an energy mosa). Files are opened once per thread with a
+chunk cache; `refresh()` re-lists the files of a scan still being written. Also:
 
 - `list_scans(spec, root, dataset, detector=None)`: classmethod, the sorted numbers of the `scanNNNN` folders holding files of `detector`; `bexa.list_scans(dataset_folder)` does the same from a path.
 - `cache_records()`: the detector files by path, size and modification time, but the master by its path, the entry this scan reads and the frame count: BLISS appends every new scan to the master, so keying on the file would discard every cached result of the dataset at each new scan.
@@ -2845,9 +2976,12 @@ Writes a DataArray, a Dataset or a dict of DataArrays to `path`: zarr for `.zarr
 (use `.h5` so that `load` recognises it). Variables keep dims, coordinates and attrs (dicts and
 lists as JSON); the file attrs get the provenance of `bexa.core.provenance.build_attrs` (bexa
 version, git hash, date, Python, source files, parameters) unless `bexa_version` is set. In HDF5,
-arrays of 2 or more dims over 1024 values are compressed (`compression`, gzip level 4; `None` for
-none) in one chunk per frame, and NeXus `NXdata` groups let h5web and silx plot the file. An
-attr over 60 KB (`MAX_ATTR_BYTES`; the per-frame statistics of a large stack) is dropped, as
+arrays of 2 or more dims over 1024 values are compressed in one chunk per frame: `compression` is
+`"gzip"` (level 4; every HDF5 reader has it, so `save` keeps it as its default), `"lzf"` (with
+byte shuffle, which floats need to compress with lzf at all; what the cache and
+`bexa.stack(..., store=)` write: one scan's results, a 116 MB preview and 101 MB of maps, take
+0.7 s to write against 6.9 s with gzip and 0.3 s to read against 0.9 s) or `None` for none.
+NeXus `NXdata` groups let h5web and silx plot the file. An attr over 60 KB (`MAX_ATTR_BYTES`; the per-frame statistics of a large stack) is dropped, as
 HDF5 keeps attributes in the object header. GPU arrays are copied to the host;
 `overwrite=False` raises `FileExistsError` for an existing file. Returns the path. `bexa.save`
 is this function.
@@ -2899,8 +3033,9 @@ Write a bexa HDF5 file piece by piece, for results built scan by scan. Declare e
 with its full shape, write the coordinates, then put blocks into position and close; the file
 is built under a temporary name (`<stem>.partial.h5`) and appears under `path` only when it is
 complete. `attrs` are the file attrs (provenance is added unless `bexa_version` is in them);
-`compression` applies to variables of two or more dims, as in `save`. The file reads back with
-`load` or `open_lazy`. Members:
+`compression` applies to variables of two or more dims, as in `save` (`bexa.stack` passes
+`"lzf"`, `bexa.core.dataset.STORE_COMPRESSION`, which writes about ten times faster than gzip).
+The file reads back with `load` or `open_lazy`. Members:
 
 - `add_variable(name, dims, shape, dtype, attrs=None, compression=True)`: declare a variable; a float one starts as NaN (`compression=False` or another name overrides the file's).
 - `add_coord(name, values, dims=None, attrs=None)`: write a coordinate, 1-D along its own dim unless `dims` says otherwise (text becomes bytes).
@@ -3193,8 +3328,8 @@ mu = scan.coords["mu"]               # motor values in deg, one per frame
 Intensity-weighted mean motor position per pixel, `sum(I m) / sum(I)` along `axis`, in the units
 of `values`: the DFXM centre-of-mass map. `sigma` first smooths the frames with a Gaussian of that
 many pixels (v9 used 3) and `clip` floors the weights so dark pixels do not divide by zero (`None`
-leaves them). On `(mu, y, x)` it equals `com_mu` of `scan.com(axes=("mu",), sigma=...)`; with two
-motor axes `sigma` also smooths along the other motor, so sum it out first (`vol.sum("chi")`).
+leaves them). On `(mu, y, x)` it equals `com_mu` of `scan.com(axes=("mu",), sigma=...)`; on a
+volume with two motor axes `sigma` smooths the pixels only, never along the other motor.
 
 ```python
 com = rocking.motor_com(vol, mu, sigma=1.0)       # (64, 80) map in deg
@@ -3220,7 +3355,10 @@ dim="auto")` over an energy series. `com_energy = sum(I E) / sum(I)` and `width_
 standard deviation) are what `bexa.acc.EnergyCOM` computes with `sigma=0`, without opening the
 scans again as a series; other dims (a height) are kept. Returns an `xarray.Dataset` with
 `com_energy`, `width_energy` (keV) and `total`; pixels whose total is below `clip` are NaN.
-`ValueError` when `dim` is not a dim of `sums`.
+A stack larger than `ENERGY_COM_BLOCK_BYTES` (256 MiB) is processed one slice of its first
+other dim at a time, so a lazy stack on disk (`bexa.stack(..., store=True)`) is read block by
+block and the float64 temporaries stay the size of one slice. `ValueError` when `dim` is not a
+dim of `sums`.
 
 ```python
 ds = bexa.demo("zstack")                                   # five mu scans at 16.98 to 17.02 keV per height
@@ -3304,6 +3442,11 @@ stitching. Always a numpy float array.
 ```python
 rocking.combine_axes(mu, 0.2)[:3]                       # [-1.2, -1.1167, -1.0333]
 ```
+
+Constants:
+
+- `ENERGY_COM_BLOCK_BYTES`: `256 * 2**20`, the size of a stack above which
+  `energy_com_from_stack` works one outer slice at a time.
 
 ### bexa.analysis.peaks: the peak on the detector, frame by frame
 
@@ -4229,9 +4372,10 @@ peak = bexa.ROI(y=(16, 48), x=(20, 60))          # pixel window in full-resoluti
 `bexa.viz.images.show(image, ax=None, clim=("p", 1, 99), cmap=None, log=False, roi=None, scalebar=True, title=None, colorbar=True, figsize=None, **imshow_kwargs)`
 
 Display a 2-D image (DataArray, numpy or cupy array) with percentile colour limits and a
-colourbar; returns `(fig, ax, im)`, `im` the matplotlib `AxesImage`. A DataArray is drawn in its
-`y`/`x` coordinates, so a preview's axes read in full-resolution pixels and ROI boxes line up;
-the axes are labelled `x` and `y` and the title defaults to the array's name.
+colourbar; returns `(fig, ax, im)`, `im` the matplotlib `AxesImage`. A DataArray is drawn in the
+coordinates of its last two dims, the pixels whatever their names (`y`/`x`, or `yb`/`xb` for a
+preview binned on its own), so a preview's axes read in full-resolution pixels and ROI boxes
+line up; the axes are labelled after those dims and the title defaults to the array's name.
 
 - `clim`: a `bexa.viz.style.resolve_clim` spec; `log=True` shows `log10(1 + image)`, negative
   values clipped to 0; `roi`: an `ROI` or `{name: ROI}`, drawn by `roi_overlay`.
@@ -4249,7 +4393,8 @@ fig, ax, im = image.bexa.plot(log=True)          # the same function through the
 `bexa.viz.images.tiles(volume, axis=0, n=9, per_row=3, indices=None, clim="shared", cmap=None, log=False, titles=True, figsize=None)`
 
 A grid of images along one axis of a stack. For a DataArray, `axis` is a dim name or index, all
-other dims except `y` and `x` are summed away and each tile is titled from the coordinate
+other dims except the last two (the pixels, whatever their names) are summed away and each tile
+is titled from the coordinate
 (`mu = 0.3333`); for a numpy array the axis is moved to the front and tiles are titled
 `index = 5`. Shows `n` evenly spaced frames (or exactly `indices`), `per_row` to a row.
 `clim="shared"` puts all tiles on one scale (1st to 99th percentile of the frames shown),
@@ -4489,9 +4634,10 @@ Constants:
 
 ### bexa.viz.volume: projections, slices, isosurfaces and 3-D renderings
 
-Views of volumes `(motors..., y, x)` and z-stacks `(z, y, x)`. `projections_panel`, `isosurface`
-and `rlp_scatter` draw interactive plotly figures with `backend="plotly"`; `render` is plotly
-only. Show plotly figures in a notebook with `show_plotly`.
+Views of volumes `(motors..., y, x)` and z-stacks `(z, y, x)`; the last two dims are the pixels
+whatever their names (`yb`, `xb` for a preview binned on its own). `projections_panel`,
+`isosurface` and `rlp_scatter` draw interactive plotly figures with `backend="plotly"`; `render`
+is plotly only. Show plotly figures in a notebook with `show_plotly`.
 
 ```python
 import bexa
@@ -4508,7 +4654,8 @@ stack = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Sum()], dim="samz")   # 
 
 Every projection of a volume in one figure: the detector image `xy`, each motor against each
 pixel axis (`chi_y`, `chi_x`, `mu_y`, `mu_x`) and each pair of motors (`chi_mu`). `data` is a
-DataArray `(motors..., y, x)` reduced with `method` (`"sum"`, `"max"`, `"mean"` or any other
+DataArray `(motors..., y, x)` (the last two dims are the pixels under any names; the panels
+keep the `_y`, `_x` names) reduced with `method` (`"sum"`, `"max"`, `"mean"` or any other
 DataArray reduction), or a mapping of names to 2-D DataArrays such as
 `scan.reduce([bexa.acc.Projections()])` (every 2-D entry except `grid` becomes a panel). `keys`
 picks and orders panels; `log=True` shows `log10(1 + I)`. Each panel has its own 1st to 99th
@@ -4611,7 +4758,9 @@ page = volume.show_plotly(fig, how="html", include_plotlyjs=True)   # self-conta
 ### bexa.viz.interactive: sliders and ROI pickers
 
 Browsers step through the motor dims of an array (previews and maps, not whole scans), with one
-slider per extra dim. They read one block per move through `isel`, so a volume stacked on disk
+slider per extra dim: the last two dims are the image and the last three the volume, whatever
+their names (`y`, `x`, or `yb`, `xb` for a preview binned on its own). They read one block per
+move through `isel`, so a volume stacked on disk
 (`bexa.stack(..., store=True)`, `bexa.io.cube.open_lazy`) browses without being loaded, and
 `clim="shared"` takes its limits from the stack's per-frame statistics (`shared_limits`)
 instead of a pass over everything. `brightest` and `shared_limits` are `bexa.core.stacks`
@@ -4652,7 +4801,8 @@ logged = prev.bexa.browse(log=True, clim="each")
 `bexa.viz.interactive.Browser(volume, cmap=None, clim="shared", log=False, figsize=(6, 5), widgets=None)`
 
 Step through the motor dims of a DataArray `(motors..., y, x)` one image at a time. Every dim
-other than `y` and `x` gets a slider and the title shows the current values
+but the last two (the pixels, whatever their names) gets a slider and the title shows the
+current values
 (`chi = -0.1, mu = 0.06667`); a leading dim may also index quantities (an `xr.concat` of maps
 with a `quantity` coordinate), whose names then show in the title. `clim="shared"` uses the 1st
 and 99th percentiles of the whole array (`shared_limits`: from the stack's statistics or a
@@ -4878,7 +5028,8 @@ napari viewers for a machine with a display. Each app keeps its state in a plain
 a window with magicgui controls. Only the launchers import napari and magicgui (`ImportError`
 with an install hint otherwise); `import bexa.viz` does not load this module. A launcher opens
 its window at once (`show=False` builds it hidden): in a script call `napari.run()` afterwards,
-in Jupyter run `%gui qt` first.
+in Jupyter run `%gui qt` first. Volumes and layers may name their pixel dims `y`, `x` or, for a
+preview binned on its own, `yb`, `xb`: the last two dims are the pixels.
 
 ```python
 import bexa
@@ -5792,8 +5943,11 @@ bitshuffle-lz4 when hdf5plugin is installed). Read by `esrf_id03_bliss_2026`
   moves along x and the second's along y over the inner 60 % of the range, sigma 12 % of the
   range, unless `centers`, `widths` (a value or `(H, W)` map per motor, as `dfxm_sample` gives)
   set them; a curve narrower than half a step is widened.
-- `motors`: `(name, points)`, slow first (one motor gives an fscan1d, two an fscan2d); `ranges`:
-  `{motor: (start, stop)}`, default mu -1 to 1, chi -0.5 to 0.5, phi -0.3 to 0.3 deg, else 0 to 1;
+- `motors`: `(name, points)`, slow first (one motor gives an fscan1d, two an fscan2d, three an
+  fscan3d written with BLISS's `slow1_motor`/`slow2_motor`/`fast_motor`; `ccmth` among them makes
+  an energy mosa that `bexa.open` reads with an `energy` dim in keV); `ranges`:
+  `{motor: (start, stop)}`, default mu -1 to 1, chi -0.5 to 0.5, phi -0.3 to 0.3 deg, ccmth
+  0.005 deg either side of the angle of `energy_keV`, else 0 to 1;
   `positioners`: fixed motor values such as `{"samz": 0.5}`; `layout`: `"2026"` or `"2025"` (with
   `fscan_parameters`, both read as 2026), `"2024"` (without, plus `obpitch`) or `"F2026"` (the
   2026 layout plus the frames linked into the master as a virtual dataset
@@ -7626,7 +7780,9 @@ s.motor_dims, s.frame_index.tolist()                 # ('chi', 'mu'), [[0, 1, 2,
 
 Constants:
 
-- `PIXEL_DIMS`: `("y", "x")`, the two detector dims. `MISSING`: `-1`, the id of an absent frame.
+- `PIXEL_DIMS`: `("y", "x")`, the two detector dims. `BINNED_PIXEL_DIMS`: `("yb", "xb")`, the
+  pixel dims of a `bexa.acc.Preview(downsample=...)` binned on its own, so that one result can
+  hold images of two sizes. `MISSING`: `-1`, the id of an absent frame.
 
 ### bexa.core.backend: numpy or cupy, devices, memory budget, batch sizes
 
@@ -7722,14 +7878,21 @@ except MemoryError as exc:
 ```
 
 #### `choose_batch_frames`
-`bexa.core.backend.choose_batch_frames(frame_bytes, budget=None, live_copies=4, min_frames=1, max_frames=None, device="cpu")`
+`bexa.core.backend.choose_batch_frames(frame_bytes, budget=None, live_copies=4, min_frames=1, max_frames=None, device="cpu", max_bytes=None)`
 
 Frames per batch so that `live_copies` batch-sized arrays (raw batch, float copy, filtered copy,
-work space) fit in `budget` bytes (default `memory_budget(device)`), clipped to `min_frames` and
-`max_frames`. `frame_bytes` is one frame after ROI, downsampling and dtype conversion.
+work space) fit in `budget` bytes (default `memory_budget(device)`), the batch itself capped at
+`max_bytes` (default `MAX_BATCH_BYTES`, 256 MiB), then clipped to `min_frames` and `max_frames`.
+`frame_bytes` is one frame after ROI, downsampling and dtype conversion. The cap matters on
+large nodes: with 400 GB the budget alone made batches of whole scans, which are no faster (the
+frames stream through once either way) and multiply every batch-sized temporary of the
+pipeline. Measured on the lab workstation (160 frames of 1024 x 1024, Sum + MotorCOM(sigma=3)
+on the CPU), batches of 16, 47 and 160 frames run at the same speed, and peak memory is about
+4.5 batches plus the results.
 
 ```python
-backend.choose_batch_frames(frame_bytes=2160 * 2560 * 4, budget=8 * 1024**3)   # 97 float32 PCO frames
+backend.choose_batch_frames(frame_bytes=2160 * 2560 * 4, budget=8 * 1024**3)   # 12 float32 PCO frames: 256 MiB
+backend.choose_batch_frames(frame_bytes=2160 * 2560 * 4, budget=8 * 1024**3, max_bytes=2 * 1024**3)   # 97: the budget alone
 ```
 
 #### `device_info`
@@ -7779,6 +7942,23 @@ backend.is_cupy_array(gpu), backend.is_cupy_array(host)  # (True, False)
 smooth = backend.ndimage_module(gpu).gaussian_filter(gpu, sigma=(0, 2, 2))   # on the GPU
 ```
 
+#### `gaussian_frames`
+`bexa.core.backend.gaussian_frames(frames, sigma)`
+
+Every frame of an `(n, y, x)` array smoothed by a Gaussian of `sigma` pixels along the last two
+axes, numpy or cupy, the same kind back; `sigma <= 0` returns the input itself. numpy float
+frames are split over `bexa.core.parallel.compute_threads` threads of the shared
+`bexa.core.parallel.compute_pool`: scipy's filters release the GIL, and eight threads smooth
+about five times faster than one. A single image, an integer array or a cupy array goes through
+`gaussian_filter` directly. The weights of `MotorCOM` and the `sigma` of
+`bexa.analysis.rocking.motor_com` go through it.
+
+```python
+frames = np.random.default_rng(0).random((8, 64, 80), dtype=np.float32)
+smooth = backend.gaussian_frames(frames, 3.0)                 # (8, 64, 80), smoothed in threads
+backend.gaussian_frames(frames, 0) is frames                  # True
+```
+
 #### `is_oom_error`
 `bexa.core.backend.is_oom_error(exc)`
 
@@ -7808,7 +7988,8 @@ backend.free_device_memory()
 Constants:
 
 - `DEFAULT_MEMORY_FRACTION`: `0.5`, the budget fraction without `fraction=` or
-  `BEXA_MEMORY_FRACTION`.
+  `BEXA_MEMORY_FRACTION`. `MAX_BATCH_BYTES`: `256 * 2**20`, the cap on one batch of frames
+  whatever the budget.
 
 ### bexa.core.resources: memory and CPUs of the process, SLURM cgroups
 
@@ -7952,8 +8133,10 @@ total = scan.sum()                           # DataArray (y, x)
 Two-level cache: `root` is the folder of entries (`None`: memory only), `memory_bytes` the budget
 of the LRU level: `"auto"` (`default_memory_bytes`: a tenth of the usable memory, at most 2 GiB),
 a number of bytes, or 0 or `None` to turn it off; larger objects stay on disk only. Entries are
-`<root>/<first 2 characters of the key>/<key>.h5`, written through a temporary file. Members
-(and attributes `root`, `memory_bytes`):
+`<root>/<first 2 characters of the key>/<key>.h5`, written through a temporary file with lzf
+compression and byte shuffle (`FILE_COMPRESSION`: a preview is written in a tenth of gzip's
+time and read three times faster; the files are bexa's own, so portability does not matter).
+Members (and attributes `root`, `memory_bytes`):
 
 - `key(files, params)`: static method, `bexa.core.provenance.fingerprint(files, params)`, a
   40-character hex key that changes with any file's size or modification time or any parameter.
@@ -8016,16 +8199,21 @@ for entry in cache.entries():
 
 Constants:
 
-- `DEFAULT_MEMORY_BYTES`: `2 * 1024**3`, the most the memory level takes by default; `MEMORY_SHARE`: `0.1`, its share of the usable memory.
+- `DEFAULT_MEMORY_BYTES`: `2 * 1024**3`, the most the memory level takes by default; `MEMORY_SHARE`: `0.1`, its share of the usable memory; `FILE_COMPRESSION`: `"lzf"`, the HDF5 compression of the cache files.
 
 ### bexa.core.parallel: threads, processes and prefetching
 
 HDF5 reads and hdf5plugin decompression release the GIL, so threads overlap reading with
-computation; CPU-bound work per file (one XFEL point file) runs in spawned processes.
+computation, and so do scipy's filters, so the CPU work of one process (the Gaussian smoothing
+of the centre of mass) is split over `compute_threads` threads. h5py lets one thread at a time
+into HDF5, though, so reading several scans at once takes processes: CPU-bound work per file
+(one XFEL point file) and `bexa.stack(..., workers=)` run in spawned processes.
 
 ```python
 import bexa
-from bexa.core.parallel import Prefetcher, default_workers, pin_blas_threads, process_pool, thread_map
+from bexa.core.parallel import (
+    Prefetcher, compute_pool, compute_threads, default_workers, pin_blas_threads, process_pool, thread_map,
+)
 
 ds = bexa.demo("alignment")                  # a dataset of four quick scans
 ```
@@ -8066,11 +8254,14 @@ default_workers("io"), default_workers("cpu")   # (8, 15) on a 16-core workstati
 ```
 
 #### `process_pool`
-`bexa.core.parallel.process_pool(workers=None)`
+`bexa.core.parallel.process_pool(workers=None, env=None)`
 
 A `ProcessPoolExecutor` with spawned workers (HDF5 and CUDA state never cross a fork), each
-running `pin_blas_threads(1)` at start; `workers` defaults to `default_workers("cpu")`. Functions
-and arguments must be picklable, and a script creates the pool under
+running `pin_blas_threads(1)` at start; `workers` defaults to `default_workers("cpu")`. `env` is
+a dict of environment variables set in every worker before it imports numpy: `bexa.stack(...,
+workers=)` passes a `BEXA_MEMORY_FRACTION` divided by the number of workers and a
+`BEXA_THREADS` of `min(8, cores // workers)`, so the workers share the job's memory and cores.
+Functions and arguments must be picklable, and a script creates the pool under
 `if __name__ == "__main__":`. The pinning runs after the worker has imported the main module and
 keeps variables already set, so set `OMP_NUM_THREADS=1` and the others before starting Python to
 be sure.
@@ -8078,7 +8269,7 @@ be sure.
 ```python
 import math
 if __name__ == "__main__":
-    with process_pool(workers=4) as pool:
+    with process_pool(workers=4, env={"BEXA_THREADS": "2"}) as pool:
         roots = list(pool.map(math.sqrt, range(8)))
 ```
 
@@ -8091,6 +8282,32 @@ imported.
 
 ```python
 pin_blas_threads(1)                          # first thing in a worker script
+```
+
+#### `compute_threads`
+`bexa.core.parallel.compute_threads()`
+
+Threads for the CPU work inside one process: `BEXA_THREADS` when set (at least 1), else the
+usable cores of the job capped at 8, beyond which the gain flattens.
+`bexa.core.backend.gaussian_frames` splits its frames over that many threads, and
+`bexa.stack(..., workers=)` sets `BEXA_THREADS` to `min(8, cores // workers)` in every worker
+so that the workers share the cores.
+
+```python
+compute_threads()                            # 8 on a 16-core workstation; what BEXA_THREADS says when it is set
+```
+
+#### `compute_pool`
+`bexa.core.parallel.compute_pool()`
+
+One `ThreadPoolExecutor` of `compute_threads()` threads per process, made on the first call and
+shared by every frame-parallel numpy job (`gaussian_frames`), so that the threads are not
+started again for every batch.
+
+```python
+pool = compute_pool()
+list(pool.map(abs, [-1, -2, -3]))            # [1, 2, 3]
+compute_pool() is pool                       # True: the same pool on every call
 ```
 
 Constants:
@@ -8791,6 +9008,7 @@ in a notebook, with `os.environ[...]` before the call that reads them.
 |---|---|---|---|
 | `BEXA_DEVICE` | Device for calls with `device=None`: `auto`, `cpu`, `cuda` (or `gpu`). Set by `bexa --device`. An explicit `device="auto"`, the default of `scan.reduce` and the scan verbs, does not read it. | `auto` | `bexa.core.backend.resolve_device`; shown by `bexa.core.settings.settings`, `bexa.config.loader.env_settings` |
 | `BEXA_MEMORY_FRACTION` | Fraction of the usable memory one operation may use (batch sizes, the `scan.read` limit). Set by `bexa --memory-fraction`; `~/.bexa_env` from `esrf_setup.sh` sets 0.3. | `0.5` | `bexa.core.backend.memory_budget`, `settings`, `env_settings` |
+| `BEXA_THREADS` | Threads for the CPU work of one process: the Gaussian smoothing of `MotorCOM` and `bexa.analysis.rocking` (`bexa.core.backend.gaussian_frames`). `bexa.stack(..., workers=)` sets it to `min(8, cores // workers)` in every worker process. | the usable cores, at most 8 | `bexa.core.parallel.compute_threads` |
 | `BEXA_CACHE_DIR` | Cache folder of previews and cached reductions; when set, scans opened through a profile cache their reductions. | `<processed_root>/bexa_cache`, else `~/.cache/bexa` | `bexa.config.paths.cache_root`, `bexa.core.scan.open_profile`, `settings`, `env_settings` |
 | `BEXA_PROFILE` | Profile used when none is given: `load_profile()`, `bexa.open(sample=...)`, `bexa.open_dataset(sample=...)`. | not set | `bexa.config.loader.load_profile`, `settings`, `env_settings` |
 | `BEXA_PROFILE_DIR` | Folders searched first for profiles, separated by `os.pathsep`. | not set | `bexa.config.loader.profile_dirs` |
