@@ -1326,7 +1326,8 @@ One coordinate array per scanned motor spanning every scan (top-level name `bexa
 for scans measured on different grids: another range or step at some heights, two datasets
 scanned differently. For each motor: from the lowest to the highest value over the scans, in a
 step no coarser than the finest median step any scan used (the grid ends on the highest value);
-a motor whose grid is the same in every scan keeps it. `dims` limits the answer to some motors
+a motor whose grid is the same in every scan, up to the readback jitter (a quarter of a step),
+keeps it. `dims` limits the answer to some motors
 (default: every scanned motor, which every scan must have, else `ValueError`); `roi` and
 `downsample`, as in `stack`, restrict the ranges the way the pass does. `regrid` puts results
 onto this grid, and `stack` does so by itself.
@@ -1687,9 +1688,15 @@ calls it) and return one `xarray.Dataset` with every result.
 - `cache`: `True` (the scan's cache), a `Cache`, or `None`/`False`. With `None`, a scan opened
   with `cache_reductions=True` uses its cache. Cached results are keyed on the files, the
   accumulator, the plan, `method` and `dtype`.
-- `prefetch`: read the next batch in a background thread.
+- `prefetch`: read the next batches in a background thread (`prefetch_depth` of them).
 - `show_progress`: a progress bar (tqdm); `None` shows one for passes of 200 frames or more
   in an interactive session.
+
+The frames are read as stored and converted to `dtype` on the GPU or over threads on the CPU
+(`cast_frames`), so the reading thread only reads. On the CPU the accumulators fold each batch
+in at the same time, one thread each (numpy and scipy release the GIL), so a `Sum`, a
+`FrameStats` and a `MotorCOM` together cost about what the `MotorCOM` alone costs; on the GPU
+one stream runs them in turn.
 
 ```python
 res = bexa.reduce(scan, [bexa.acc.Sum, bexa.acc.MotorCOM(axes=("mu",))], roi=window, device="cpu")
@@ -2023,7 +2030,10 @@ Stream the frames of a plan as `FrameBatch` objects: read through the source's
 `read_frames`, cut to the window, block-reduced, and moved to `device` (`"cpu"` or `"cuda"`).
 The batch size comes from the memory budget, keeping `live_copies` batch-sized arrays inside
 it, unless `batch_frames` is given; with `prefetch` the next batches are read in a background
-thread, `prefetch_depth` of them ahead. `Scan.batches` calls it.
+thread, `prefetch_depth` of them ahead. The frames are read as stored (uint16, half the bytes
+of float32) and converted to `dtype` on the GPU, or over threads on the CPU (`cast_frames`), so
+the reading thread only reads: on a share delivering 1 GB/s the conversion in the reader had
+halved the reading speed. `Scan.batches` calls it.
 
 ```python
 from bexa.core.reductions import iter_batches
@@ -2473,8 +2483,15 @@ motors, an energy mosa, that dim is named `energy` and holds keV (`ENERGY_DIM`; 
 per-frame channel), so `MotorCOM(axes=("energy",))` gives `com_energy` straight from the scan.
 `measurement` channels are per-frame channels, positioners scalars, renamed motors take their
 logical names from `motors.aliases`, and the energy is `energy_keV` or `ccmth` converted with the
-Si 111 d-spacing (the mean angle of an energy mosa). Files are opened once per thread with a
-chunk cache; `refresh()` re-lists the files of a scan still being written. Also:
+Si 111 d-spacing (the mean angle of an energy mosa). How the frames are split over the detector
+files comes from the master when it says (`layout.frames_total`, `acq_nb_frames`, and
+`layout.frames_per_file`, `saving_frame_per_file`, as LIMA records them; the frame shape and
+dtype from the virtual dataset `layout.master_frames` in the autumn 2026 layout), so opening a
+scan opens one detector file, the last, whose count is the one a partial scan changes, instead
+of all sixty-four; when the files do not add up (a scan still being written) every file is
+opened. `read_frames` without `dtype` returns the frames as stored, read straight into the
+output array. Files are opened once per thread with a chunk cache; `refresh()` re-lists the
+files of a scan still being written. Also:
 
 - `list_scans(spec, root, dataset, detector=None)`: classmethod, the sorted numbers of the `scanNNNN` folders holding files of `detector`; `bexa.list_scans(dataset_folder)` does the same from a path.
 - `cache_records()`: the detector files by path, size and modification time, but the master by its path, the entry this scan reads and the frame count: BLISS appends every new scan to the master, so keying on the file would discard every cached result of the dataset at each new scan.
@@ -6063,11 +6080,13 @@ work = Path(tempfile.mkdtemp())
 `bexa.testing.synthetic.make_esrf_scan(root, dataset="synth_dfxm", scan=1, detector="pco_ff", motors=(("chi", 4), ("mu", 12)), ranges=None, frame_shape=(48, 64), n_files=2, energy_keV=17.0, layout="2026", order="slow_major", partial=0, amplitude=4000.0, background=10.0, noise=0.0, seed=0, dtype=np.uint16, positioners=None, curve="gaussian", centers=None, widths=None)`
 
 Writes one BLISS scan: the master `<root>/<dataset>/<dataset>.h5` (entry `<scan>.1` with
-`fscan_parameters`, per-frame motor values, positioners with `ccmth` for `energy_keV` on Si 111;
-later scans of the dataset are added to it) and `n_files` detector files
-`<dataset>/scan<NNNN>/<detector>_<i>.h5` (frames at `ESRF_FRAMES_PATH`, one per chunk,
-bitshuffle-lz4 when hdf5plugin is installed). Read by `esrf_id03_bliss_2026`
-(`esrf_id03_bliss_2024` for `layout="2024"`); returns a `SyntheticEsrfScan`.
+`fscan_parameters`, per-frame motor values, positioners with `ccmth` for `energy_keV` on Si 111,
+and LIMA's `acq_nb_frames` and `saving_frame_per_file`; later scans of the dataset are added to
+it) and up to `n_files` detector files `<dataset>/scan<NNNN>/<detector>_<i>.h5` (frames at
+`ESRF_FRAMES_PATH`, one per chunk, bitshuffle-lz4 when hdf5plugin is installed; every file but
+the last holds the same number of frames, as LIMA writes them, and a partial scan fills fewer
+files). Read by `esrf_id03_bliss_2026` (`esrf_id03_bliss_2024` for `layout="2024"`); returns a
+`SyntheticEsrfScan`.
 
 - Signal: along each motor every pixel has a Gaussian (with `curve="edge"` an error-function step,
   as in a knife-edge scan) of height `amplitude` (a number or an `(H, W)` map) on `background`
@@ -8078,6 +8097,20 @@ backend.is_cupy_array(gpu), backend.is_cupy_array(host)  # (True, False)
 
 ```python
 smooth = backend.ndimage_module(gpu).gaussian_filter(gpu, sigma=(0, 2, 2))   # on the GPU
+```
+
+#### `cast_frames`
+`bexa.core.backend.cast_frames(frames, dtype)`
+
+`frames` as `dtype` (numpy), the conversion of a large array (from `CAST_IN_THREADS_FROM`,
+8 MiB) split over `bexa.core.parallel.compute_threads` threads; numpy's casting releases the
+GIL. The streaming engine reads frames as stored and converts them here (or on the GPU), so the
+reading thread only reads. An array that already has the dtype is returned as it is.
+
+```python
+raw = np.random.default_rng(0).integers(0, 60000, (24, 512, 512), dtype=np.uint16)
+backend.cast_frames(raw, np.float32).dtype          # float32, equal to raw.astype(np.float32)
+backend.cast_frames(raw, np.uint16) is raw          # True
 ```
 
 #### `gaussian_frames`
