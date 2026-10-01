@@ -10,13 +10,17 @@ old and new reduced data look the same in memory: a Dataset with
 
 from __future__ import annotations
 
+import contextlib
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 import h5py
 import numpy as np
 import xarray as xr
+from xarray.backends import BackendArray
+from xarray.core import indexing
 
 from bexa._log import get_logger
 from bexa.core.provenance import build_attrs, to_json
@@ -28,7 +32,15 @@ FORMAT_VERSION = "cube-v1"
 LEGACY_AXES = ("delays", "phi", "chi", "th", "tth", "laser_v", "laser_h", "index")
 LASER_COORD = np.array(["off", "on"])
 
-__all__ = ["is_bexa_file", "load", "load_lcls_cube", "load_legacy_cube", "save"]
+__all__ = [
+    "StoreWriter",
+    "is_bexa_file",
+    "load",
+    "load_lcls_cube",
+    "load_legacy_cube",
+    "open_lazy",
+    "save",
+]
 
 
 # ----------------------------------------------------------------------- attrs
@@ -50,11 +62,21 @@ def _decode_attr(value: Any) -> Any:
     return value
 
 
+MAX_ATTR_BYTES = 60_000  # HDF5 keeps attributes in the object header: about 64 KB in all
+
+
 def _write_attrs(node: Any, attrs: dict[str, Any]) -> None:
     for key, value in attrs.items():
         if value is None:
             continue
-        node.attrs[key] = _encode_attr(value)
+        encoded = _encode_attr(value)
+        size = encoded.nbytes if isinstance(encoded, np.ndarray) else len(str(encoded))
+        if size > MAX_ATTR_BYTES:  # the per-frame statistics of a stack: derived, droppable
+            log.debug(
+                "attr %s is %d bytes, too large for an HDF5 attribute; not written", key, size
+            )
+            continue
+        node.attrs[key] = encoded
 
 
 def _read_attrs(node: Any) -> dict[str, Any]:
@@ -117,7 +139,14 @@ def save(
 
 def _write_nexus(f: Any, dataset: xr.Dataset) -> None:
     """NeXus ``NXdata`` groups linking to the arrays, so h5web and silx plot the file as it is."""
-    names = [str(n) for n in dataset.data_vars]
+    var_dims = {str(n): [str(d) for d in dataset[n].dims] for n in dataset.data_vars}
+    coord_ndim = {str(n): int(c.ndim) for n, c in dataset.coords.items()}
+    _link_nexus(f, var_dims, coord_ndim)
+
+
+def _link_nexus(f: Any, var_dims: dict[str, list[str]], coord_ndim: dict[str, int]) -> None:
+    """NeXus groups for variables with the given dims, linking the 1-D coords as axes."""
+    names = list(var_dims)
     if not names:
         return
     f.attrs["NX_class"] = "NXroot"
@@ -131,9 +160,8 @@ def _write_nexus(f: Any, dataset: xr.Dataset) -> None:
         group.attrs["signal"] = name
         group[name] = f[name]  # a hard link: no second copy of the data
         axes = []
-        for dim in dataset[name].dims:
-            dim = str(dim)
-            usable = dim in f["coords"] and dim in dataset.coords and dataset.coords[dim].ndim == 1
+        for dim in var_dims[name]:
+            usable = dim in f["coords"] and coord_ndim.get(dim) == 1
             if usable and dim != name:
                 if dim not in group:
                     group[dim] = f["coords"][dim]
@@ -143,18 +171,114 @@ def _write_nexus(f: Any, dataset: xr.Dataset) -> None:
         group.attrs["axes"] = axes
 
 
+def _dataset_kwargs(
+    shape: tuple[int, ...], dtype: np.dtype, compression: str | None
+) -> dict[str, Any]:
+    """Chunk and compression settings of :func:`save`: one chunk per frame, gzip."""
+    size = int(np.prod(shape)) if shape else 1
+    if not compression or len(shape) < 2 or size <= 1024:
+        return {}
+    kwargs: dict[str, Any] = {
+        "compression": compression,
+        "chunks": (1,) * (len(shape) - 2) + shape[-2:],
+    }
+    if compression == "gzip":
+        kwargs["compression_opts"] = 4
+    return kwargs
+
+
+class StoreWriter:
+    """Write a bexa HDF5 file piece by piece, for results built scan by scan.
+
+    Declare every variable with :meth:`add_variable` (its full shape; the file
+    holds NaN until written), the coordinates with :meth:`add_coord`, then
+    :meth:`write` blocks into position and :meth:`close`. The file appears
+    under ``path`` only when it is complete (it is built under a temporary
+    name), and it reads back with :func:`load` or :func:`open_lazy`.
+    """
+
+    def __init__(
+        self,
+        path: str | Path,
+        attrs: dict[str, Any] | None = None,
+        compression: str | None = "gzip",
+    ):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._tmp = self.path.with_name(self.path.stem + ".partial.h5")
+        self._file = h5py.File(self._tmp, "w")
+        self._file.attrs[FORMAT_MARKER] = FORMAT_VERSION
+        file_attrs = dict(attrs or {})
+        if "bexa_version" not in file_attrs:
+            file_attrs.update(build_attrs())
+        _write_attrs(self._file, file_attrs)
+        self._file.create_group("coords")
+        self._var_dims: dict[str, list[str]] = {}
+        self._coord_ndim: dict[str, int] = {}
+        self._compression = compression
+
+    def add_variable(
+        self,
+        name: str,
+        dims: Sequence[str],
+        shape: Sequence[int],
+        dtype: Any,
+        attrs: dict[str, Any] | None = None,
+        compression: str | bool | None = True,
+    ) -> None:
+        """Declare a variable of the given dims and shape; its values start as NaN (or 0)."""
+        dtype = np.dtype(dtype)
+        shape = tuple(int(n) for n in shape)
+        kwargs = _dataset_kwargs(
+            shape, dtype, self._compression if compression is True else (compression or None)
+        )
+        if dtype.kind == "f":
+            kwargs["fillvalue"] = np.nan
+        ds = self._file.create_dataset(name, shape=shape, dtype=dtype, **kwargs)
+        ds.attrs["dims"] = json.dumps([str(d) for d in dims])
+        _write_attrs(ds, dict(attrs or {}))
+        self._var_dims[name] = [str(d) for d in dims]
+
+    def add_coord(
+        self,
+        name: str,
+        values: Any,
+        dims: Sequence[str] | None = None,
+        attrs: dict[str, Any] | None = None,
+    ) -> None:
+        """Write a coordinate (1-D along its own dim unless ``dims`` says otherwise)."""
+        data = np.asarray(values)
+        if data.dtype.kind in "UO":
+            data = data.astype("S")
+        ds = self._file["coords"].create_dataset(name, data=data)
+        ds.attrs["dims"] = json.dumps([str(d) for d in (dims or (name,))])
+        _write_attrs(ds, dict(attrs or {}))
+        self._coord_ndim[name] = int(data.ndim)
+
+    def write(self, name: str, index: tuple[int, ...] | tuple[slice, ...], block: Any) -> None:
+        """Put ``block`` at ``index`` (one int or slice per leading dim) of a declared variable."""
+        self._file[name][tuple(index)] = np.asarray(block)
+
+    def close(self) -> Path:
+        """Finish the file: the variable list, the NeXus links, and the final name."""
+        self._file.attrs["data_vars"] = json.dumps(list(self._var_dims))
+        _link_nexus(self._file, self._var_dims, self._coord_ndim)
+        self._file.close()
+        self._tmp.replace(self.path)
+        return self.path
+
+    def abort(self) -> None:
+        """Close and delete the partial file after a failure."""
+        with contextlib.suppress(Exception):
+            self._file.close()
+        self._tmp.unlink(missing_ok=True)
+
+
 def _write_variable(group: Any, name: str, var: xr.DataArray, compression: str | None) -> None:
     data = np.asarray(var.values)
     if data.dtype.kind in "UO":
         data = data.astype("S")
-    kwargs: dict[str, Any] = {}
-    if compression and data.ndim >= 2 and data.size > 1024:
-        kwargs = {
-            "compression": compression,
-            "compression_opts": 4 if compression == "gzip" else None,
-        }
-        kwargs = {k: v for k, v in kwargs.items() if v is not None}
-        kwargs["chunks"] = (1,) * (data.ndim - 2) + tuple(data.shape[-2:])
+    kwargs = _dataset_kwargs(tuple(data.shape), data.dtype, compression)
     ds = group.create_dataset(name, data=data, **kwargs)
     ds.attrs["dims"] = json.dumps(list(var.dims))
     _write_attrs(ds, dict(var.attrs))
@@ -214,18 +338,80 @@ def _read_variable(node: Any) -> xr.Variable:
     return xr.Variable(dims, data, attrs=attrs)
 
 
+def _file_contents(f: Any) -> tuple[dict[str, Any], list[str], dict[str, xr.Variable]]:
+    """File attrs (without the format markers), the variable names and the coordinates."""
+    attrs = _read_attrs(f)
+    names = json.loads(attrs.pop("data_vars", "[]"))
+    for key in (FORMAT_MARKER, "NX_class", "default"):
+        attrs.pop(key, None)
+    coords = (
+        {name: _read_variable(f["coords"][name]) for name in f["coords"]} if "coords" in f else {}
+    )
+    return attrs, names, coords
+
+
 def _load_bexa_h5(path: Path) -> xr.Dataset:
+    from bexa.core.backend import check_fits
+
     with h5py.File(path, "r") as f:
-        attrs = _read_attrs(f)
-        names = json.loads(attrs.pop("data_vars", "[]"))
-        for key in (FORMAT_MARKER, "NX_class", "default"):
-            attrs.pop(key, None)
+        attrs, names, coords = _file_contents(f)
+        nbytes = sum(int(np.prod(f[name].shape)) * f[name].dtype.itemsize for name in names)
+        check_fits(nbytes, f"loading {path.name}", hint="open_lazy(path) reads blocks on demand")
         data_vars = {name: _read_variable(f[name]) for name in names}
-        coords = (
-            {name: _read_variable(f["coords"][name]) for name in f["coords"]}
-            if "coords" in f
-            else {}
+    return xr.Dataset(data_vars, coords=coords, attrs=attrs)
+
+
+class _LazyH5Array(BackendArray):
+    """One dataset of an HDF5 file, read on demand the way xarray's backends do it."""
+
+    def __init__(self, path: Path, name: str, shape: tuple[int, ...], dtype: np.dtype) -> None:
+        self.path = path
+        self.name = name
+        self.shape = shape
+        self.dtype = dtype
+
+    def __getitem__(self, key: Any) -> np.ndarray:
+        return indexing.explicit_indexing_adapter(
+            key, self.shape, indexing.IndexingSupport.OUTER_1VECTOR, self._read
         )
+
+    def _read(self, key: tuple[Any, ...]) -> np.ndarray:
+        with h5py.File(self.path, "r") as f:  # opened per read: nothing stays locked
+            return np.asarray(f[self.name][key])
+
+
+def open_lazy(path: str | Path) -> xr.Dataset:
+    """Open a bexa HDF5 file so that only the part that is indexed is read.
+
+    The variables are lazily indexed arrays: ``ds[name].isel(...)``, ``.sel``
+    and ``.transpose`` read nothing, ``.values`` reads the selected block, and
+    coordinates and attrs are loaded. Anything that needs the whole array (a
+    sum, a plot of everything, :func:`save`) loads it, so keep to blocks. This
+    is how a volume stacked with ``store=`` (:func:`bexa.stack`) is browsed
+    without fitting in memory.
+    """
+    path = Path(path)
+    if not is_bexa_file(path):
+        raise ValueError(f"{path} is not a bexa HDF5 file")
+    with h5py.File(path, "r") as f:
+        attrs, names, coords = _file_contents(f)
+        data_vars: dict[str, xr.Variable] = {}
+        for name in names:
+            node = f[name]
+            if node.dtype.kind in "SOU" or node.ndim == 0:
+                data_vars[name] = _read_variable(node)
+                continue
+            dims = (
+                json.loads(node.attrs["dims"])
+                if "dims" in node.attrs
+                else [f"dim_{i}" for i in range(node.ndim)]
+            )
+            var_attrs = {k: _decode_attr(v) for k, v in node.attrs.items() if k != "dims"}
+            lazy = indexing.LazilyIndexedArray(
+                _LazyH5Array(path, name, tuple(node.shape), np.dtype(node.dtype))
+            )
+            data_vars[name] = xr.Variable(dims, lazy, attrs=var_attrs)
+    attrs["lazy_file"] = str(path)
     return xr.Dataset(data_vars, coords=coords, attrs=attrs)
 
 

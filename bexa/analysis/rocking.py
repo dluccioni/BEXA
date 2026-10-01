@@ -19,6 +19,7 @@ __all__ = [
     "argmax_motor",
     "combine_axes",
     "energy_com",
+    "energy_com_from_stack",
     "moments",
     "motor_com",
     "rocking_curve_stats",
@@ -57,6 +58,36 @@ def motor_com(
 
 
 energy_com = motor_com
+
+
+def energy_com_from_stack(sums: Any, dim: str = "energy", clip: float = 1e-10) -> Any:
+    """Energy centre-of-mass maps from summed images stacked on an energy dim.
+
+    ``sums`` is a DataArray with an ``energy`` coordinate in keV (the ``sum``
+    of ``bexa.stack(scans, [bexa.acc.Sum()], dim="auto")`` over an energy
+    series): per pixel ``com_energy = sum(I E) / sum(I)`` and ``width_energy``
+    is the standard deviation, what ``bexa.acc.EnergyCOM`` computes with
+    ``sigma=0`` without opening the scans again as a series. Other dims (a
+    height, for example) are kept. Returns a Dataset with ``com_energy``,
+    ``width_energy`` and ``total``; pixels with no intensity are NaN.
+    """
+    import xarray as xr
+
+    if dim not in sums.dims:
+        raise ValueError(f"{dim!r} is not a dim of the stack {tuple(sums.dims)}")
+    energy = sums.coords[dim].astype(float)
+    weights = sums.fillna(0.0).clip(min=0.0)
+    total = weights.sum(dim)
+    safe = total.where(total > clip)
+    com = (weights * energy).sum(dim) / safe
+    variance = ((weights * energy**2).sum(dim) / safe - com**2).clip(min=0.0)
+    out = xr.Dataset(
+        {"com_energy": com, "width_energy": np.sqrt(variance), "total": total},
+        attrs={"energy_dim": dim, "n_energies": int(sums.sizes[dim])},
+    )
+    for name in ("com_energy", "width_energy"):
+        out[name].attrs["units"] = "keV"
+    return out
 
 
 def moments(

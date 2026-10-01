@@ -243,7 +243,7 @@ class Scan:
         """The downsampled volume ``(motors..., y, x)``; cached on disk when possible."""
         from bexa.core.reductions import Preview, reduce
 
-        use_cache = self.cache if cache else None
+        use_cache: Cache | bool = self.cache if cache and self.cache is not None else False
         res = reduce(
             self,
             [Preview(apply_log=apply_log)],
@@ -262,20 +262,25 @@ class Scan:
         downsample: int | Sequence[int] | None = None,
         device: str | None = "cpu",
         dtype: Any = np.float32,
+        cache: bool = False,
         **kwargs: Any,
     ) -> xr.DataArray:
-        """Load frames into memory as ``(motors..., y, x)`` (checks the size against the budget)."""
+        """Load frames into memory as ``(motors..., y, x)`` (checks the size against the budget).
+
+        With ``cache=True`` the volume is kept in the scan's cache, so the next
+        session reads it back instead of the raw frames.
+        """
         from bexa.core import backend
         from bexa.core.reductions import Preview, make_plan, reduce
 
         plan = make_plan(self.structure, roi if roi is not None else self.roi, downsample)
         nbytes = int(np.prod(plan.shape)) * np.dtype(dtype).itemsize
-        budget = backend.memory_budget(device)
-        if nbytes > budget:
-            raise MemoryError(
-                f"reading {plan.shape} at {np.dtype(dtype)} needs {nbytes / 1e9:.1f} GB but the "
-                f"budget is {budget / 1e9:.1f} GB; add an ROI or downsample, or use reduce()"
-            )
+        backend.check_fits(
+            nbytes,
+            f"reading {plan.shape} at {np.dtype(dtype)}",
+            device,
+            hint="add an ROI or downsample, or use reduce()",
+        )
         res = reduce(
             self,
             [Preview()],
@@ -283,7 +288,7 @@ class Scan:
             downsample=downsample,
             device=device,
             dtype=dtype,
-            cache=False,
+            cache=self.cache if cache and self.cache is not None else False,
             **kwargs,
         )
         return res["preview"]
@@ -385,6 +390,20 @@ def open_source(
     else:
         scans = [int(s) for s in scan]
     parts = [engine.from_path(spec, path, scan=s, **kwargs) for s in scans]
+    return combine_sources(parts, scans, stack_dim)
+
+
+def combine_sources(
+    parts: Sequence[Source], scans: Sequence[int], stack_dim: str | None = None
+) -> MultiScanSource:
+    """Stack already-open sources on a new leading dim, sorted along it.
+
+    ``scans`` labels the parts (their scan numbers, or table ids); ``stack_dim``
+    is ``"energy"`` (the default when every part has its own energy), ``"scan"``
+    (the labels, kept in the given order) or a positioner read from every part.
+    """
+    parts = list(parts)
+    labels = [int(s) for s in scans]
     energies = [p.energy_keV for p in parts]
     if stack_dim is None:
         distinct = (
@@ -396,11 +415,11 @@ def open_source(
     if stack_dim == "energy":
         if any(e is None for e in energies):
             raise ValueError("cannot stack on energy: a scan of the series has no energy")
-        coords = [float(e) for e in energies]
+        coords = [float(e) for e in energies if e is not None]
     elif stack_dim == "scan":
-        coords = [float(s) for s in scans]
+        coords = [float(s) for s in labels]
     else:  # a positioner recorded in every scan, for example samz
-        coords = [_positioner(p, stack_dim, s) for p, s in zip(parts, scans, strict=True)]
+        coords = [_positioner(p, stack_dim, s) for p, s in zip(parts, labels, strict=True)]
     order = np.arange(len(parts)) if stack_dim == "scan" else np.argsort(coords)
     parts = [parts[i] for i in order]
     coords = [coords[i] for i in order]
@@ -432,7 +451,7 @@ def open(
     energy_keV: float | None = None,
     geometry: Any = None,
     crystal: Any = None,
-    cache: Cache | bool | None = True,
+    cache: Cache | str | Path | bool | None = True,
     cache_reductions: bool | None = None,
     **kwargs: Any,
 ) -> Scan:
@@ -456,6 +475,10 @@ def open(
         Detector name when the layout has several.
     energy_keV
         Override the energy derived from the monochromator.
+    cache
+        ``True`` (a cache in the folder of :func:`bexa.config.paths.cache_root`, or
+        the profile's), a folder path, a :class:`bexa.core.cache.Cache`, or
+        ``False`` for none. Previews are cached whenever there is a cache.
     cache_reductions
         Keep reduction results in the disk cache like previews. Off by default
         for a path; on for a profile with a ``processed_root``.
@@ -472,6 +495,7 @@ def open(
             detector=detector,
             dataset=dataset,
             cache_reductions=cache_reductions,
+            cache=None if cache is True else cache,
             **kwargs,
         )
     if format is None and "::" in str(path):  # file.h5::/dataset shortcut
@@ -486,18 +510,26 @@ def open(
         geometry = DetectorGeometry.from_spec(
             spec, getattr(source, "detector", detector), energy_keV=source.energy_keV
         )
-    if cache is True:
-        cache = Cache(cache_root())
-    elif cache is False:
-        cache = None
+    resolved_cache = _resolve_cache(cache, cache_root())
     return Scan(
         source,
         spec,
         geometry=geometry,
         crystal=crystal,
-        cache=cache,
-        cache_reductions=bool(cache_reductions) and cache is not None,
+        cache=resolved_cache,
+        cache_reductions=bool(cache_reductions) and resolved_cache is not None,
     )
+
+
+def _resolve_cache(cache: Cache | str | Path | bool | None, default_root: Path) -> Cache | None:
+    """``True``: a cache at ``default_root``; a path: a cache there; ``False``/``None``: none."""
+    if isinstance(cache, Cache):
+        return cache
+    if cache is True:
+        return Cache(default_root)
+    if isinstance(cache, (str, Path)):
+        return Cache(Path(cache))
+    return None
 
 
 def open_profile(
@@ -507,13 +539,15 @@ def open_profile(
     detector: str | None = None,
     dataset: str | None = None,
     cache_reductions: bool | None = None,
+    cache: Cache | str | Path | bool | None = None,
     **kwargs: Any,
 ) -> Scan:
     """Open a scan described by a beamtime profile (``bexa.open(profile=..., sample=...)``).
 
     ``profile`` may be ``None`` to use ``BEXA_PROFILE``. Reduction results are
     cached under the profile's ``processed_root`` unless ``cache_reductions``
-    says otherwise.
+    says otherwise; ``cache`` (a folder, a :class:`Cache` or ``False``) replaces
+    that cache.
     """
     prof = profile if isinstance(profile, BeamtimeProfile) else load_profile(profile)
     spec = load_spec(prof.format, overrides=prof.format_overrides or None)
@@ -551,7 +585,9 @@ def open_profile(
             crystal = crystal_from_cif(cif_path)
         except Exception as exc:
             log.warning("could not load CIF %s: %s", cif_path, exc)
-    cache = Cache(cache_root(prof.processed_root))
+    resolved_cache = _resolve_cache(
+        True if cache is None else cache, cache_root(prof.processed_root)
+    )
     if cache_reductions is None:
         cache_reductions = prof.processed_root is not None or bool(os.environ.get(CACHE_DIR_ENV))
     return Scan(
@@ -559,10 +595,10 @@ def open_profile(
         spec,
         geometry=geometry,
         crystal=crystal,
-        cache=cache,
+        cache=resolved_cache,
         profile=prof,
         name=f"{prof.name}/{dataset}",
-        cache_reductions=cache_reductions,
+        cache_reductions=bool(cache_reductions) and resolved_cache is not None,
         hkl_center=None if hkl_center is None else (hkl_center[0], hkl_center[1], hkl_center[2]),
     )
 

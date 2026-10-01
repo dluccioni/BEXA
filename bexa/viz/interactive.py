@@ -18,6 +18,7 @@ import numpy as np
 import xarray as xr
 
 from bexa.core.roi import ROI
+from bexa.core.stacks import brightest, shared_limits
 from bexa.viz.style import as_array, resolve_clim
 
 __all__ = [
@@ -25,12 +26,18 @@ __all__ = [
     "RenderBrowser",
     "RoiPicker",
     "VolumeBrowser",
+    "brightest",
     "browse",
     "browse_render",
     "browse_volume",
     "compare",
     "pick_roi",
+    "shared_limits",
 ]
+
+
+def _log_block(block: np.ndarray) -> np.ndarray:
+    return np.log10(1.0 + np.clip(block, 0, None))
 
 
 def _in_notebook() -> bool:
@@ -62,7 +69,9 @@ class _SliderPanel:
     """What the browsers share: one index per slider dim and the two slider back ends.
 
     A subclass sets ``volume``, ``motor_dims``, ``index``, ``fig`` and ``title``
-    before calling :meth:`_init_sliders`, and implements :meth:`redraw`.
+    before calling :meth:`_init_sliders`, and implements :meth:`redraw`. The
+    data is read block by block through :meth:`_block`, so a volume opened
+    with :func:`bexa.io.cube.open_lazy` is never loaded whole.
     """
 
     volume: xr.DataArray
@@ -70,6 +79,26 @@ class _SliderPanel:
     index: dict[str, int]
     fig: Any
     title: Any
+    log: bool = False
+    _current_key: tuple[int, ...] | None = None
+    _current_block: np.ndarray | None = None
+
+    def _block(self) -> np.ndarray:
+        """The numpy block at the current slider positions (after ``log``), read once per move."""
+        key = tuple(self.index[d] for d in self.motor_dims)
+        if key != self._current_key or self._current_block is None:
+            block = as_array(self.volume.isel(dict(zip(self.motor_dims, key, strict=True))))
+            self._current_block = _log_block(block) if self.log else block
+            self._current_key = key
+        return self._current_block
+
+    def _limits(self, clim: Any, low: float = 1.0, high: float = 99.0) -> Any:
+        """``None`` for per-frame limits, else ``(vmin, vmax)``; shared limits need no full pass."""
+        if clim == "each":
+            return None
+        if clim == "shared":
+            return shared_limits(self.volume, low, high, log=self.log)
+        return clim
 
     def _init_sliders(self, widgets: bool | None) -> None:
         self._sliders: list[Any] = []
@@ -206,19 +235,13 @@ class Browser(_SliderPanel):
     ) -> None:
         import matplotlib.pyplot as plt
 
+        if volume.ndim < 2:
+            raise ValueError(f"a browser needs at least an image; got dims {tuple(volume.dims)}")
         self.volume = volume
-        self.motor_dims = [str(d) for d in volume.dims if d not in ("y", "x")]
+        self.motor_dims = [str(d) for d in volume.dims[:-2]]
         self.index = {d: 0 for d in self.motor_dims}
         self.log = log
-        self.data = as_array(volume)
-        if log:
-            self.data = np.log10(1.0 + np.clip(self.data, 0, None))
-        if clim == "each":
-            self.limits = None
-        elif clim == "shared":
-            self.limits = resolve_clim(self.data, ("p", 1, 99))
-        else:
-            self.limits = clim
+        self.limits = self._limits(clim)
         # No automatic layout: the slider axes are placed by hand below the image.
         self.fig, self.ax = plt.subplots(figsize=figsize, layout="none")
         frame = self._frame()
@@ -228,8 +251,13 @@ class Browser(_SliderPanel):
         self.title = self.ax.set_title(self._title())
         self._init_sliders(widgets)
 
+    @property
+    def data(self) -> np.ndarray:
+        """The frame on show (after ``log``)."""
+        return self._block()
+
     def _frame(self) -> np.ndarray:
-        return self.data[tuple(self.index[d] for d in self.motor_dims)]
+        return self._block()
 
     def redraw(self) -> None:
         frame = self._frame()
@@ -261,8 +289,9 @@ class VolumeBrowser(_SliderPanel):
     """Show a ``(z, y, x)`` volume and step through the conditions in front of it.
 
     The last three dims of ``volume`` are the volume axes; every leading dim
-    (``chi``, ``mu``, ``energy``, a ``quantity`` index, ...) gets a slider. The
-    whole array is held in memory, so use it on previews and maps.
+    (``chi``, ``mu``, ``energy``, a ``quantity`` index, ...) gets a slider. One
+    block is read per move, so a stack opened from disk
+    (:func:`bexa.io.cube.open_lazy`) browses without being loaded.
 
     Parameters
     ----------
@@ -303,15 +332,7 @@ class VolumeBrowser(_SliderPanel):
         self.volume_dims = [str(d) for d in volume.dims[-3:]]
         self.motor_dims = [str(d) for d in volume.dims[:-3]]
         self.index = {d: 0 for d in self.motor_dims}
-        self.data = as_array(volume)
-        if log:
-            self.data = np.log10(1.0 + np.clip(self.data, 0, None))
-        if clim == "each":
-            self.limits = None
-        elif clim == "shared":
-            self.limits = resolve_clim(self.data, ("p", 1, 99))
-        else:
-            self.limits = clim
+        self.limits = self._limits(clim)
         self.threshold = threshold
         self.images: list[Any] = []
         if view == "projections":
@@ -335,8 +356,13 @@ class VolumeBrowser(_SliderPanel):
         self._init_sliders(widgets)
 
     def current(self) -> np.ndarray:
-        """The ``(z, y, x)`` block at the current slider positions."""
-        return self.data[tuple(self.index[d] for d in self.motor_dims)]
+        """The ``(z, y, x)`` block at the current slider positions (after ``log``)."""
+        return self._block()
+
+    @property
+    def data(self) -> np.ndarray:
+        """The block on show, as :meth:`current`."""
+        return self._block()
 
     def _projections(self) -> list[np.ndarray]:
         block = self.current()
@@ -478,7 +504,12 @@ class RenderBrowser(_SliderPanel):
         self.motor_dims = [str(d) for d in volume.dims[:-3]]
         self.index = {d: 0 for d in self.motor_dims}
         self.height = height
-        self.render_kwargs = render_kwargs
+        self.render_kwargs = dict(render_kwargs)
+        if "clim" not in self.render_kwargs and volume.attrs.get("block_stats_dims") is not None:
+            # the stack knows its per-frame percentiles: one colour scale for every condition
+            self.render_kwargs["clim"] = shared_limits(
+                volume, 5, 99.5, log=bool(self.render_kwargs.get("log", False))
+            )
         self.figure: Any = None
         self._syncing = False
         self.output = widgets.Output()
