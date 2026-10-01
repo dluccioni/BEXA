@@ -710,6 +710,8 @@ functions that need them. Each name is documented in full under the module that 
 | `bexa.list_scans` | scan numbers of a dataset folder | `bexa.core.scan.list_scans` |
 | `bexa.open_dataset` | every scan of a dataset folder (or of several folders), as a table | `bexa.core.dataset.open_dataset` |
 | `bexa.stack` | reduce several scans (several at a time with `workers=`) and stack the results on the positioners that vary between them (`samz`, `energy`), in memory or in one HDF5 file | `bexa.core.dataset.stack` |
+| `bexa.common_grid` | one motor grid spanning scans measured with different ranges or steps | `bexa.core.dataset.common_grid` |
+| `bexa.regrid` | interpolate a pass's results onto such a grid | `bexa.core.dataset.regrid` |
 | `bexa.reduce` | run accumulators over a scan in one streaming pass | `bexa.core.reductions.reduce` |
 | `bexa.acc` | the accumulators: `bexa.acc.Sum()`, `bexa.acc.MotorCOM(...)`, ... (the module `bexa.core.reductions`) | `bexa.core.reductions` |
 | `bexa.ROI` | region of interest over pixels, motors and energy | `bexa.core.roi.ROI` |
@@ -1161,8 +1163,10 @@ A pandas DataFrame with one row per scan: `id` (`dataset` next, for several fold
 `type` (`fscan1d`, `fscan2d`, ...), `title`, `motors` (`"chi x mu"`), `shape`, `ranges`,
 `frames`, `missing` (grid points without a frame), `energy_keV`, then one column per
 positioner recorded in the master file (`samz`, `ccmth`, `phi`, ...). Built once and kept;
-`refresh=True` rebuilds it. `compact=True` drops the positioner columns that never change and
-the `missing` column when no scan has missing frames: what a notebook shows.
+`refresh=True` rebuilds it. `compact=True` drops the positioner columns that never change, a
+motor also listed under an alias, the followers of a motor that steps (`samz` when `uz` does;
+the spec's `motors.coupled`) and the `missing` column when no scan has missing frames: what a
+notebook shows.
 
 ```python
 ds.table()[["id", "type", "motors", "energy_keV", "samz"]]
@@ -1228,18 +1232,19 @@ ds.groups("samz", type="fscan2d")   # {-0.002: [1], -0.001: [7], 0.0: [13], 0.00
 ```
 
 #### `Dataset.varying`
-`bexa.core.dataset.Dataset.varying(scans=None, **criteria)`
+`bexa.core.dataset.Dataset.varying(scans=None, axes=None, **criteria)`
 
 What differs between the chosen scans (selection as in `select_numbers`): `{dim: sorted
 values}` of the positioners, and of the energy as `"energy"` in keV, that are not the same in
 every scan, outer dim first; see `varying`. These are the dims `stack(..., dim="auto")` builds
-its grid on.
+its grid on. `axes` names the dims by hand instead (see `varying`).
 
 ```python
 ds.varying(type="fscan2d")                       # {'samz': array([-0.002, -0.001, 0., 0.001, 0.002])}
 ds.varying(type="fscan1d", samz=0.0)             # {'energy': array([16.98, 16.99, 17., 17.01, 17.02])}
 ds.varying(type="fscan1d")                       # {'samz': ..., 'energy': ...}: a z-stack at every energy
 ds.varying(scans=[1])                            # {}: one scan, nothing varies
+ds.varying(type="fscan1d", axes=["energy"])      # {'energy': ...}: the energy alone, whatever else moved
 ```
 
 #### `Dataset.scan`
@@ -1282,15 +1287,22 @@ ds.close()
 ```
 
 #### `varying`
-`bexa.core.dataset.varying(scans, tolerance=None)`
+`bexa.core.dataset.varying(scans, tolerance=None, axes=None)`
 
 The positioners, and the energy, that differ between the given `Scan`s: `{dim: sorted values}`,
 the energy reported as `"energy"` in keV. Scanned motors are left out, and so is the
 monochromator motor the energy derives from (`ccmth`) when the energy itself varies, and a
-motor the spec also records under an alias (`z1` for `samz`), so nothing counts twice. Values
-closer than `tolerance` (default 1e-3 of their spread) are one grid point. The dims come
-slowest first: the one that changes least often from scan to scan is the outer one, as the
-height is for a z-stack repeated at every energy. `Dataset.varying` calls it on a selection.
+motor the spec also records under an alias (`z1` for `samz`), so nothing counts twice. A motor
+that another one drives (the spec's `motors.coupled`: at ID03 `uz` moves `samz` and `shexatz`)
+is not an axis of its own when its leader steps, and neither is any positioner that steps in
+lockstep with another one, whatever the spec says: of those, the leader, the energy, then the
+first in `motors.known` order is kept. Values closer than `tolerance` (default 1e-3 of their
+spread) are one grid point. The dims come slowest first: the one that changes least often from
+scan to scan is the outer one, as the height is for a z-stack repeated at every energy. `axes`
+overrides all of this: these names, in this order, are the dims (positioners, `"energy"` or
+`"scan"`; `ValueError` for one a scan does not record), for when something else drifts between
+the scans and the automatic choice is not what was measured. `Dataset.varying` calls it on a
+selection.
 
 ```python
 from bexa.core.dataset import varying
@@ -1298,10 +1310,49 @@ from bexa.core.dataset import varying
 varying(ds.select(type="fscan2d"))               # {'samz': array([-0.002, -0.001, 0., 0.001, 0.002])}
 varying(ds[[2, 3, 4]])                           # {'energy': array([16.98, 16.99, 17.])}
 varying(ds[[2, 3, 4]], tolerance=0.05)           # {}: energies within 0.05 keV count as one
+varying(ds.select(type="fscan2d"), axes=["samz"])   # the same, named by hand (any positioner, varying or not)
+```
+
+#### `common_grid`
+`bexa.core.dataset.common_grid(scans, dims=None, roi=None, downsample=None)`
+
+One coordinate array per scanned motor spanning every scan (top-level name `bexa.common_grid`),
+for scans measured on different grids: another range or step at some heights, two datasets
+scanned differently. For each motor: from the lowest to the highest value over the scans, in a
+step no coarser than the finest median step any scan used (the grid ends on the highest value);
+a motor whose grid is the same in every scan keeps it. `dims` limits the answer to some motors
+(default: every scanned motor, which every scan must have, else `ValueError`); `roi` and
+`downsample`, as in `stack`, restrict the ranges the way the pass does. `regrid` puts results
+onto this grid, and `stack` does so by itself.
+
+```python
+from bexa.testing import make_esrf_scan
+
+coarse = make_esrf_scan(ds.path.parent, dataset="grids", scan=1, motors=(("chi", 3), ("mu", 6)), ranges={"mu": (-1.0, 1.0)}, n_files=1)
+fine = make_esrf_scan(ds.path.parent, dataset="grids", scan=2, motors=(("chi", 3), ("mu", 11)), ranges={"mu": (-0.5, 1.5)}, n_files=1)
+two = bexa.open_dataset(coarse.dataset_dir, cache=False).select([1, 2])
+grid = bexa.common_grid(two)                     # {'chi': the shared grid, 'mu': 14 points from -1 to 1.5}
+len(grid["mu"]), float(grid["mu"][-1])           # (14, 1.5)
+```
+
+#### `regrid`
+`bexa.core.dataset.regrid(result, coords, method="linear")`
+
+`result` (a Dataset or DataArray from a pass, or any xarray object; top-level name
+`bexa.regrid`) with every variable on a dim of `coords` interpolated onto those values along
+them (`method` as in `DataArray.interp`, `"nearest"` for a dim with a single point), NaN outside
+the variable's own range; variables without those dims, the maps, come back as they are, and the
+attrs are kept.
+
+```python
+curves = two[0].reduce([bexa.acc.FrameStats()], device="cpu")   # (chi, mu) on the coarse grid
+on_grid = bexa.regrid(curves, grid)                             # (chi, mu) on the common grid
+on_grid["frame_sum"].sizes["mu"], bool(on_grid["frame_sum"].isnull().values[:, -1].all())   # (14, True): nothing beyond mu = 1
+bexa.regrid(curves["frame_sum"], {"mu": grid["mu"]}).dims       # ('chi', 'mu'): one array, one dim
 ```
 
 #### `stack`
-`bexa.core.dataset.stack(scans, accumulators, dim="auto", *, coords=None, store=None, dtype=None, tolerance=None, workers=None, **reduce_kwargs)`
+`bexa.core.dataset.stack(scans, accumulators, dim="auto", *, coords=None, store=None, dtype=None, tolerance=None, workers=None, grid="auto", **reduce_kwargs)`
 
 Reduce every scan with the same accumulators and stack the results on a grid of scans
 (top-level name `bexa.stack`). `dim` names the new dims: `"auto"` takes what `varying` finds (a
@@ -1311,9 +1362,13 @@ scan gets no new dim, scans that differ in nothing are stacked on `"scan"`); one
 (`"energy"` is the energy in keV, `"scan"` the scan numbers), unless `coords` gives the values
 of a single dim. The grid is dense: NaN where no scan sits at a combination (a warning says how
 many), and two scans at the same position are a `ValueError`. `roi`, `downsample`, `device` and
-the other keywords of `reduce` apply to every scan, so the maps line up pixel by pixel; the
-inner dims must have the same shape in every scan. Replaces the layer loop of
-`betterCOM_stitchingZ`.
+the other keywords of `reduce` apply to every scan, so the maps line up pixel by pixel. Scans
+measured on different motor grids (another range or step at some heights) are handled by
+`grid`: `"auto"` (default) interpolates every result that has motor dims (previews, per-frame
+statistics, curves) onto `common_grid` of the scans, the full range in the finest step, and
+says so in the log; a `{dim: values}` mapping names the grid (the same for two stacks that
+will be compared); `False` requires one grid and raises otherwise. Maps without motor dims are
+never touched. Replaces the layer loop of `betterCOM_stitchingZ`.
 
 - In memory (the default): each output variable is allocated once (`dtype`, say `np.float32`,
   halves the maps) and filled scan by scan, so peak memory is the result plus one scan; the
@@ -2157,8 +2212,10 @@ formats.best_spec(pal.measurement_dir).name      # 'pal_xfel_points_2025_09'
 
 A parsed spec: a pydantic model, built by `load_spec`, with one attribute per YAML entry
 (`abstract` marks a base for `extends` only; `motors` holds the `per_frame`, `scalar` and
-`structure` templates, `known`, `aliases`, `units`; `keys` maps a logical key to its alias list;
-`source_path` is the YAML file). Unknown entries are kept. Methods:
+`structure` templates, `known`, `aliases`, `units` and `coupled`, `{leader: [followers]}` for a
+motor that drives others, `uz: [samz, shexatz]` at ID03, so that `varying` and the compact
+table count a stepping leader once; `keys` maps a logical key to its alias list; `source_path`
+is the YAML file). Unknown entries are kept. Methods:
 
 - `aliases(key)`: every name of the logical key, preferred first; `[key]` for a key the spec does not list.
 - `resolve_key(key, available)`: the first alias of `key` present in `available` (columns, HDF5 paths), or `None`.
@@ -6030,8 +6087,9 @@ height's mosaicity scan). One energy (`energies=(17.0,)`) gives heights only, on
 deeper per layer step, so grain sections change with the height; the energy centre adds each
 region's strain to a gradient along x and with the height. `tilt_offset` (`{"mu": 0.05}`,
 degrees) tilts the whole sample, the same grain measured again after annealing, say, for
-difference maps between two datasets (the planted `chi_center`/`mu_center` move with it). Files
-as in `make_esrf_scan` (spec `esrf_id03_bliss_2026`); returns a `SyntheticZStack`.
+difference maps between two datasets (the planted `chi_center`/`mu_center` move with it). With
+`z_motor="uz"` the positioner `samz` follows at `uz - 0.03`, as the ID03 stage does. Files as in
+`make_esrf_scan` (spec `esrf_id03_bliss_2026`); returns a `SyntheticZStack`.
 
 ```python
 zs = make_esrf_zstack(work)                     # 5 heights x (90 + 5 x 8 frames), 40 x 48 pixels
