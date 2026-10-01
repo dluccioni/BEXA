@@ -2022,8 +2022,8 @@ small = block_reduce(np.ones((10, 64, 80), np.float32), 4, 4)   # (10, 16, 20)
 Stream the frames of a plan as `FrameBatch` objects: read through the source's
 `read_frames`, cut to the window, block-reduced, and moved to `device` (`"cpu"` or `"cuda"`).
 The batch size comes from the memory budget, keeping `live_copies` batch-sized arrays inside
-it, unless `batch_frames` is given; with `prefetch` the next batch is read in a background
-thread. `Scan.batches` calls it.
+it, unless `batch_frames` is given; with `prefetch` the next batches are read in a background
+thread, `prefetch_depth` of them ahead. `Scan.batches` calls it.
 
 ```python
 from bexa.core.reductions import iter_batches
@@ -2033,10 +2033,24 @@ for batch in iter_batches(scan.source, plan, batch_frames=16):
     break
 ```
 
+#### `prefetch_depth`
+`bexa.core.reductions.prefetch_depth(batch_bytes)`
+
+How many batches `iter_batches` reads ahead of the computation: between 2 and `MAX_PREFETCH`
+(8), as many as fit in `PREFETCH_SHARE` (a tenth) of the memory budget. A deeper queue rides
+out the pauses of a network file system while the frames keep being processed, at the cost of
+that many batches of host memory.
+
+```python
+from bexa.core.reductions import prefetch_depth
+
+prefetch_depth(10**6), prefetch_depth(10**15)    # (8, 2): tiny batches go deep, huge ones stay at two
+```
+
 Constants: `PIXEL_DIMS = ("y", "x")` and `BINNED_PIXEL_DIMS = ("yb", "xb")`, from
 `bexa.core.structure` (the pixel dims of a `Preview` binned on its own);
 `AUTO_PROGRESS_FRAMES = 200`, the pass length from which interactive sessions show a progress
-bar.
+bar; `PREFETCH_SHARE = 0.1` and `MAX_PREFETCH = 8`, the bounds of `prefetch_depth`.
 
 ### bexa.core.accessor: .bexa on xarray objects
 
@@ -7972,14 +7986,15 @@ host = backend.to_device(gpu, "cpu")                                  # numpy ar
 #### `memory_budget`
 `bexa.core.backend.memory_budget(device="cpu", fraction=None)`
 
-Bytes one operation may use: `fraction` (default `BEXA_MEMORY_FRACTION`, else 0.5) of the memory
+Bytes one operation may use: `fraction` (default `BEXA_MEMORY_FRACTION`, else 0.8) of the memory
 this process can still use (`bexa.core.resources.memory_info`: the SLURM job's limit on a
-cluster, the free memory elsewhere), and on CUDA at most `fraction` of the free GPU memory.
+cluster, the free memory elsewhere), and on CUDA at most `fraction` of the free GPU memory; the
+rest is headroom for the pipeline's temporaries, the session's other variables and the system.
 `scan.read`, previews, `bexa.stack` and `bexa.load` refuse anything larger (`check_fits`);
-batch sizes follow from it.
+batch sizes, the prefetch depth and the in-memory cache level follow from it.
 
 ```python
-backend.memory_budget("cpu") / 1e9              # GB: half of what this process can still use
+backend.memory_budget("cpu") / 1e9              # GB: 0.8 of what this process can still use
 backend.memory_budget("cuda", fraction=0.2)     # also at most 0.2 of the free GPU memory
 ```
 
@@ -8110,7 +8125,7 @@ backend.free_device_memory()
 
 Constants:
 
-- `DEFAULT_MEMORY_FRACTION`: `0.5`, the budget fraction without `fraction=` or
+- `DEFAULT_MEMORY_FRACTION`: `0.8`, the budget fraction without `fraction=` or
   `BEXA_MEMORY_FRACTION`. `MAX_BATCH_BYTES`: `256 * 2**20`, the cap on one batch of frames
   whatever the budget.
 
@@ -8203,7 +8218,7 @@ equivalent is `bexa settings`.
 
 ```python
 s = bexa.settings()     # device: cuda (requested auto, from default), GPU NVIDIA GeForce RTX 4090, 16 CPU cores (from machine)
-                        # memory: budget 12.08 GB = fraction 0.5 (from default) of 25.9 GB available and 24.2 GB free on the GPU
+                        # memory: budget 20.7 GB = fraction 0.8 (from default) of 25.9 GB available and 24.2 GB free on the GPU
 ```
 
 #### `settings`
@@ -8254,7 +8269,7 @@ total = scan.sum()                           # DataArray (y, x)
 `bexa.core.cache.Cache(root=None, memory_bytes="auto")`
 
 Two-level cache: `root` is the folder of entries (`None`: memory only), `memory_bytes` the budget
-of the LRU level: `"auto"` (`default_memory_bytes`: a tenth of the usable memory, at most 2 GiB),
+of the LRU level: `"auto"` (`default_memory_bytes`: a quarter of the usable memory, at most 32 GiB),
 a number of bytes, or 0 or `None` to turn it off; larger objects stay on disk only. Entries are
 `<root>/<first 2 characters of the key>/<key>.h5`, written through a temporary file with lzf
 compression and byte shuffle (`FILE_COMPRESSION`: a preview is written in a tenth of gzip's
@@ -8298,13 +8313,14 @@ default_cache().root                         # BEXA_CACHE_DIR when set, else ~/.
 #### `default_memory_bytes`
 `bexa.core.cache.default_memory_bytes()`
 
-The budget of the in-memory level of a `Cache(memory_bytes="auto")`: a tenth of the memory this
-process can use (`bexa.core.resources.memory_info`), at most 2 GiB (`DEFAULT_MEMORY_BYTES`). A
-dataset of many scans shares one cache, so the level stays small next to the results
-themselves: 2 GiB in a 64 GB session, about 400 MB on a 4 GB laptop.
+The budget of the in-memory level of a `Cache(memory_bytes="auto")`: a quarter of the memory
+this process can use (`bexa.core.resources.memory_info`, `MEMORY_SHARE`), at most 32 GiB
+(`DEFAULT_MEMORY_BYTES`). Results read back from this level cost nothing, so it takes what a
+session can spare: 16 GiB in a 64 GB session, 32 GiB on a 400 GB node, 1 GB on a 4 GB laptop;
+being an LRU it never holds more than that whatever the dataset.
 
 ```python
-default_memory_bytes() <= 2 * 1024**3        # True
+default_memory_bytes() <= 32 * 1024**3       # True
 Cache("processed/bexa_cache").memory_bytes == default_memory_bytes()   # True
 ```
 
@@ -8358,7 +8374,7 @@ sums = thread_map(lambda n: ds.scan(n).sum(device="cpu"), ds.scans)   # one summ
 Runs an iterator in a background thread with up to `depth` items waiting in a bounded queue, so
 the next item is produced while the current one is used. Iterate over it once; an exception of
 the producer is re-raised in the loop, and `close()` stops the producer early. The streaming
-engine reads its batches through one.
+engine reads its batches through one, `bexa.core.reductions.prefetch_depth` batches deep.
 
 ```python
 total = 0.0
@@ -9130,7 +9146,7 @@ in a notebook, with `os.environ[...]` before the call that reads them.
 | Variable | Sets | Default | Read by |
 |---|---|---|---|
 | `BEXA_DEVICE` | Device for calls with `device=None`: `auto`, `cpu`, `cuda` (or `gpu`). Set by `bexa --device`. An explicit `device="auto"`, the default of `scan.reduce` and the scan verbs, does not read it. | `auto` | `bexa.core.backend.resolve_device`; shown by `bexa.core.settings.settings`, `bexa.config.loader.env_settings` |
-| `BEXA_MEMORY_FRACTION` | Fraction of the usable memory one operation may use (batch sizes, the `scan.read` limit). Set by `bexa --memory-fraction`; `~/.bexa_env` from `esrf_setup.sh` sets 0.3. | `0.5` | `bexa.core.backend.memory_budget`, `settings`, `env_settings` |
+| `BEXA_MEMORY_FRACTION` | Fraction of the usable memory one operation may use (batch sizes, the `scan.read` limit). Set by `bexa --memory-fraction`; `~/.bexa_env` from `esrf_setup.sh` sets 0.3. | `0.8` | `bexa.core.backend.memory_budget`, `settings`, `env_settings` |
 | `BEXA_THREADS` | Threads for the CPU work of one process: the Gaussian smoothing of `MotorCOM` and `bexa.analysis.rocking` (`bexa.core.backend.gaussian_frames`). `bexa.stack(..., workers=)` sets it to `min(8, cores // workers)` in every worker process. | the usable cores, at most 8 | `bexa.core.parallel.compute_threads` |
 | `BEXA_CACHE_DIR` | Cache folder of previews and cached reductions; when set, scans opened through a profile cache their reductions. | `<processed_root>/bexa_cache`, else `~/.cache/bexa` | `bexa.config.paths.cache_root`, `bexa.core.scan.open_profile`, `settings`, `env_settings` |
 | `BEXA_PROFILE` | Profile used when none is given: `load_profile()`, `bexa.open(sample=...)`, `bexa.open_dataset(sample=...)`. | not set | `bexa.config.loader.load_profile`, `settings`, `env_settings` |
@@ -9188,7 +9204,7 @@ two as environment variables, so the library code a command calls sees them.
   with `device=None` follow it; in this version the scan commands do not, as they ask the
   reductions for `device="auto"`, which takes the GPU whenever cupy finds one.
 - `--memory-fraction FLOAT` (default: not set, so an exported `BEXA_MEMORY_FRACTION`, else
-  0.5): fraction of the free memory (the SLURM job's allocation on a cluster) that one operation
+  0.8): fraction of the free memory (the SLURM job's allocation on a cluster) that one operation
   may use; batch sizes follow from it. Sets `BEXA_MEMORY_FRACTION`.
 - `--headless` (default off): switches matplotlib to the Agg backend for this process, so no
   window opens and `--plot` or `--show` show nothing. No environment variable (in Python, set
