@@ -71,6 +71,8 @@ class Scan:
         self.cache_reductions = cache_reductions
         self.profile = profile
         self.roi = ROI()
+        # how the scan was opened: bexa.open(**scan.recipe) opens it again, in another process too
+        self.recipe: dict[str, Any] | None = None
         self._structure: Structure | None = None
 
     # ------------------------------------------------------------ metadata
@@ -511,7 +513,7 @@ def open(
             spec, getattr(source, "detector", detector), energy_keV=source.energy_keV
         )
     resolved_cache = _resolve_cache(cache, cache_root())
-    return Scan(
+    opened = Scan(
         source,
         spec,
         geometry=geometry,
@@ -519,6 +521,15 @@ def open(
         cache=resolved_cache,
         cache_reductions=bool(cache_reductions) and resolved_cache is not None,
     )
+    opened.recipe = {
+        "path": str(path),
+        "scan": scan,
+        "format": spec.name,  # the spec is known: no sniffing when the recipe is used
+        "detector": detector,
+        "overrides": overrides,
+        **kwargs,
+    }
+    return opened
 
 
 def _resolve_cache(cache: Cache | str | Path | bool | None, default_root: Path) -> Cache | None:
@@ -590,7 +601,7 @@ def open_profile(
     )
     if cache_reductions is None:
         cache_reductions = prof.processed_root is not None or bool(os.environ.get(CACHE_DIR_ENV))
-    return Scan(
+    opened = Scan(
         source,
         spec,
         geometry=geometry,
@@ -601,6 +612,15 @@ def open_profile(
         cache_reductions=bool(cache_reductions) and resolved_cache is not None,
         hkl_center=None if hkl_center is None else (hkl_center[0], hkl_center[1], hkl_center[2]),
     )
+    opened.recipe = {
+        "profile": str(prof.source_path) if prof.source_path is not None else prof,
+        "sample": sample,
+        "dataset": dataset,
+        "scan": scan,
+        "detector": detector,
+        **kwargs,
+    }
+    return opened
 
 
 def list_scans(

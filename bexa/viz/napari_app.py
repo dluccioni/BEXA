@@ -242,7 +242,7 @@ class SlicesToVoxels:
         if hasattr(layer, "structure"):
             motors = tuple(str(d) for d in layer.structure.motor_dims)
         elif hasattr(layer, "dims"):
-            motors = tuple(str(d) for d in layer.dims if d not in ("y", "x"))
+            motors = tuple(str(d) for d in layer.dims[:-2])
         else:
             motors = ()
         if len(motors) >= 2:

@@ -184,6 +184,8 @@ def _dataset_kwargs(
     }
     if compression == "gzip":
         kwargs["compression_opts"] = 4
+    elif compression == "lzf":
+        kwargs["shuffle"] = True  # byte shuffling makes floats compress with lzf at all
     return kwargs
 
 

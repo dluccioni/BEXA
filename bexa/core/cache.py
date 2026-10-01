@@ -26,6 +26,9 @@ log = get_logger(__name__)
 
 DEFAULT_MEMORY_BYTES = 2 * 1024**3  # the memory level never grows past this
 MEMORY_SHARE = 0.1  # ... nor past this share of the memory the process may use
+FILE_COMPRESSION = (
+    "lzf"  # cache files are bexa's own: lzf writes a preview in a tenth of gzip's time
+)
 
 
 def default_memory_bytes() -> int:
@@ -125,7 +128,7 @@ class Cache:
 
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp.h5")
-        save(obj, tmp)
+        save(obj, tmp, compression=FILE_COMPRESSION)
         tmp.replace(path)
         return path
 

@@ -9,6 +9,7 @@ them: which module (``array_module``), how much memory may be used
 from __future__ import annotations
 
 import functools
+import itertools
 import os
 import types
 from typing import Any, Literal
@@ -21,6 +22,9 @@ log = get_logger(__name__)
 
 Device = Literal["cpu", "cuda"]
 DEFAULT_MEMORY_FRACTION = 0.5
+# the batch itself is capped: bigger batches are no faster (the frames are processed in one
+# streaming pass either way) and every temporary of the pipeline is batch-sized
+MAX_BATCH_BYTES = 256 * 2**20
 
 
 @functools.lru_cache(maxsize=1)
@@ -133,6 +137,36 @@ def to_host(obj: Any) -> Any:
     return obj
 
 
+def gaussian_frames(frames: Any, sigma: float) -> Any:
+    """Every frame of ``(n, y, x)`` smoothed by a Gaussian of ``sigma`` pixels (numpy or cupy).
+
+    numpy frames are split over :func:`bexa.core.parallel.compute_threads`
+    threads: scipy's filters release the GIL, and eight threads smooth about
+    five times faster than one. ``sigma <= 0`` returns the frames untouched.
+    """
+    if sigma <= 0:
+        return frames
+    ndi = ndimage_module(frames)
+    if is_cupy_array(frames) or frames.ndim != 3 or frames.dtype.kind != "f":
+        return ndi.gaussian_filter(frames, sigma=(0,) * (frames.ndim - 2) + (sigma, sigma))
+    from bexa.core.parallel import compute_pool, compute_threads
+
+    threads = min(compute_threads(), frames.shape[0])
+    if threads <= 1:
+        return ndi.gaussian_filter(frames, sigma=(0, sigma, sigma))
+    out = np.empty_like(frames)
+    bounds = np.linspace(0, frames.shape[0], threads + 1).astype(int)
+    pool = compute_pool()
+    futures = [
+        pool.submit(ndi.gaussian_filter, frames[a:b], (0, sigma, sigma), output=out[a:b])
+        for a, b in itertools.pairwise(bounds)
+        if b > a
+    ]
+    for future in futures:
+        future.result()
+    return out
+
+
 def memory_budget(device: str | None = "cpu", fraction: float | None = None) -> int:
     """Bytes a single operation may use on ``device``.
 
@@ -178,6 +212,7 @@ def choose_batch_frames(
     min_frames: int = 1,
     max_frames: int | None = None,
     device: str | None = "cpu",
+    max_bytes: int | None = None,
 ) -> int:
     """Number of frames per batch that keeps ``live_copies`` copies of the batch inside the budget.
 
@@ -190,10 +225,16 @@ def choose_batch_frames(
     live_copies
         How many batch-sized arrays exist at once (the raw batch, its float
         copy, a filtered copy and accumulator work space is a typical 4).
+    max_bytes
+        Cap on the batch itself (default ``MAX_BATCH_BYTES``, 256 MiB): on a
+        machine with hundreds of GB the budget alone would make batches of
+        whole scans, which are no faster and multiply every temporary.
     """
     if budget is None:
         budget = memory_budget(device)
-    n = int(budget // max(frame_bytes * live_copies, 1))
+    if max_bytes is None:
+        max_bytes = MAX_BATCH_BYTES
+    n = int(min(budget // max(frame_bytes * live_copies, 1), max_bytes // max(frame_bytes, 1)))
     n = max(n, min_frames)
     if max_frames is not None:
         n = min(n, max_frames)

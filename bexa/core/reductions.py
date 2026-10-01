@@ -32,7 +32,7 @@ from bexa.core.parallel import Prefetcher
 from bexa.core.provenance import RunStats, build_attrs
 from bexa.core.registry import register_accumulator
 from bexa.core.roi import ROI
-from bexa.core.structure import PIXEL_DIMS, Structure
+from bexa.core.structure import BINNED_PIXEL_DIMS, PIXEL_DIMS, Structure
 from bexa.io.base import FrameBatch, Source
 
 log = get_logger(__name__)
@@ -226,11 +226,26 @@ class Accumulator(ABC):
         self.n_frames_seen = 0
 
     def start(self, plan: Plan, xp: Any, dtype: Any) -> None:
+        if "_fresh" not in self.__dict__:
+            self._fresh = dict(self.__dict__)  # as built, before any pass: what pickling sends
         self.plan = plan
         self.xp = xp
         self.dtype = dtype
         self.n_frames_seen = 0
         self._allocate()
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Pickle the accumulator as built: no totals, plan or array module of a pass.
+
+        Worker processes (``bexa.stack(workers=...)``) receive accumulators this
+        way, whether or not they have run already.
+        """
+        state = self.__dict__.get("_fresh", self.__dict__)
+        return {k: v for k, v in state.items() if k not in ("_fresh", "xp", "plan")}
+
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        self.__dict__.update(state)
+        self.xp = np
 
     def _allocate(self) -> None:  # optional hook
         return None
@@ -352,27 +367,61 @@ class Preview(Accumulator):
         Store ``log10(1 + I)`` instead of ``I`` (the v9 preview did this).
     fill
         Value at grid points without a frame (partial scans).
+    downsample
+        Pixel binning of this preview alone (an int or ``(by, bx)``), on top of
+        the pass's ``downsample``: the other accumulators of the pass keep the
+        full frames, so one pass gives full-resolution maps and a binned volume.
+        Such a preview names its pixel dims ``(yb, xb)`` (one result holds one
+        size per dim name) with the full-resolution index of each block's first
+        pixel as coordinates; the browsers and projections take any names.
+    method
+        ``"mean"`` (block mean), ``"sum"`` or ``"max"`` for that binning.
     """
 
     name = "preview"
     live_copies = 1
 
-    def __init__(self, apply_log: bool = False, fill: float = np.nan) -> None:
-        super().__init__(apply_log=apply_log, fill=fill)
+    def __init__(
+        self,
+        apply_log: bool = False,
+        fill: float = np.nan,
+        downsample: int | Sequence[int] | None = None,
+        method: str = "mean",
+    ) -> None:
+        if isinstance(downsample, (int, np.integer)):
+            by = bx = int(downsample)
+        elif downsample is not None:
+            by, bx = (int(v) for v in downsample)
+        else:
+            by = bx = 1
+        if by < 1 or bx < 1:
+            raise ValueError(f"downsample factors must be positive, got {downsample!r}")
+        super().__init__(
+            apply_log=apply_log,
+            fill=fill,
+            **({"downsample": [by, bx], "method": method} if (by, bx) != (1, 1) else {}),
+        )
         self.apply_log = apply_log
         self.fill = fill
+        self.bin = (by, bx)
+        self.method = method
 
     def _allocate(self) -> None:
-        nbytes = int(np.prod(self.plan.shape)) * np.dtype(self.dtype).itemsize
+        ny, nx = self.plan.window.shape
+        if ny // self.bin[0] < 1 or nx // self.bin[1] < 1:
+            raise ValueError(f"a preview binning of {self.bin} leaves no pixels in {(ny, nx)}")
+        self.shape = (*self.plan.grid_shape, ny // self.bin[0], nx // self.bin[1])
+        nbytes = int(np.prod(self.shape)) * np.dtype(self.dtype).itemsize
         backend.check_fits(
             nbytes,
-            f"the preview volume {tuple(self.plan.shape)}",
+            f"the preview volume {self.shape}",
             "cuda" if self.xp is not np else "cpu",
             hint="use a larger downsample or an ROI, or stack previews with store=True",
         )
-        self.volume = self.xp.full(self.plan.shape, self.fill, dtype=self.dtype)
+        self.volume = self.xp.full(self.shape, self.fill, dtype=self.dtype)
 
     def update(self, frames: Any, frame_ids: np.ndarray) -> None:
+        frames = block_reduce(frames, *self.bin, self.method)
         if self.apply_log:
             frames = self.xp.log10(1.0 + self.xp.clip(frames, 0, None))
         positions = self.plan.grid_positions(frame_ids)
@@ -380,7 +429,19 @@ class Preview(Accumulator):
         self.n_frames_seen += len(frame_ids)
 
     def result(self) -> xr.DataArray:
-        return self._volume(self.volume, self.name, apply_log=self.apply_log)
+        if self.bin == (1, 1):
+            return self._volume(self.volume, self.name, apply_log=self.apply_log)
+        w = self.plan.window  # binned: its own pixel dims, coords = first pixel of every block
+        coords = dict(self.plan.coords)
+        coords[BINNED_PIXEL_DIMS[0]] = w.y.start + w.ds_y * self.bin[0] * np.arange(self.shape[-2])
+        coords[BINNED_PIXEL_DIMS[1]] = w.x.start + w.ds_x * self.bin[1] * np.arange(self.shape[-1])
+        return xr.DataArray(
+            backend.to_host(self.volume),
+            dims=self.plan.motor_dims + BINNED_PIXEL_DIMS,
+            coords=coords,
+            name=self.name,
+            attrs={"apply_log": self.apply_log, "binning": list(self.bin)},
+        )
 
 
 @register_accumulator("projections")
@@ -571,15 +632,20 @@ class MotorCOM(Accumulator):
         shape = self.plan.window.shape
         self.s0 = self._zeros(shape)
         self.sums = {a: [self._zeros(shape) for _ in range(self.moments)] for a in self.use_axes}
-        self._ndi = backend.ndimage_module(self.xp) if self.sigma > 0 else None
+        # motor values are taken from the middle of each axis: the moments of a batch are then
+        # formed in the frames' dtype (float32 BLAS, no float64 copy of the batch) without
+        # losing the width, which for an energy of 17 keV is 1e-6 of the value squared
+        self.origin = {
+            a: float(np.mean(self.plan.coords[a])) if len(self.plan.coords.get(a, ())) else 0.0
+            for a in self.use_axes
+        }
 
     def _weights(self, frames: Any) -> Any:
         xp = self.xp
         w = frames if frames.dtype.kind == "f" else frames.astype(self.dtype)
         if self.weights == "log":
             w = xp.log10(1.0 + xp.clip(w, 0, None))
-        if self._ndi is not None:
-            w = self._ndi.gaussian_filter(w, sigma=(0, self.sigma, self.sigma))
+        w = backend.gaussian_frames(w, self.sigma)  # threads on the CPU
         return xp.clip(w, self.clip, None)
 
     def update(self, frames: Any, frame_ids: np.ndarray) -> None:
@@ -587,7 +653,8 @@ class MotorCOM(Accumulator):
         w = self._weights(frames)
         self.s0 += w.sum(axis=0, dtype=self.s0.dtype)
         for axis in self.use_axes:
-            m = xp.asarray(self.plan.motor_values(axis, frame_ids), dtype=np.float64)
+            m = np.asarray(self.plan.motor_values(axis, frame_ids), dtype=np.float64)
+            m = xp.asarray(m - self.origin[axis], dtype=w.dtype)
             power = m
             for k in range(self.moments):
                 self.sums[axis][k] += xp.tensordot(power, w, axes=(0, 0))
@@ -601,8 +668,10 @@ class MotorCOM(Accumulator):
         out: dict[str, xr.DataArray] = {"total": self._image(self.s0, "total", **attrs)}
         for axis in self.use_axes:
             unit = self.plan.structure.units.get(axis, "")
-            mean1 = self.sums[axis][0] / s0
-            out[f"com_{axis}"] = self._image(mean1, f"com_{axis}", motor=axis, units=unit, **attrs)
+            mean1 = self.sums[axis][0] / s0  # about the origin; the central moments do not move
+            out[f"com_{axis}"] = self._image(
+                mean1 + self.origin[axis], f"com_{axis}", motor=axis, units=unit, **attrs
+            )
             if self.moments >= 2:
                 mean2 = self.sums[axis][1] / s0
                 var = xp.clip(mean2 - mean1**2, 0, None)

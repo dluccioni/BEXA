@@ -14,11 +14,14 @@ __all__ = ["add_scalebar", "roi_overlay", "show", "tiles"]
 
 
 def _extent(da: Any) -> list[float] | None:
-    """imshow extent from the y/x coordinates of a DataArray (None for plain arrays)."""
-    if not (hasattr(da, "coords") and "y" in da.coords and "x" in da.coords):
+    """imshow extent from the pixel coordinates (the last two dims) of a DataArray."""
+    if not (hasattr(da, "coords") and hasattr(da, "dims") and len(da.dims) >= 2):
         return None
-    y = np.asarray(da.coords["y"].values, dtype=float)
-    x = np.asarray(da.coords["x"].values, dtype=float)
+    dy_name, dx_name = da.dims[-2:]
+    if dy_name not in da.coords or dx_name not in da.coords:
+        return None
+    y = np.asarray(da.coords[dy_name].values, dtype=float)
+    x = np.asarray(da.coords[dx_name].values, dtype=float)
     if y.size < 2 or x.size < 2:
         return None
     dy = y[1] - y[0]
@@ -148,9 +151,10 @@ def tiles(
 
     if hasattr(volume, "dims"):
         dim = volume.dims[axis] if isinstance(axis, int) else axis
-        others = [d for d in volume.dims if d not in (dim, "y", "x")]
+        pixels = tuple(volume.dims[-2:])
+        others = [d for d in volume.dims if d not in (dim, *pixels)]
         stack = volume.sum(others) if others else volume
-        stack = stack.transpose(dim, "y", "x")
+        stack = stack.transpose(dim, *pixels)
         coords = (
             np.asarray(stack.coords[dim].values)
             if dim in stack.coords

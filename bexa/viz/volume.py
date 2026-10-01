@@ -16,16 +16,17 @@ __all__ = ["isosurface", "projections_panel", "render", "rlp_scatter", "show_plo
 
 def _projections_from_volume(volume: xr.DataArray, method: str) -> dict[str, xr.DataArray]:
     reducer = getattr(volume, method)
-    motors = [d for d in volume.dims if d not in ("y", "x")]
+    motors = list(volume.dims[:-2])  # the last two dims are the pixels, whatever their names
+    py, px = volume.dims[-2:]
     out: dict[str, xr.DataArray] = {"xy": reducer(motors) if motors else volume}
     for d in motors:
         others = [m for m in motors if m != d]
-        out[f"{d}_y"] = reducer([*others, "x"])
-        out[f"{d}_x"] = reducer([*others, "y"])
+        out[f"{d}_y"] = reducer([*others, px])
+        out[f"{d}_x"] = reducer([*others, py])
     for i, d0 in enumerate(motors):
         for d1 in motors[i + 1 :]:
             others = [m for m in motors if m not in (d0, d1)]
-            out[f"{d0}_{d1}"] = reducer([*others, "y", "x"])
+            out[f"{d0}_{d1}"] = reducer([*others, py, px])
     return out
 
 

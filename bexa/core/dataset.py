@@ -12,8 +12,10 @@ z-stack becomes ``(samz, y, x)`` maps and a z-stack at several energies
 
 from __future__ import annotations
 
+import os
 import warnings
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Generator, Iterable, Sequence
+from concurrent.futures import as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -22,11 +24,14 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from bexa._log import get_logger
+from bexa._log import get_logger, interactive_session, progress
+from bexa.core.backend import DEFAULT_MEMORY_FRACTION, resolve_device
+from bexa.core.parallel import default_workers, process_pool
 from bexa.core.provenance import build_attrs, fingerprint, to_json
+from bexa.core.resources import usable_cpus
 from bexa.core.scan import Scan, _resolve_cache, combine_sources, list_scans
 from bexa.core.scan import open as open_scan
-from bexa.core.structure import _group_values
+from bexa.core.structure import ENERGY_DIM, _group_values
 
 log = get_logger(__name__)
 
@@ -34,8 +39,10 @@ __all__ = ["Dataset", "open_dataset", "stack", "varying"]
 
 LEAD_COLUMNS = ("id", "dataset")
 FIXED_COLUMNS = ("scan", "type", "title", "motors", "shape", "ranges", "frames", "missing")
-ENERGY_DIM = "energy"
 STATS_SUFFIXES = ("_block_total", "_block_p1", "_block_p99")
+# stacks on disk are bexa's own files: lzf writes ten times faster than gzip and reads four
+# times faster, which the browsers feel at every slider move
+STORE_COMPRESSION = "lzf"
 
 
 def _scan_numbers(selection: Any, available: Sequence[int]) -> list[int]:
@@ -503,16 +510,25 @@ def varying(scans: Iterable[Scan], tolerance: float | None = None) -> dict[str, 
     return {c: found[c][0] for c in order}
 
 
+STATS_SAMPLE = 1 << 18  # pixels per frame that the percentiles look at (every k-th pixel)
+
+
 def _block_stats(array: np.ndarray) -> dict[str, np.ndarray]:
-    """Per-frame total and 1st/99th percentiles over the last two axes (NaN frames stay NaN)."""
+    """Per-frame total and 1st/99th percentiles over the last two axes (NaN frames stay NaN).
+
+    The total is exact; the percentiles, which only set colour limits, come
+    from a strided sample of large frames so that a 2048 x 2048 map costs a
+    few ms rather than a sort of four million values.
+    """
     lead = tuple(array.shape[:-2])
     flat = np.asarray(array).reshape((*lead, -1))
+    step = max(1, flat.shape[-1] // STATS_SAMPLE)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)  # all-NaN frames
         total = np.where(
             np.all(np.isnan(flat), axis=-1), np.nan, np.nansum(flat, axis=-1, dtype=np.float64)
         )
-        p1, p99 = np.nanpercentile(flat, [1, 99], axis=-1)
+        p1, p99 = np.nanpercentile(flat[..., ::step], [1, 99], axis=-1)
     return {"total": np.asarray(total), "p1": np.asarray(p1), "p99": np.asarray(p99)}
 
 
@@ -532,6 +548,7 @@ def stack(
     store: str | Path | bool | None = None,
     dtype: Any = None,
     tolerance: float | None = None,
+    workers: int | str | None = None,
     **reduce_kwargs: Any,
 ) -> xr.Dataset:
     """Reduce every scan with the same accumulators and stack the results on a grid of scans.
@@ -558,6 +575,17 @@ def stack(
     statistics (``<name>_block_total``, ``_block_p1``, ``_block_p99``) for
     :func:`bexa.viz.interactive.brightest` and the browsers' colour limits.
 
+    ``workers`` reduces several scans at once, each in its own process (reopened
+    from ``Scan.recipe``), which is how the reading and decompression of the
+    frames run in parallel: h5py lets one thread into HDF5 at a time, so
+    threads cannot. An int sets the number of processes; ``"auto"`` uses the
+    cores of the job but one on the CPU, and ``GPU_WORKERS`` (3) when the device
+    resolves to the GPU, which the workers then share (two or three keep it fed
+    while the others read). Each worker gets ``BEXA_MEMORY_FRACTION`` divided by
+    the number of workers and its share of the cores as ``BEXA_THREADS``.
+    Results arrive as they finish and are written at once, so memory stays at
+    a few scans' results.
+
     Parameters
     ----------
     coords
@@ -567,6 +595,9 @@ def stack(
     tolerance
         Values of a dim closer than this are the same grid point (default
         1e-3 of the spread).
+    workers
+        Scans reduced at the same time, in processes (default: one, in this
+        process).
     """
     scans = list(scans)
     if not scans:
@@ -630,10 +661,90 @@ def stack(
             attrs,
             dtype,
             reduce_kwargs,
+            workers,
         )
     return _build_in_memory(
-        scans, accumulators, positions, grid_shape, outer_coords, attrs, dtype, reduce_kwargs
+        scans,
+        accumulators,
+        positions,
+        grid_shape,
+        outer_coords,
+        attrs,
+        dtype,
+        reduce_kwargs,
+        workers,
     )
+
+
+GPU_WORKERS = 3  # "auto" workers sharing one GPU: enough to keep it fed while others read
+
+
+def _resolve_workers(workers: int | str | None, n_scans: int, device: str) -> int:
+    if workers is None or workers is False:
+        return 1
+    if workers == "auto":
+        count = GPU_WORKERS if device == "cuda" else default_workers("cpu")
+    else:
+        count = int(workers)
+    return max(1, min(count, n_scans))
+
+
+def _reduce_recipe(
+    recipe: dict[str, Any],
+    accumulators: list[Any],
+    reduce_kwargs: dict[str, Any],
+    cache: str | None,
+    cache_reductions: bool,
+) -> xr.Dataset:
+    """One scan reduced in a worker process: reopened from its recipe, closed after."""
+    scan = open_scan(**recipe, cache=cache or False, cache_reductions=cache_reductions)
+    try:
+        return scan.reduce(accumulators, **reduce_kwargs)
+    finally:
+        scan.close()
+
+
+def _reduced(
+    scans: list[Scan], accumulators: list[Any], reduce_kwargs: dict[str, Any], workers: Any
+) -> Generator[tuple[int, xr.Dataset], None, None]:
+    """``(index, result)`` per scan: in this process in order, or from processes as they finish."""
+    device = resolve_device(reduce_kwargs.get("device", "auto"))  # what this process would use
+    n_workers = _resolve_workers(workers, len(scans), device)
+    if n_workers <= 1:
+        for i, scan in enumerate(scans):
+            yield i, scan.reduce(accumulators, **reduce_kwargs)
+        return
+    jobs = []
+    for scan in scans:
+        if scan.recipe is None:
+            raise ValueError(
+                f"{_label(scan)} cannot be reopened in a worker: scans opened with bexa.open or "
+                "a Dataset carry the recipe that workers need"
+            )
+        root = scan.cache.root if scan.cache is not None else None
+        jobs.append((scan.recipe, None if root is None else str(root), scan.cache_reductions))
+    # one progress bar over the scans, here; the workers share the GPU when there is one
+    kwargs = {**reduce_kwargs, "show_progress": False, "device": device}
+    fraction = float(os.environ.get("BEXA_MEMORY_FRACTION", DEFAULT_MEMORY_FRACTION))
+    cpus, _ = usable_cpus()
+    env = {  # the workers share the job's memory and cores
+        "BEXA_MEMORY_FRACTION": f"{fraction / n_workers:.6g}",
+        "BEXA_THREADS": str(max(1, min(8, cpus // n_workers))),
+    }
+    log.info("reducing %d scans in %d processes", len(scans), n_workers)
+    pool = process_pool(n_workers, env=env)
+    try:
+        futures = {
+            pool.submit(_reduce_recipe, recipe, accumulators, kwargs, root, cached): i
+            for i, (recipe, root, cached) in enumerate(jobs)
+        }
+        show = reduce_kwargs.get("show_progress") is not False and interactive_session()
+        for future in progress(as_completed(futures), len(futures), desc="scans", enabled=show):
+            yield futures[future], future.result()
+    except BaseException:
+        pool.shutdown(wait=False, cancel_futures=True)  # scans still running finish on their own
+        raise
+    pool.shutdown(wait=True)
 
 
 def _records(scan: Scan) -> list[dict[str, Any]]:
@@ -721,6 +832,7 @@ def _build_in_memory(
     attrs: dict[str, Any],
     dtype: Any,
     reduce_kwargs: dict[str, Any],
+    workers: Any = None,
 ) -> xr.Dataset:
     from bexa.core.backend import check_fits
 
@@ -730,44 +842,53 @@ def _build_in_memory(
     layout: dict[str, tuple[tuple[str, ...], tuple[int, ...], np.dtype]] = {}
     inner_coords: dict[str, Any] = {}
     inner_attrs: dict[str, dict[str, Any]] = {}
-    for scan, position in zip(scans, positions, strict=True):
-        result = scan.reduce(accumulators, **reduce_kwargs)
-        if not arrays:
-            layout = _plan_variables(result, dtype)
-            total = sum(
-                int(np.prod(grid_shape + shape)) * dt.itemsize for _, shape, dt in layout.values()
-            )
-            check_fits(
-                total,
-                f"stacking {len(scans)} scans on {dims}",
-                reduce_kwargs.get("device", "cpu")
-                if reduce_kwargs.get("device") not in (None, "auto")
-                else "cpu",
-                hint="pass store=True to build the stack on disk, or add an ROI or a downsample",
-            )
-            for name, (_, shape, dt) in layout.items():
-                arrays[name] = np.full(grid_shape + shape, np.nan, dtype=dt)
-                stats[name] = (
-                    {k: np.full(grid_shape + shape[:-2], np.nan) for k in ("total", "p1", "p99")}
-                    if len(shape) >= 2
-                    else {}
+    results = _reduced(scans, accumulators, reduce_kwargs, workers)
+    try:
+        for i, result in results:
+            scan, position = scans[i], positions[i]
+            if not arrays:
+                layout = _plan_variables(result, dtype)
+                total = sum(
+                    int(np.prod(grid_shape + shape)) * dt.itemsize
+                    for _, shape, dt in layout.values()
                 )
-                inner_coords.update(
-                    {str(k): v for k, v in result[name].coords.items() if k not in inner_coords}
+                check_fits(
+                    total,
+                    f"stacking {len(scans)} scans on {dims}",
+                    reduce_kwargs.get("device", "cpu")
+                    if reduce_kwargs.get("device") not in (None, "auto")
+                    else "cpu",
+                    hint="pass store=True to build the stack on disk, or add an ROI or a "
+                    "downsample",
                 )
-                inner_attrs[name] = dict(result[name].attrs)
-        for name, (_, shape, _) in layout.items():
-            if name not in result or tuple(result[name].shape) != shape:
-                got = tuple(result[name].shape) if name in result else None
-                raise ValueError(
-                    f"{scan.name}: {name} has shape {got}, the first scan {shape}; "
-                    "stack scans with the same grid and the same ROI"
-                )
-            block = result[name].values
-            arrays[name][position] = block
-            if stats[name]:
-                for k, v in _block_stats(block).items():
-                    stats[name][k][position] = v
+                for name, (_, shape, dt) in layout.items():
+                    arrays[name] = np.full(grid_shape + shape, np.nan, dtype=dt)
+                    stats[name] = (
+                        {
+                            k: np.full(grid_shape + shape[:-2], np.nan)
+                            for k in ("total", "p1", "p99")
+                        }
+                        if len(shape) >= 2
+                        else {}
+                    )
+                    inner_coords.update(
+                        {str(k): v for k, v in result[name].coords.items() if k not in inner_coords}
+                    )
+                    inner_attrs[name] = dict(result[name].attrs)
+            for name, (_, shape, _) in layout.items():
+                if name not in result or tuple(result[name].shape) != shape:
+                    got = tuple(result[name].shape) if name in result else None
+                    raise ValueError(
+                        f"{scan.name}: {name} has shape {got}, the first scan {shape}; "
+                        "stack scans with the same grid and the same ROI"
+                    )
+                block = result[name].values
+                arrays[name][position] = block
+                if stats[name]:
+                    for k, v in _block_stats(block).items():
+                        stats[name][k][position] = v
+    finally:
+        results.close()  # stops the worker pool when a result could not be placed
     data_vars = {}
     for name, (var_dims, _, _) in layout.items():
         full_dims = (*dims, *var_dims)
@@ -835,6 +956,7 @@ def _build_store(
     attrs: dict[str, Any],
     dtype: Any,
     reduce_kwargs: dict[str, Any],
+    workers: Any = None,
 ) -> xr.Dataset:
     from bexa.io.cube import StoreWriter
 
@@ -842,12 +964,13 @@ def _build_store(
     writer: StoreWriter | None = None
     layout: dict[str, tuple[tuple[str, ...], tuple[int, ...], np.dtype]] = {}
     reduce_kwargs = {"cache": False, **reduce_kwargs}  # the store is the cache of these results
+    results = _reduced(scans, accumulators, reduce_kwargs, workers)
     try:
-        for scan, position in zip(scans, positions, strict=True):
-            result = scan.reduce(accumulators, **reduce_kwargs)
+        for i, result in results:
+            scan, position = scans[i], positions[i]
             if writer is None:
                 layout = _plan_variables(result, dtype)
-                writer = StoreWriter(path, attrs)
+                writer = StoreWriter(path, attrs, compression=STORE_COMPRESSION)
                 for d in dims:
                     writer.add_coord(
                         d, outer_coords[d], attrs={"units": "keV"} if d == ENERGY_DIM else None
@@ -889,6 +1012,8 @@ def _build_store(
         if writer is not None:
             writer.abort()
         raise
+    finally:
+        results.close()  # stops the worker pool when a result could not be written
     assert writer is not None
     writer.close()
     return _open_store(path)

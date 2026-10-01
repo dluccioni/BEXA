@@ -15,6 +15,10 @@ from typing import Any
 import numpy as np
 
 PIXEL_DIMS: tuple[str, str] = ("y", "x")
+# the dim of an energy axis in keV: a series of scans, or a monochromator stepped inside a scan
+ENERGY_DIM = "energy"
+# the pixel dims of a preview binned inside a pass, next to full-resolution maps named (y, x)
+BINNED_PIXEL_DIMS: tuple[str, str] = ("yb", "xb")
 MISSING = -1
 
 

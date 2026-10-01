@@ -12,8 +12,10 @@ from typing import Any
 
 import numpy as np
 
-from bexa.core.backend import array_module, ndimage_module
+from bexa.core.backend import array_module, gaussian_frames
 from bexa.core.units import FWHM_PER_SIGMA
+
+ENERGY_COM_BLOCK_BYTES = 256 * 2**20  # larger stacks are processed one outer slice at a time
 
 __all__ = [
     "argmax_motor",
@@ -35,8 +37,7 @@ def _prepare(
     xp = array_module(volume)
     w = xp.moveaxis(xp.asarray(volume, dtype=np.float64), axis, 0)
     if sigma:
-        ndi = ndimage_module(volume)
-        w = xp.stack([ndi.gaussian_filter(f, sigma) for f in w])
+        w = gaussian_frames(xp.ascontiguousarray(w), sigma)
     if clip is not None:
         w = xp.clip(w, clip, None)
     v = xp.asarray(values, dtype=np.float64)
@@ -75,6 +76,17 @@ def energy_com_from_stack(sums: Any, dim: str = "energy", clip: float = 1e-10) -
 
     if dim not in sums.dims:
         raise ValueError(f"{dim!r} is not a dim of the stack {tuple(sums.dims)}")
+    outer = [d for d in sums.dims if d != dim]
+    if outer and sums.sizes[outer[0]] > 1 and sums.nbytes > ENERGY_COM_BLOCK_BYTES:
+        # one slice of the first other dim at a time: a lazy stack is read block by block and
+        # the float64 temporaries stay the size of one slice
+        parts = [
+            energy_com_from_stack(sums.isel({outer[0]: i}), dim, clip)
+            for i in range(sums.sizes[outer[0]])
+        ]
+        out = xr.concat(parts, dim=outer[0])
+        out.coords[outer[0]] = sums.coords[outer[0]].values
+        return out
     energy = sums.coords[dim].astype(float)
     weights = sums.fillna(0.0).clip(min=0.0)
     total = weights.sum(dim)

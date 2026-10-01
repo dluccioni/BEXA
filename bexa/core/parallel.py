@@ -36,6 +36,36 @@ def pin_blas_threads(n: int = 1) -> None:
         os.environ.setdefault(name, str(n))
 
 
+def compute_threads() -> int:
+    """Threads for the CPU work of one process (:func:`bexa.core.backend.gaussian_frames`).
+
+    ``BEXA_THREADS`` when set, else up to eight of the usable cores: the
+    gain flattens beyond that, and worker processes get their share.
+    """
+    env = os.environ.get("BEXA_THREADS")
+    if env:
+        return max(1, int(env))
+    from bexa.core.resources import usable_cpus
+
+    cpus, _ = usable_cpus()
+    return max(1, min(8, cpus))
+
+
+_compute_pool: ThreadPoolExecutor | None = None
+_compute_lock = threading.Lock()
+
+
+def compute_pool() -> ThreadPoolExecutor:
+    """One shared pool of :func:`compute_threads` threads for frame-parallel numpy work."""
+    global _compute_pool
+    with _compute_lock:
+        if _compute_pool is None:
+            _compute_pool = ThreadPoolExecutor(
+                max_workers=compute_threads(), thread_name_prefix="bexa-compute"
+            )
+        return _compute_pool
+
+
 def default_workers(kind: str = "io") -> int:
     """Sensible worker counts: 8 threads for I/O, all but one usable core for processes.
 
@@ -116,14 +146,26 @@ def thread_map(fn: Callable[[T], R], items: Iterable[T], workers: int | None = N
         return list(pool.map(fn, items))
 
 
-def process_pool(workers: int | None = None) -> ProcessPoolExecutor:
+def _init_worker(blas_threads: int, env: dict[str, str] | None) -> None:
+    """Runs first in every spawned worker: the environment of the job, then the BLAS pinning."""
+    if env:
+        os.environ.update(env)
+    pin_blas_threads(blas_threads)
+
+
+def process_pool(
+    workers: int | None = None, env: dict[str, str] | None = None
+) -> ProcessPoolExecutor:
     """A spawn-based process pool with BLAS threads pinned in every worker.
 
     Spawn (rather than fork) keeps HDF5 and CUDA state out of the children,
-    which is what the legacy XFEL cube builder learned the hard way.
+    which is what the legacy XFEL cube builder learned the hard way. ``env``
+    sets environment variables in every worker before it imports numpy (a
+    smaller ``BEXA_MEMORY_FRACTION`` when several workers share the job's
+    memory, for example).
     """
     workers = workers or default_workers("cpu")
     ctx = mp.get_context("spawn")
     return ProcessPoolExecutor(
-        max_workers=workers, mp_context=ctx, initializer=pin_blas_threads, initargs=(1,)
+        max_workers=workers, mp_context=ctx, initializer=_init_worker, initargs=(1, env)
     )
