@@ -1,0 +1,19 @@
+# ESRF ID03, autumn 2026 (ma7352, CrCoNi): the January 2026 layout, with the frames of a
+# scan also reachable through the master file as one virtual dataset
+# (N.1/instrument/pco_ff/image) and the far-field camera read out as 2048 x 2048.
+name: esrf_id03_bliss_F2026
+extends: esrf_id03_bliss_2026
+description: ESRF ID03 BLISS layout as recorded in September/October 2026 (ma7352).
+
+fingerprint:   # the virtual dataset in the master tells this layout from January 2026
+  master_paths:
+    - "{scan}.1/measurement"
+    - "{scan}.1/instrument/positioners"
+    - "{scan}.1/instrument/fscan_parameters"
+    - "{scan}.1/instrument/pco_ff/image"
+
+detectors:
+  pco_ff: {pixel_size_um: 6.5, shape: [2048, 2048], effective_pixel_nm: 235}
+  pco_nf: {pixel_size_um: 6.5, shape: [2160, 2560], effective_pixel_nm: 235}
+  mpx: {pixel_size_um: 55.0}
+  eiger: {pixel_size_um: 75.0}

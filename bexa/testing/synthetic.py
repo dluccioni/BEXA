@@ -170,7 +170,10 @@ def make_esrf_scan(
         them the centres form a smooth gradient across the field of view.
     layout
         ``"2026"``/``"2025"`` write ``fscan_parameters``; ``"2024"`` omits them
-        so the grid must be detected from readbacks (and adds ``obpitch``).
+        so the grid must be detected from readbacks (and adds ``obpitch``);
+        ``"F2026"`` (autumn 2026, ma7352) is ``"2026"`` plus the frames reachable
+        through the master file as a virtual dataset
+        (``N.1/instrument/<detector>/image``).
     order
         ``"slow_major"`` (fast motor loops inside the slow one) or ``"snake"``
         (fast motor reverses on every other slow step).
@@ -272,7 +275,7 @@ def make_esrf_scan(
         }
         if layout == "2024":
             scalars["obpitch"] = float(coords.get("obpitch", np.zeros(1))[0])
-        if layout == "2026":
+        if layout in ("2026", "F2026"):
             scalars.update({"ux": 0.0, "uy": 0.0, "uz": 0.0})
         scalars.update(positioners or {})
         for name, value in scalars.items():
@@ -281,6 +284,16 @@ def make_esrf_scan(
             if name in pos:
                 del pos[name]
             pos.create_dataset(name, data=per_frame[name].astype(np.float64))
+        if layout == "F2026":  # the master also reaches the frames, as one virtual dataset
+            virtual = h5py.VirtualLayout(shape=(n_frames, H, W), dtype=dtype)
+            for i, path in enumerate(detector_files):
+                start, stop = int(bounds[i]), int(bounds[i + 1])
+                virtual[start:stop] = h5py.VirtualSource(
+                    str(path),
+                    ESRF_FRAMES_PATH.format(detector=detector),
+                    shape=(stop - start, H, W),
+                )
+            entry.create_virtual_dataset(f"instrument/{detector}/image", virtual)
         entry.attrs["NX_class"] = "NXentry"
 
     return SyntheticEsrfScan(
@@ -860,11 +873,15 @@ def make_esrf_zstack(
     seed: int = 0,
     energy_scan: str = "rocking",
     layer_px: float = 4.0,
+    z_motor: str = "samz",
     **kwargs: Any,
 ) -> SyntheticZStack:
-    """A mosaicity scan and an energy series per sample height (``samz``), in one dataset.
+    """A mosaicity scan and an energy series per sample height, in one dataset.
 
-    Two ways of scanning the energy, chosen with ``energy_scan``:
+    The height is the positioner ``z_motor`` (``samz``, or ``uz`` as at ma7352).
+    One energy (``energies=(17.0,)``) gives heights only, one height
+    (``z_values=(0.0,)``) an energy series only. Two ways of scanning the
+    energy, chosen with ``energy_scan``:
 
     - ``"rocking"``: at every height one ``mosa`` scan (chi x mu) at the nominal energy,
       followed by one ``energy_motor`` scan (a mu rocking curve) per energy;
@@ -885,6 +902,8 @@ def make_esrf_zstack(
     """
     if energy_scan not in ("rocking", "mosa"):
         raise ValueError(f"energy_scan must be 'rocking' or 'mosa', not {energy_scan!r}")
+    if len(z_values) == 0 or len(energies) == 0:
+        raise ValueError("a z-stack needs at least one height and one energy")
     root = Path(root)
     height, width = frame_shape
     _, xx = np.mgrid[0:height, 0:width]
@@ -912,7 +931,7 @@ def make_esrf_zstack(
             tilt_centres[name][k] = sample.centers[name]
         labels[k] = sample.labels
         grains[k] = sample.grains
-        fixed = {"samz": float(z)}
+        fixed = {z_motor: float(z)}
         if energy_scan == "rocking":  # the mosaicity scan at the nominal energy comes first
             made = make_esrf_scan(
                 root,
