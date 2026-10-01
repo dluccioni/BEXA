@@ -164,6 +164,19 @@ class Hdf5StackSource(BaseSource):
     def files(self) -> list[Path]:
         return [self.master, *(p for p, _, _ in self._files)]
 
+    def cache_records(self) -> list[dict[str, Any]]:
+        """The detector files by size and mtime, the master by the entry this scan reads.
+
+        BLISS appends every new scan to the master file, so its size and mtime
+        change all through a beamtime while this scan's entry does not; keying on
+        the file itself would discard every cached result of the dataset at each
+        new scan.
+        """
+        from bexa.core.provenance import file_records
+
+        master = {"path": str(self.master), "entry": self._entry, "n_frames": self._n_frames}
+        return [master, *file_records(p for p, _, _ in self._files)]
+
     @property
     def frame_shape(self) -> tuple[int, int]:
         return self._frame_shape

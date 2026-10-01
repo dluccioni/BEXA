@@ -24,7 +24,20 @@ from bexa.core.provenance import fingerprint
 
 log = get_logger(__name__)
 
-DEFAULT_MEMORY_BYTES = 2 * 1024**3
+DEFAULT_MEMORY_BYTES = 2 * 1024**3  # the memory level never grows past this
+MEMORY_SHARE = 0.1  # ... nor past this share of the memory the process may use
+
+
+def default_memory_bytes() -> int:
+    """Budget of the in-memory level: a tenth of the usable memory, at most 2 GiB.
+
+    A dataset of many scans shares one cache, so the level must stay small next
+    to the results themselves; on a 64 GB session it is 2 GiB, on a 4 GB laptop
+    about 400 MB.
+    """
+    from bexa.core.resources import memory_info
+
+    return int(min(DEFAULT_MEMORY_BYTES, MEMORY_SHARE * memory_info().available))
 
 
 @dataclass
@@ -54,14 +67,15 @@ class Cache:
         Cache folder; ``None`` disables the disk level. Defaults come from
         :func:`bexa.config.paths.cache_root`.
     memory_bytes
-        Budget of the in-memory level (0 disables it).
+        Budget of the in-memory level: ``"auto"`` (:func:`default_memory_bytes`),
+        a number of bytes, or 0 / ``None`` to disable it.
     """
 
-    def __init__(
-        self, root: str | Path | None = None, memory_bytes: int | None = DEFAULT_MEMORY_BYTES
-    ):
+    def __init__(self, root: str | Path | None = None, memory_bytes: int | str | None = "auto"):
         self.root = Path(root) if root is not None else None
-        self.memory_bytes = memory_bytes or 0
+        if memory_bytes == "auto":
+            memory_bytes = default_memory_bytes()
+        self.memory_bytes = int(memory_bytes or 0)
         self._memory: OrderedDict[str, Any] = OrderedDict()
         self._memory_used = 0
         self._lock = threading.Lock()
@@ -90,6 +104,9 @@ class Cache:
 
             try:
                 obj = load(path, squeeze_single=False)
+            except MemoryError as exc:  # over the budget right now; the file stays
+                log.warning("not loading cache entry %s: %s", path, exc)
+                return None
             except Exception as exc:  # a half-written file; drop it
                 log.warning("discarding unreadable cache entry %s (%s)", path, exc)
                 path.unlink(missing_ok=True)

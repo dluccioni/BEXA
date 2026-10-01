@@ -161,6 +161,17 @@ class BaseSource(ABC):
     def __exit__(self, *exc: object) -> None:
         self.close()
 
+    def cache_records(self) -> list[dict[str, Any]]:
+        """What identifies the data for cache keys: path, size and mtime of every file.
+
+        Engines whose files change while the data they serve does not (a master
+        file that BLISS appends a scan to) override this with records of the part
+        they read.
+        """
+        from bexa.core.provenance import file_records
+
+        return file_records(self.files())
+
     # ---- helpers ---------------------------------------------------------
     def frame_bytes(self, y: slice = slice(None), x: slice = slice(None), dtype: Any = None) -> int:
         """Bytes of one frame inside the window at ``dtype`` (default: stored dtype)."""

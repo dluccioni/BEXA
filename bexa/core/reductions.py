@@ -129,6 +129,11 @@ class Plan:
             "grid": list(self.grid_shape),
             "n_frames": int(self.frame_ids.size),
             "dims": list(self.dims),
+            # the motor part of the ROI: two windows of the same size must not share a key
+            "motors": {
+                d: [float(c[0]), float(c[-1]), len(c)] if len(c) else []
+                for d, c in self.coords.items()
+            },
         }
 
     def all_coords(self) -> dict[str, Any]:
@@ -358,6 +363,13 @@ class Preview(Accumulator):
         self.fill = fill
 
     def _allocate(self) -> None:
+        nbytes = int(np.prod(self.plan.shape)) * np.dtype(self.dtype).itemsize
+        backend.check_fits(
+            nbytes,
+            f"the preview volume {tuple(self.plan.shape)}",
+            "cuda" if self.xp is not np else "cpu",
+            hint="use a larger downsample or an ROI, or stack previews with store=True",
+        )
         self.volume = self.xp.full(self.plan.shape, self.fill, dtype=self.dtype)
 
     def update(self, frames: Any, frame_ids: np.ndarray) -> None:
@@ -920,11 +932,12 @@ def reduce(
 
     results: dict[str, xr.DataArray] = {}
     to_run: list[tuple[Accumulator, str | None]] = []
+    records = source.cache_records() if hasattr(source, "cache_records") else files
     for acc in accs:
         key = None
         if isinstance(cache, Cache):
             key = cache.key(
-                files,
+                records,
                 {
                     "acc": acc.describe(),
                     "plan": plan.describe(),

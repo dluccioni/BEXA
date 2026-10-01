@@ -26,22 +26,30 @@ from bexa._log import get_logger
 log = get_logger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+_GIT_HASHES: dict[str, str | None] = {}  # one git subprocess per checkout and process
 
 
 def git_hash(root: Path | None = None) -> str | None:
-    """Short git hash of the checkout, or ``None`` when git or the repo is absent."""
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=str(root or _REPO_ROOT),
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return out.stdout.strip() or None
+    """Short git hash of the checkout, or ``None`` when git or the repo is absent.
+
+    The answer is kept for the rest of the process: every cache write and every
+    saved file records it, and a subprocess per write would add up.
+    """
+    where = str(root or _REPO_ROOT)
+    if where not in _GIT_HASHES:
+        try:
+            out = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=where,
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            _GIT_HASHES[where] = out.stdout.strip() or None
+        except (OSError, subprocess.SubprocessError):
+            _GIT_HASHES[where] = None
+    return _GIT_HASHES[where]
 
 
 def json_default(obj: Any) -> Any:
@@ -68,10 +76,18 @@ def to_json(obj: Any) -> str:
     return json.dumps(obj, default=json_default, sort_keys=True, separators=(",", ":"))
 
 
-def file_records(paths: Iterable[str | Path]) -> list[dict[str, Any]]:
-    """Path, size and modification time of each file (missing files get size -1)."""
+def file_records(paths: Iterable[str | Path | Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Path, size and modification time of each file (missing files get size -1).
+
+    A record given as a dict passes through unchanged: sources describe files
+    that way when a part of a file identifies the data better than its size and
+    modification time (``Source.cache_records``).
+    """
     records = []
     for p in paths:
+        if isinstance(p, Mapping):
+            records.append(dict(p))
+            continue
         path = Path(p)
         try:
             st = path.stat()
@@ -81,7 +97,7 @@ def file_records(paths: Iterable[str | Path]) -> list[dict[str, Any]]:
     return records
 
 
-def fingerprint(paths: Iterable[str | Path], params: Any = None) -> str:
+def fingerprint(paths: Iterable[str | Path | Mapping[str, Any]], params: Any = None) -> str:
     """SHA-1 over the file records and parameters; the key used by the cache."""
     payload = {"files": file_records(paths), "params": params}
     return hashlib.sha1(to_json(payload).encode("utf-8")).hexdigest()

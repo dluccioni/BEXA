@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from bexa.core.provenance import to_json
 from bexa.core.structure import Structure
 from bexa.io.base import BaseSource, Source
 
@@ -47,6 +48,18 @@ class MultiScanSource(BaseSource):
             for f in p.files():
                 seen.setdefault(f, None)
         return list(seen)
+
+    def cache_records(self) -> list[dict[str, Any]]:
+        """The records of every part, each once, plus the dim and its coordinates."""
+        from bexa.core.provenance import file_records
+
+        seen: dict[str, dict[str, Any]] = {}
+        for p in self.parts:
+            records = p.cache_records() if hasattr(p, "cache_records") else file_records(p.files())
+            for record in records:
+                seen.setdefault(to_json(record), record)
+        stacking = {"path": "", "dim": self.dim, "coords": [float(c) for c in self.coords]}
+        return [*seen.values(), stacking]
 
     @property
     def frame_shape(self) -> tuple[int, int]:

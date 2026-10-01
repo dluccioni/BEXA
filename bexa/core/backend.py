@@ -154,6 +154,23 @@ def memory_budget(device: str | None = "cpu", fraction: float | None = None) -> 
     return int(budget)
 
 
+def check_fits(nbytes: int, what: str, device: str | None = "cpu", hint: str = "") -> int:
+    """Raise ``MemoryError`` when ``nbytes`` exceeds the budget of ``device``; return the budget.
+
+    The message names the size, the budget and, with ``hint``, the way out
+    (an ROI, a larger downsample, ``store=``), so a result that cannot fit
+    stops the call instead of the kernel.
+    """
+    budget = memory_budget(device)
+    if nbytes > budget:
+        raise MemoryError(
+            f"{what} needs {nbytes / 1e9:.2f} GB but the memory budget is {budget / 1e9:.2f} GB"
+            + (f"; {hint}" if hint else "")
+            + " (BEXA_MEMORY_FRACTION raises the budget)"
+        )
+    return budget
+
+
 def choose_batch_frames(
     frame_bytes: int,
     budget: int | None = None,
