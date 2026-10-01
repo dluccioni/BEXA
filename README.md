@@ -77,7 +77,7 @@ the rest stays the same.
 | `10_zstack_3d_conditions.py` | the z-stack as a 3-D volume stepped through (chi, mu) or (energy, mu); the Slices-to-Voxels model and GUI |
 | `11_roi_to_3d_rlp.py` | from a pixel ROI on the projections to the 3-D reciprocal-space view |
 | `12_esrf_dfxm_workflow.ipynb` | a notebook for an ID03 DFXM beamtime end to end: alignment scans, quick mosa scan, fine mosa scan, energy scan, z-stack, 3-D rendering with a slider per scanned motor |
-| `13_esrf_dfxm_general.ipynb` | one notebook for any ID03 dataset (a single mosaicity scan, a z-stack, an energy series, both, or several folders): it reads what varies between the scans and stacks on that; one streaming pass per scan (several scans at a time with `WORKERS`) gives the binned previews and the full-resolution maps, stacked into one file in the cache that every later cell reads block by block |
+| `13_esrf_dfxm_general.ipynb` | one notebook for any ID03 dataset (a single mosaicity scan, a z-stack, an energy series, both, or several folders): it reads what varies between the scans and stacks on that; one streaming pass per scan (several scans at a time with `WORKERS`) gives the binned previews and the full-resolution maps, stacked into one file in the cache that every later cell reads block by block; section 10 also renders the total scattered intensity per voxel, and section 11 compares two sets of scans from any folders, B minus A pair by pair (intensity and tilt changes) |
 
 ## Layout
 
@@ -1375,9 +1375,8 @@ A volume stacked by `bexa.stack` is `(outer..., motors..., y, x)` and may live o
 of its frames: they use the per-frame statistics the stack carries in its attrs
 (`block_stats_dims`, `block_total`, `block_p1`, `block_p99`, computed scan by scan while
 stacking; a `transpose` keeps them), or stream over the frames one at a time when the attrs are
-missing or no longer match the dims. `brightest` and `shared_limits` are also reachable as
-`bexa.viz.interactive.brightest` and `bexa.viz.interactive.shared_limits`, and the browsers use
-them.
+missing or no longer match the dims. `brightest`, `shared_limits` and `total_volume` are also
+reachable from `bexa.viz.interactive`, and the browsers use the first two.
 
 ```python
 import tempfile
@@ -1419,6 +1418,28 @@ without statistics the same from a sample of 64 frames. `log=True` returns the l
 ```python
 stacks.shared_limits(vol)                        # (10.0, 2091.95): from the stored percentiles, no frame read
 stacks.shared_limits(vol, 5, 99.5, log=True)     # (1.0414, 3.3208): limits of log10(1 + I)
+```
+
+#### `total_volume`
+`bexa.core.stacks.total_volume(volume, keep=None, downsample=None, method="mean")`
+
+The intensity summed over every leading dim but `keep` (a name or a list; default the first
+one), read one kept position at a time, so a lazy stack on disk costs the memory of one such
+block: `stacked["sum"]` of a z-stack with `keep="samz"` is the total scattered intensity per
+voxel `(z, y, x)`, whatever was scanned (energies included), and `stacked["preview"]` summed over
+the scan motors gives the same from the binned frames. `downsample` (an int or `(by, bx)`) bins
+the pixels of the result with block `method` (`"mean"`, `"sum"` or `"max"`), the coordinates
+being the full-resolution index of each block's first pixel, so a volume of summed images takes
+the voxel size of the previews. NaN frames (missing scans) count as zero. The result is in
+memory, named `total_<name>`, with attrs `summed_over`, `binning` and `method`; a dim that is
+not in front of the image raises `ValueError`.
+
+```python
+maps = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Sum()], dim="auto", store=True)   # (samz, y, x) summed images
+total = stacks.total_volume(maps["sum"], keep="samz", downsample=2)   # (5, 20, 24): the total intensity per voxel, binned by 2
+total.attrs["summed_over"], float(total.sel(samz=0.0).sum())           # ([], 982299.2): nothing else to sum here; its total at samz = 0
+over_motors = stacks.total_volume(vol, keep="samz")                    # (samz, y, x) from the previews, summed over chi and mu
+over_motors.dims, over_motors.attrs["summed_over"]                     # (('samz', 'y', 'x'), ['chi', 'mu'])
 ```
 
 #### `block_stats`
@@ -4765,9 +4786,10 @@ their names (`y`, `x`, or `yb`, `xb` for a preview binned on its own). They read
 move through `isel`, so a volume stacked on disk
 (`bexa.stack(..., store=True)`, `bexa.io.cube.open_lazy`) browses without being loaded, and
 `clim="shared"` takes its limits from the stack's per-frame statistics (`shared_limits`)
-instead of a pass over everything. `brightest` and `shared_limits` are `bexa.core.stacks`
-functions re-exported here: `brightest` gives the slider positions of the condition that
-lights the volume up, for `update(**peak)`. `widgets=None` (default) gives ipywidgets sliders in
+instead of a pass over everything. `brightest`, `shared_limits` and `total_volume` are
+`bexa.core.stacks` functions re-exported here: `brightest` gives the slider positions of the
+condition that lights the volume up, for `update(**peak)`, and `total_volume` the intensity
+summed over the scan motors (a `(z, y, x)` volume to render or browse). `widgets=None` (default) gives ipywidgets sliders in
 a Jupyter kernel (JupyterLab, VS Code interactive window) and matplotlib `Slider`s under the
 figure elsewhere (scripts, terminal IPython, or no ipywidgets); `widgets=True` or `False`
 forces one. With ipywidgets and a live backend (`%matplotlib widget`, ipympl) the image follows
@@ -5996,7 +6018,7 @@ bexa.open(series[0].dataset_dir, scan=(1, 3)).dims     # ('energy', 'mu', 'y', '
 ```
 
 #### `make_esrf_zstack`
-`bexa.testing.synthetic.make_esrf_zstack(root, dataset="synth_zstack", z_values=(-0.002, -0.001, 0.0, 0.001, 0.002), mosa=(("chi", 6), ("mu", 15)), energies=(16.98, 16.99, 17.0, 17.01, 17.02), energy_motor=("mu", 8), frame_shape=(40, 48), first_scan=1, n_files=1, seed=0, energy_scan="rocking", layer_px=4.0, z_motor="samz", **kwargs)`
+`bexa.testing.synthetic.make_esrf_zstack(root, dataset="synth_zstack", z_values=(-0.002, -0.001, 0.0, 0.001, 0.002), mosa=(("chi", 6), ("mu", 15)), energies=(16.98, 16.99, 17.0, 17.01, 17.02), energy_motor=("mu", 8), frame_shape=(40, 48), first_scan=1, n_files=1, seed=0, energy_scan="rocking", layer_px=4.0, z_motor="samz", tilt_offset=None, **kwargs)`
 
 A z-stack in one dataset: at every height of `z_values` (the positioner `z_motor`, `samz` by
 default or `uz` as at ma7352, in mm) a mosaicity scan and an energy series, numbered from
@@ -6006,8 +6028,10 @@ at every energy (dims `(energy, chi, mu, y, x)`; the one nearest the mean energy
 height's mosaicity scan). One energy (`energies=(17.0,)`) gives heights only, one height
 (`z_values=(0.0,)`) an energy series only. The sample is `dfxm_sample` cut `layer_px` pixels
 deeper per layer step, so grain sections change with the height; the energy centre adds each
-region's strain to a gradient along x and with the height. Files as in `make_esrf_scan` (spec
-`esrf_id03_bliss_2026`); returns a `SyntheticZStack`.
+region's strain to a gradient along x and with the height. `tilt_offset` (`{"mu": 0.05}`,
+degrees) tilts the whole sample, the same grain measured again after annealing, say, for
+difference maps between two datasets (the planted `chi_center`/`mu_center` move with it). Files
+as in `make_esrf_scan` (spec `esrf_id03_bliss_2026`); returns a `SyntheticZStack`.
 
 ```python
 zs = make_esrf_zstack(work)                     # 5 heights x (90 + 5 x 8 frames), 40 x 48 pixels
@@ -6016,6 +6040,8 @@ bexa.open(zs.dataset_dir, scan=zs.energy_scans[0]).dims     # ('energy', 'mu', '
 zs.truth["energy_center"].shape                 # (5, 40, 48)
 uz = make_esrf_zstack(work / "uz", z_values=(0.0, 0.5), energies=(17.0,), z_motor="uz")   # two heights on uz, no energy series
 uz.mosa_scans, bexa.open_dataset(uz.dataset_dir).varying(type="fscan2d")   # ([1, 3], {'uz': array([0. , 0.5])})
+after = make_esrf_zstack(work / "after", z_values=(0.0, 0.5), energies=(17.0,), z_motor="uz", tilt_offset={"mu": 0.1})
+float((after.truth["mu_center"] - uz.truth["mu_center"]).mean())   # 0.1: the same grain, tilted
 ```
 
 #### `SyntheticZStack`
