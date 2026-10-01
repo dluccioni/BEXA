@@ -184,7 +184,14 @@ def make_esrf_scan(
     root = Path(root)
     names = [m[0] for m in motors]
     shape = tuple(m[1] for m in motors)
-    default_ranges = {"mu": (-1.0, 1.0), "chi": (-0.5, 0.5), "phi": (-0.3, 0.3), "obpitch": (0, 1)}
+    ccmth = energy_to_mono_angle(energy_keV, "Si111")
+    default_ranges = {
+        "mu": (-1.0, 1.0),
+        "chi": (-0.5, 0.5),
+        "phi": (-0.3, 0.3),
+        "obpitch": (0, 1),
+        "ccmth": (ccmth - 0.005, ccmth + 0.005),  # an energy mosa steps the mono inside the scan
+    }
     coords = {}
     for name, n in motors:
         lo, hi = (ranges or {}).get(name, default_ranges.get(name, (0.0, 1.0)))
@@ -231,7 +238,6 @@ def make_esrf_scan(
         detector_files.append(path)
 
     # ---- master file -----------------------------------------------------
-    ccmth = energy_to_mono_angle(energy_keV, "Si111")
     with h5py.File(master, "a") as f:
         entry = f.require_group(f"{scan}.1")
         if layout != "2024" and len(names) >= 1:
@@ -239,21 +245,13 @@ def make_esrf_scan(
             scan_type = f"fscan{len(names)}d"
             fs.create_dataset("scan_type", data=scan_type)
             fs.create_dataset("scan_name", data=scan_type)
-            if len(names) == 1:
-                fs.create_dataset("motor", data=names[0])
-                fs.create_dataset("npoints", data=shape[0])
-            else:
-                fs.create_dataset("slow_motor", data=names[0])
-                fs.create_dataset("fast_motor", data=names[1])
-                fs.create_dataset("slow_npoints", data=shape[0])
-                fs.create_dataset("fast_npoints", data=shape[1])
-            if len(names) == 3:
-                fs.create_dataset("outer_motor", data=names[0])
-                fs.create_dataset("middle_motor", data=names[1])
-                fs.create_dataset("inner_motor", data=names[2])
-                fs.create_dataset("outer_npoints", data=shape[0])
-                fs.create_dataset("middle_npoints", data=shape[1])
-                fs.create_dataset("inner_npoints", data=shape[2])
+            # the motor keys BLISS writes: motor / slow + fast / slow1 + slow2 + fast (slow1 outer)
+            keys = {1: ("motor",), 2: ("slow_motor", "fast_motor")}.get(
+                len(names), ("slow1_motor", "slow2_motor", "fast_motor")
+            )
+            for key, name, n in zip(keys, names, shape, strict=True):
+                fs.create_dataset(key, data=name)
+                fs.create_dataset(key.replace("motor", "npoints"), data=n)
         title = " ".join(f"{n} {coords[n][0]:g} {coords[n][-1]:g} {len(coords[n])}" for n in names)
         entry.create_dataset("title", data=f"fscan{len(names)}d {title} 0.05")
         meas = entry.require_group("measurement")

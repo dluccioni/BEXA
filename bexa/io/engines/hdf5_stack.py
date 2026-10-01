@@ -19,7 +19,7 @@ import numpy as np
 
 from bexa._log import get_logger
 from bexa.core.registry import register_engine
-from bexa.core.structure import Structure
+from bexa.core.structure import ENERGY_DIM, Structure
 from bexa.core.units import mono_angle_to_energy
 from bexa.io.base import BaseSource
 from bexa.io.formats import FormatSpec
@@ -28,6 +28,21 @@ log = get_logger(__name__)
 
 # Motors v9 looked for when no scan description is available.
 FALLBACK_MOTORS = ("mu", "chi", "phi", "theta", "omega", "delta", "gamma", "ux", "uy", "uz")
+# the datasets of fscan_parameters that name the scanned motors, slowest loop first: BLISS
+# writes ``motor`` for an fscan, ``slow_motor``/``fast_motor`` for an fscan2d and
+# ``slow1_motor``/``slow2_motor``/``fast_motor`` for an fscan3d (slow1 is the outer loop);
+# the ``outer``/``middle``/``inner`` names are accepted too
+MOTOR_KEYS = (
+    "outer_motor",
+    "slow1_motor",
+    "slow_motor",
+    "middle_motor",
+    "slow2_motor",
+    "slow3_motor",
+    "inner_motor",
+    "fast_motor",
+    "motor",
+)
 MIN_CACHE_BYTES = 8 * 1024**2
 MAX_CACHE_BYTES = 512 * 1024**2
 
@@ -303,22 +318,19 @@ class Hdf5StackSource(BaseSource):
             return None
         names: list[str] = []
         counts: list[int] = []
-        pairs: tuple[tuple[str, str], ...]
-        if scan_type == "fscan3d":
-            pairs = (
-                ("outer_motor", "outer_npoints"),
-                ("middle_motor", "middle_npoints"),
-                ("inner_motor", "inner_npoints"),
-            )
-        elif scan_type == "fscan2d":
-            pairs = (("slow_motor", "slow_npoints"), ("fast_motor", "fast_npoints"))
-        else:
-            pairs = (("motor", "npoints"),)
-        for motor_key, count_key in pairs:
+        for motor_key in MOTOR_KEYS:
             if motor_key in g:
+                count_key = motor_key.replace("motor", "npoints")
                 names.append(str(_decode(g[motor_key][()])))
                 counts.append(int(g[count_key][()]) if count_key in g else 0)
         return scan_type, names, counts
+
+    def _energies(self, angles: np.ndarray) -> np.ndarray:
+        """Energies in keV of per-frame monochromator angles, with the spec's crystal."""
+        crystal = self.spec.energy.get("crystal", "Si111")
+        d_spacing = self.spec.energy.get("d_spacing_A")
+        angles = np.asarray(angles, dtype=float)
+        return np.asarray(mono_angle_to_energy(angles, d_spacing or crystal), dtype=float)
 
     def _build_structure(self) -> Structure:
         with h5py.File(self.master, "r") as f:
@@ -375,10 +387,18 @@ class Hdf5StackSource(BaseSource):
         units = dict(self.spec.motors.get("units", {}) or {})
         energy = self._energy(per_frame, scalars)
         if order:
+            motors = {m: per_frame[m] for m in order}
+            source = self.spec.energy.get("from")
+            if source in motors:
+                # the monochromator angle was stepped inside the scan (an energy mosa): the dim
+                # is the energy, in keV, and the angle stays a per-frame channel
+                motors = {(ENERGY_DIM if m == source else m): v for m, v in motors.items()}
+                motors[ENERGY_DIM] = self._energies(per_frame[source])
+                units[ENERGY_DIM] = "keV"
             structure = Structure.from_per_frame(
-                {m: per_frame[m] for m in order},
+                motors,
                 self._frame_shape,
-                order=order if declared else None,
+                order=None,  # the readbacks say which loop is outer; ties keep the declared order
                 scan_type=scan_type,
                 units=units,
                 energy_keV=energy,

@@ -7,6 +7,8 @@ the detector in millimetres, pixel sizes in micrometres.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 HC_KEV_ANGSTROM = 12.398419843  # h*c in keV*Angstrom
@@ -61,11 +63,12 @@ def d_spacing_from_angle(theta_deg: float, energy_keV: float) -> float:
     return float(energy_to_wavelength(energy_keV)) / (2.0 * np.sin(np.radians(theta_deg)))
 
 
-def mono_angle_to_energy(theta_deg: float, crystal: str = "Si111") -> float:
+def mono_angle_to_energy(theta_deg: float | np.ndarray, crystal: str | float = "Si111") -> Any:
     """Energy in keV selected by a monochromator crystal at Bragg angle ``theta_deg``.
 
     ESRF ID03 records the channel-cut angle as ``ccmth``; with Si(111) this
-    gives ``E = hc / (2 d sin(ccmth))``.
+    gives ``E = hc / (2 d sin(ccmth))``. ``crystal`` may be a d-spacing in
+    angstrom; an array of angles gives an array of energies.
     """
     d = MONO_D_SPACINGS_ANGSTROM[crystal] if isinstance(crystal, str) else float(crystal)
     return HC_KEV_ANGSTROM / (2.0 * d * np.sin(np.radians(theta_deg)))
