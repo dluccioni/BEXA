@@ -1132,9 +1132,11 @@ both = bexa.open_dataset([ds.path, part2.dataset_dir], cache="bexa_cache")   # a
 The class behind `open_dataset` (top-level name `bexa.Dataset`). `format`, `detector`,
 `cache_reductions` and `open_kwargs` are passed to `bexa.open` for every scan; `cache` is
 `True` (the folder of `bexa.config.paths.cache_root`, or the profile's), a folder path (one
-cache for the dataset there), a `Cache` or `False`, and every scan shares it. Scans are opened
-once and their handles kept until `refresh` or `close`; a `Dataset` is a context manager, and
-in a notebook it shows its table.
+cache for the dataset there), a `Cache` or `False`, and every scan shares it. The layout of a
+folder is sniffed once, when the dataset is opened (a folder that cannot be read fails there:
+a BLISS dataset copied without its master file says "no master file ... is missing"), and the
+scans are then opened by that spec's name. Scans are opened once and their handles kept until
+`refresh` or `close`; a `Dataset` is a context manager, and in a notebook it shows its table.
 
 - `scans`: property, every scan id, sorted: the scan numbers with detector files for one
   folder, `0, 1, 2, ...` over the combined table for several.
