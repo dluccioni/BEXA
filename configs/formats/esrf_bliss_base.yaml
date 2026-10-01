@@ -16,6 +16,9 @@ layout:
   detector_files: "{detector}_*.h5"
   frames: "entry_0000/ESRF-ID03/{detector}/data"
   entry: "{scan}.1"
+  # what the master records about the detector files, so a scan opens without opening them all
+  frames_total: "{scan}.1/instrument/{detector}/acq_parameters/acq_nb_frames"
+  frames_per_file: "{scan}.1/instrument/{detector}/ctrl_parameters/saving_frame_per_file"
 
 motors:
   per_frame: "{scan}.1/measurement/{motor}"

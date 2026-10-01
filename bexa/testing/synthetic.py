@@ -219,10 +219,13 @@ def make_esrf_scan(
     master = dataset_dir / f"{dataset}.h5"
 
     # ---- detector files -------------------------------------------------
-    bounds = np.linspace(0, n_frames, n_files + 1).astype(int)
+    # as LIMA writes them: every file but the last holds the same number of frames, and a
+    # partial scan fills fewer files
+    per_file = -(-n_total // n_files)
+    bounds = sorted({min(i * per_file, n_frames) for i in range(n_files + 1)})
     detector_files = []
     H, W = frame_shape
-    for i in range(n_files):
+    for i in range(len(bounds) - 1):
         start, stop = int(bounds[i]), int(bounds[i + 1])
         path = scan_folder / f"{detector}_{i:04d}.h5"
         with h5py.File(path, "w") as f:
@@ -240,6 +243,11 @@ def make_esrf_scan(
     # ---- master file -----------------------------------------------------
     with h5py.File(master, "a") as f:
         entry = f.require_group(f"{scan}.1")
+        if layout != "2024":  # what LIMA records about the files: frames planned, frames per file
+            acq = entry.require_group(f"instrument/{detector}/acq_parameters")
+            acq.create_dataset("acq_nb_frames", data=np.int64(n_total))
+            ctrl = entry.require_group(f"instrument/{detector}/ctrl_parameters")
+            ctrl.create_dataset("saving_frame_per_file", data=np.int64(per_file))
         if layout != "2024" and len(names) >= 1:
             fs = entry.require_group("instrument/fscan_parameters")
             scan_type = f"fscan{len(names)}d"

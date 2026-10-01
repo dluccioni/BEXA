@@ -396,8 +396,9 @@ class Dataset:
             else:
                 keep = np.isclose(column, float(value), atol=1e-9, rtol=0.0)
             table = table[np.asarray(keep, dtype=bool)]
-        if where is not None:
-            table = table[[bool(where(row)) for _, row in table.iterrows()]]
+        if where is not None:  # a boolean array: an empty list would select no columns at all
+            keep = np.asarray([bool(where(row)) for _, row in table.iterrows()], dtype=bool)
+            table = table[keep]
         return [int(n) for n in table["id"]]
 
     def select(self, scans: Any = None, **criteria: Any) -> list[Scan]:
@@ -733,13 +734,15 @@ def stack(
     attrs["scan_ids"] = [int(getattr(scan.source, "scan", i)) for i, scan in enumerate(scans)]
     attrs["datasets"] = ", ".join(dict.fromkeys(scan.name for scan in scans))  # where it came from
     attrs["accumulators"] = names
-    if not dims:  # one scan, nothing to stack on
+    if not dims:  # one scan, nothing to stack on: its results, described like a stack
         result = scans[0].reduce(accumulators, **reduce_kwargs)
         for name in list(result.data_vars):
             if result[name].ndim >= 2:
                 _attach_stats(
                     result[name], _block_stats(result[name].values), result[name].dims[:-2]
                 )
+        for key in ("stack_dims", "scan_names", "scan_ids", "datasets", "accumulators"):
+            result.attrs[key] = attrs[key]
         return result
 
     grid_shape = tuple(len(c) for c in centers)
@@ -808,10 +811,14 @@ def _merge_grids(grids: list[dict[str, np.ndarray]]) -> tuple[dict[str, np.ndarr
     for d in grids[0]:
         arrays = [g[d] for g in grids]
         first = arrays[0]
+        # the same grid up to the readback jitter of the motors: within a quarter of a step
+        # (the spread when there is one point), as the grouping of the stack axes tolerates
+        steps = [float(np.median(np.abs(np.diff(a)))) for a in arrays if a.size > 1]
+        step = min((s for s in steps if s > 0), default=0.0)
         spread = max((float(np.ptp(a)) for a in arrays if a.size), default=0.0)
+        atol = 0.25 * step if step > 0 else 1e-3 * spread + 1e-12
         same = all(
-            a.shape == first.shape and np.allclose(a, first, rtol=0, atol=1e-3 * spread + 1e-12)
-            for a in arrays[1:]
+            a.shape == first.shape and np.allclose(a, first, rtol=0, atol=atol) for a in arrays[1:]
         )
         if same:
             common[d] = first
@@ -871,10 +878,14 @@ def regrid(
     targets = {str(d): np.asarray(v, dtype=float) for d, v in coords.items()}
 
     def one(var: xr.DataArray) -> xr.DataArray:
-        wanted = {d: v for d, v in targets.items() if d in var.dims}
-        if not wanted or all(
-            d in var.coords and np.array_equal(var.coords[d].values, v) for d, v in wanted.items()
-        ):
+        # only the dims whose coordinates differ are interpolated: a one-dimensional
+        # interpolation along the energy of a preview, say, not a three-dimensional one
+        wanted = {
+            d: v
+            for d, v in targets.items()
+            if d in var.dims and not (d in var.coords and np.array_equal(var.coords[d].values, v))
+        }
+        if not wanted:
             return var
         how: Any = method if all(var.sizes[d] > 1 for d in wanted) else "nearest"
         out = var.interp(wanted, method=how, kwargs={"bounds_error": False, "fill_value": np.nan})

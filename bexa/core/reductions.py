@@ -19,6 +19,7 @@ import copy
 import math
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -29,7 +30,7 @@ from bexa._log import get_logger, interactive_session, progress
 from bexa.core import accessor as _accessor  # noqa: F401  (registers the .bexa accessors)
 from bexa.core import backend
 from bexa.core.cache import Cache
-from bexa.core.parallel import Prefetcher
+from bexa.core.parallel import Prefetcher, compute_threads
 from bexa.core.provenance import RunStats, build_attrs
 from bexa.core.registry import register_accumulator
 from bexa.core.roi import ROI
@@ -1010,10 +1011,14 @@ def iter_batches(
     def generate() -> Iterator[FrameBatch]:
         for start in range(0, ids_all.size, size):
             ids = ids_all[start : start + size]
-            frames = source.read_frames(ids, w.y, w.x, dtype=dtype)
-            frames = block_reduce(frames, w.ds_y, w.ds_x, method)
+            # the frames come as stored (uint16, half the bytes of float32); the conversion
+            # happens on the GPU, or over threads on the CPU, so the reader only reads
+            raw = source.read_frames(ids, w.y, w.x)
             if device == "cuda":
-                frames = backend.to_device(frames, "cuda")
+                frames = backend.to_device(raw, "cuda").astype(dtype, copy=False)
+            else:
+                frames = backend.cast_frames(raw, dtype)
+            frames = block_reduce(frames, w.ds_y, w.ds_x, method)
             yield FrameBatch(frames, ids, w.y, w.x)
 
     if prefetch and ids_all.size > size:
@@ -1063,14 +1068,30 @@ def _run(
     xp = backend.array_module(device)
     for acc in accumulators:
         acc.start(plan, xp, dtype)
-    live = 4 + max((a.live_copies for a in accumulators), default=0)
+    # on the CPU every accumulator folds a batch in at the same time (numpy and scipy release
+    # the GIL), so their temporaries coexist; on the GPU one stream runs them one after another
+    fan_out = xp is np and len(accumulators) > 1 and compute_threads() > 1
+    copies = [a.live_copies for a in accumulators]
+    live = 4 + (sum(copies) if fan_out else max(copies, default=0))
     batches = iter_batches(source, plan, batch_frames, dtype, device, method, prefetch, live)
     n_batches = math.ceil(
         plan.frame_ids.size / max(_batch_size(source, plan, dtype, device, live, batch_frames), 1)
     )
-    for batch in progress(batches, total=n_batches, desc="reducing", enabled=show_progress):
-        for acc in accumulators:
-            acc.update(batch.frames, batch.frame_ids)
+    pool = ThreadPoolExecutor(len(accumulators), thread_name_prefix="bexa-acc") if fan_out else None
+    try:
+        for batch in progress(batches, total=n_batches, desc="reducing", enabled=show_progress):
+            if pool is None:
+                for acc in accumulators:
+                    acc.update(batch.frames, batch.frame_ids)
+            else:
+                futures = [
+                    pool.submit(acc.update, batch.frames, batch.frame_ids) for acc in accumulators
+                ]
+                for future in futures:
+                    future.result()
+    finally:
+        if pool is not None:
+            pool.shutdown(wait=True)
 
 
 def reduce(

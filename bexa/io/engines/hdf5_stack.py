@@ -158,6 +158,19 @@ class Hdf5StackSource(BaseSource):
             raise FileNotFoundError(
                 f"no {self.detector} files matching {pattern!r} in {self.scan_folder}"
             )
+        meta = self._files_from_master(files)
+        if meta is None:
+            meta = self._files_by_opening(files)
+        self._files = meta
+        self._n_frames = meta[-1][2] + meta[-1][1]
+
+    def _frame_layout(self, ds: Any) -> None:
+        self._frame_shape = (int(ds.shape[1]), int(ds.shape[2]))
+        self._dtype = np.dtype(ds.dtype)
+        self._chunks = tuple(ds.chunks) if ds.chunks else None
+
+    def _files_by_opening(self, files: list[Path]) -> list[tuple[Path, int, int]]:
+        """Frames per file by opening every file: the sure way, and the slow one on a share."""
         meta: list[tuple[Path, int, int]] = []
         offset = 0
         for path in files:
@@ -167,13 +180,59 @@ class Hdf5StackSource(BaseSource):
                 ds = f[self.frames_path]
                 n = int(ds.shape[0])
                 if not meta:
-                    self._frame_shape = (int(ds.shape[1]), int(ds.shape[2]))
-                    self._dtype = np.dtype(ds.dtype)
-                    self._chunks = tuple(ds.chunks) if ds.chunks else None
+                    self._frame_layout(ds)
             meta.append((path, n, offset))
             offset += n
-        self._files = meta
-        self._n_frames = offset
+        return meta
+
+    def _files_from_master(self, files: list[Path]) -> list[tuple[Path, int, int]] | None:
+        """Frames per file from what the master records, opening one file (two without a VDS).
+
+        LIMA writes ``saving_frame_per_file`` frames to every file but the last,
+        and the master says how many frames the scan has (``frames_total``) and,
+        in the autumn 2026 layout, holds the frames as one virtual dataset
+        (``master_frames``: the frame shape and dtype). Only the last file is
+        opened, to count its frames, which is what a scan still being written
+        or an aborted one changes. Over a network share this is the difference
+        between one file open and sixty-four. ``None`` when the master does not
+        say, or when the files do not add up: then every file is opened.
+        """
+        layout = self.spec.layout
+        if "frames_total" not in layout or "frames_per_file" not in layout:
+            return None
+        fields = {"scan": self.scan, "detector": self.detector}
+        try:
+            with h5py.File(self.master, "r") as f:
+                total_path = self.spec.path("frames_total", **fields)
+                per_path = self.spec.path("frames_per_file", **fields)
+                if total_path not in f or per_path not in f:
+                    return None
+                total, per_file = int(f[total_path][()]), int(f[per_path][()])
+                vds_path = (
+                    self.spec.path("master_frames", **fields) if "master_frames" in layout else None
+                )
+                if vds_path is not None and vds_path in f:
+                    self._frame_layout(f[vds_path])
+                    self._chunks = None
+                else:
+                    vds_path = None
+        except (OSError, KeyError, ValueError, TypeError):
+            return None
+        if total <= 0 or per_file <= 0 or len(files) != -(-total // per_file):
+            return None
+        with h5py.File(files[-1], "r") as f:  # the last file: its count is the one that varies
+            if self.frames_path not in f:
+                raise KeyError(f"{files[-1]} has no dataset {self.frames_path!r}")
+            last = int(f[self.frames_path].shape[0])
+            if vds_path is None:
+                self._frame_layout(f[self.frames_path])
+        meta: list[tuple[Path, int, int]] = []
+        offset = 0
+        for i, path in enumerate(files):
+            n = per_file if i < len(files) - 1 else last
+            meta.append((path, n, offset))
+            offset += n
+        return meta
 
     # ---------------------------------------------------------- properties
     def files(self) -> list[Path]:
@@ -257,8 +316,10 @@ class Hdf5StackSource(BaseSource):
             ds = self._handle(path)[self.frames_path]
             for start, stop in self.contiguous_runs(local):
                 count = stop - start
-                block = ds[start:stop, y, x]
-                out[pos : pos + count] = block
+                if out.dtype == ds.dtype:  # straight into the output: no copy in between
+                    ds.read_direct(out, np.s_[start:stop, y, x], np.s_[pos : pos + count])
+                else:
+                    out[pos : pos + count] = ds[start:stop, y, x]
                 pos += count
         return out
 

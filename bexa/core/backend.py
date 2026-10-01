@@ -139,6 +139,42 @@ def to_host(obj: Any) -> Any:
     return obj
 
 
+CAST_IN_THREADS_FROM = 8 * 2**20  # smaller arrays are converted in one go
+
+
+def cast_frames(frames: np.ndarray, dtype: Any) -> np.ndarray:
+    """``frames`` as ``dtype``, the conversion of a large array split over compute threads.
+
+    Reading a stack of uint16 frames as float32 doubles the bytes to write; done
+    in the reading thread it halves the reading speed, so the streaming engine
+    reads as stored and converts here (numpy's casting releases the GIL). The
+    input is returned as it is when it already has the dtype.
+    """
+    dtype = np.dtype(dtype)
+    if frames.dtype == dtype:
+        return frames
+    out = np.empty(frames.shape, dtype)
+    if frames.ndim < 2 or frames.nbytes < CAST_IN_THREADS_FROM:
+        np.copyto(out, frames, casting="unsafe")
+        return out
+    from bexa.core.parallel import compute_pool, compute_threads
+
+    threads = min(compute_threads(), frames.shape[0])
+    if threads <= 1:
+        np.copyto(out, frames, casting="unsafe")
+        return out
+    bounds = np.linspace(0, frames.shape[0], threads + 1).astype(int)
+    pool = compute_pool()
+    futures = [
+        pool.submit(np.copyto, out[a:b], frames[a:b], casting="unsafe")
+        for a, b in itertools.pairwise(bounds)
+        if b > a
+    ]
+    for future in futures:
+        future.result()
+    return out
+
+
 def gaussian_frames(frames: Any, sigma: float) -> Any:
     """Every frame of ``(n, y, x)`` smoothed by a Gaussian of ``sigma`` pixels (numpy or cupy).
 

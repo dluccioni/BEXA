@@ -12,6 +12,9 @@ fingerprint:   # the virtual dataset in the master tells this layout from Januar
     - "{scan}.1/instrument/fscan_parameters"
     - "{scan}.1/instrument/pco_ff/image"
 
+layout:
+  master_frames: "{scan}.1/instrument/{detector}/image"   # the frames as one virtual dataset: shape and dtype
+
 detectors:
   pco_ff: {pixel_size_um: 6.5, shape: [2048, 2048], effective_pixel_nm: 235}
   pco_nf: {pixel_size_um: 6.5, shape: [2160, 2560], effective_pixel_nm: 235}
