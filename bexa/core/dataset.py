@@ -442,10 +442,14 @@ class Dataset:
         return out
 
     def varying(
-        self, scans: Any = None, axes: str | Sequence[str] | None = None, **criteria: Any
+        self,
+        scans: Any = None,
+        axes: str | Sequence[str] | None = None,
+        ignore: str | Sequence[str] | None = None,
+        **criteria: Any,
     ) -> dict[str, np.ndarray]:
         """What differs between the chosen scans, or the ``axes`` named: see :func:`varying`."""
-        return varying(self.select(scans, **criteria), axes=axes)
+        return varying(self.select(scans, **criteria), axes=axes, ignore=ignore)
 
 
 def open_dataset(path: str | Path | Sequence[str | Path] | None = None, **kwargs: Any) -> Dataset:
@@ -490,6 +494,7 @@ def varying(
     scans: Iterable[Scan],
     tolerance: float | None = None,
     axes: str | Sequence[str] | None = None,
+    ignore: str | Sequence[str] | None = None,
 ) -> dict[str, np.ndarray]:
     """The positioners, and the energy, that differ between scans: ``{dim: sorted values}``.
 
@@ -497,13 +502,15 @@ def varying(
     spec derives the energy from (``ccmth``) when the energy itself varies, so
     the same thing is not counted twice; the energy is reported as ``"energy"``
     in keV. A motor that another one drives (the spec's ``motors.coupled``:
-    ``uz`` moves ``samz`` at ID03) is not an axis of its own when its leader
-    steps, and neither is any positioner that steps in lockstep with another
-    one (the leader, then the first in the spec's ``motors.known`` order, is
-    kept). Values closer than ``tolerance`` (default 1e-3 of their spread)
-    count as one. The dims come slowest first: the one that changes least often
-    from scan to scan is the outer one, as ``uz`` is for a z-stack repeated at
-    every energy.
+    ``uz`` moves the stage readbacks ``samx``, ``samy``, ``samz`` at ID03) is
+    not an axis of its own when its leader steps, and neither is any positioner
+    that steps in lockstep with another one (the leader, then the first in the
+    spec's ``motors.known`` order, is kept). ``ignore`` names positioners that
+    are never axes, whatever they do (a readback that drifts between scans).
+    Values closer than ``tolerance`` (default 1e-3 of their spread) count as
+    one. The dims come slowest first: the one that changes least often from
+    scan to scan is the outer one, as ``uz`` is for a z-stack repeated at every
+    energy.
 
     ``axes`` overrides all of this: these names, in this order, are the dims
     (positioners, ``"energy"`` or ``"scan"``), for when other positioners drift
@@ -558,6 +565,8 @@ def varying(
         if leader in found:
             for name in followers:
                 found.pop(name, None)
+    for name in [ignore] if isinstance(ignore, str) else list(ignore or []):
+        found.pop(name, None)  # never an axis, by request
     # nor is anything stepping in lockstep with another positioner: the leader, the energy or
     # the first in the spec's known order is the axis
     known = list(spec.known_motors()) if spec is not None else []
@@ -614,6 +623,7 @@ def stack(
     tolerance: float | None = None,
     workers: int | str | None = None,
     grid: str | Mapping[str, Any] | bool | None = "auto",
+    ignore: str | Sequence[str] | None = None,
     **reduce_kwargs: Any,
 ) -> xr.Dataset:
     """Reduce every scan with the same accumulators and stack the results on a grid of scans.
@@ -670,12 +680,15 @@ def stack(
         :func:`common_grid`, the full range in the finest step; a
         ``{dim: values}`` mapping names that grid; ``False`` requires one grid
         and raises otherwise. Maps without motor dims are never touched.
+    ignore
+        Positioners ``dim="auto"`` must not take as axes however they vary
+        (see :func:`varying`).
     """
     scans = list(scans)
     if not scans:
         raise ValueError("no scans to stack")
     accumulators = list(accumulators)
-    dims, centers, positions = _grid(scans, dim, coords, tolerance)
+    dims, centers, positions = _grid(scans, dim, coords, tolerance, ignore)
     grid_coords: dict[str, np.ndarray] | None = None
     if isinstance(grid, Mapping):
         grid_coords = {str(d): np.asarray(v, dtype=float) for d, v in grid.items()}
@@ -972,10 +985,11 @@ def _grid(
     dim: str | Sequence[str],
     coords: Sequence[float] | None,
     tolerance: float | None,
+    ignore: str | Sequence[str] | None = None,
 ) -> tuple[list[str], list[np.ndarray], list[tuple[int, ...]]]:
     """The dims of the grid, their sorted centres, and the position of every scan on it."""
     if isinstance(dim, str) and dim == "auto":
-        dims = list(varying(scans, tolerance))
+        dims = list(varying(scans, tolerance, ignore=ignore))
         if not dims and len(scans) > 1:
             dims = ["scan"]
     else:
