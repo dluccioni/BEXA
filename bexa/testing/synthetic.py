@@ -147,6 +147,7 @@ def make_esrf_scan(
     curve: str = "gaussian",
     centers: Mapping[str, float | np.ndarray] | None = None,
     widths: Mapping[str, float | np.ndarray] | None = None,
+    monitors: Mapping[str, float] | None = None,
 ) -> SyntheticEsrfScan:
     """Write one ESRF BLISS scan (master file plus detector files).
 
@@ -155,6 +156,11 @@ def make_esrf_scan(
     motors
         ``(name, n_points)`` per scanned motor, slow first. One motor gives an
         fscan1d, two an fscan2d.
+    monitors
+        Slow channels sampled during the scan, ``{"nanodac1_temp": 50.0}``,
+        written to the monitoring sub-scan ``<scan>.2`` as BLISS does for a
+        furnace: a few hundred samples around the value. The autumn 2026 spec
+        reads their mean as a positioner.
     amplitude
         Peak height: one number, or an ``(H, W)`` map (a bright grain on a dim
         background).
@@ -301,6 +307,15 @@ def make_esrf_scan(
                 )
             entry.create_virtual_dataset(f"instrument/{detector}/image", virtual)
         entry.attrs["NX_class"] = "NXentry"
+        if monitors:  # the monitoring sub-scan: a value sampled over the scan's duration
+            monitor = f.require_group(f"{scan}.2")
+            monitor.create_dataset("title", data=f"fscan{len(names)}d")
+            samples = monitor.require_group("measurement")
+            samples.create_dataset("elapsed_time", data=np.linspace(0.0, 60.0, 200))
+            for name, value in monitors.items():
+                jitter = rng.normal(0.0, 0.01 * max(abs(float(value)), 1.0), 200)
+                samples.create_dataset(name, data=float(value) + jitter)
+            monitor.attrs["NX_class"] = "NXentry"
 
     return SyntheticEsrfScan(
         root=root,

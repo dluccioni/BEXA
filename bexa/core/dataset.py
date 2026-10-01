@@ -328,6 +328,11 @@ class Dataset:
             for leader, followers in _followers(spec).items():  # samz follows uz: once too
                 if leader in positioners and leader not in dropped:
                     dropped.extend(f for f in followers if f in positioners)
+            for name, step in _min_steps(spec).items():  # a drift below the motor's step
+                if name in positioners and name not in dropped:
+                    column = pd.to_numeric(table[name], errors="coerce")
+                    if column.notna().any() and float(column.max() - column.min()) < step:
+                        dropped.append(name)
             if not table["missing"].any():
                 dropped.append("missing")
             table = table.drop(columns=sorted(set(dropped)))
@@ -475,6 +480,12 @@ def _coordinate(scan: Scan, dim: str, index: int) -> float:
     raise ValueError(f"{scan.name} records no positioner {dim!r}; available: {available}")
 
 
+def _min_steps(spec: Any) -> dict[str, float]:
+    """``{motor: step}`` from the spec's ``motors.min_step``: smaller changes are drift."""
+    steps = (spec.motors.get("min_step", {}) or {}) if spec is not None else {}
+    return {str(name): float(step) for name, step in steps.items()}
+
+
 def _followers(spec: Any) -> dict[str, list[str]]:
     """``{leader: [followers]}`` from the spec's ``motors.coupled`` (``uz`` drives ``samz``)."""
     coupled = (spec.motors.get("coupled", {}) or {}) if spec is not None else {}
@@ -505,8 +516,10 @@ def varying(
     ``uz`` moves the stage readbacks ``samx``, ``samy``, ``samz`` at ID03) is
     not an axis of its own when its leader steps, and neither is any positioner
     that steps in lockstep with another one (the leader, then the first in the
-    spec's ``motors.known`` order, is kept). ``ignore`` names positioners that
-    are never axes, whatever they do (a readback that drifts between scans).
+    spec's ``motors.known`` order, is kept). A change smaller than the spec's
+    ``motors.min_step`` of a motor is drift, not a step (the stage readbacks
+    move by a tenth of a micron between the datasets of a temperature series).
+    ``ignore`` names positioners that are never axes, whatever they do.
     Values closer than ``tolerance`` (default 1e-3 of their spread) count as
     one. The dims come slowest first: the one that changes least often from
     scan to scan is the outer one, as ``uz`` is for a z-stack repeated at every
@@ -538,6 +551,10 @@ def varying(
             row[ENERGY_DIM] = float(s.energy_keV)
         rows.append(row)
     columns = [c for c in dict.fromkeys(k for r in rows for k in r) if c not in scanned]
+    spec = scans[0].spec
+    # a change smaller than the spec's min_step of a motor is drift, not a step: the stage
+    # readbacks move by a tenth of a micron between the datasets of a temperature series
+    min_step = _min_steps(spec)
     found: dict[str, tuple[np.ndarray, int, np.ndarray]] = {}
     for column in columns:
         if not all(column in r for r in rows):
@@ -545,10 +562,11 @@ def varying(
         values = np.array([r[column] for r in rows], dtype=float)
         if not np.all(np.isfinite(values)):
             continue
+        if float(np.ptp(values)) < min_step.get(column, 0.0):
+            continue
         centers, labels = _group_values(values, tolerance)
         if len(centers) > 1:
             found[column] = (centers, int(np.count_nonzero(np.diff(labels))), labels)
-    spec = scans[0].spec
     energy_from = spec.energy.get("from") if spec is not None else None
     if ENERGY_DIM in found and energy_from in found:
         del found[energy_from]

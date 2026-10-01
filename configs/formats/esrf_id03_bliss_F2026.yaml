@@ -15,6 +15,22 @@ fingerprint:   # the virtual dataset in the master tells this layout from Januar
 layout:
   master_frames: "{scan}.1/instrument/{detector}/image"   # the frames as one virtual dataset: shape and dtype
 
+motors:
+  # the furnace (a Eurotherm nanodac): BLISS samples it in the monitoring sub-scan {scan}.2 next
+  # to every fscan; the mean over the scan becomes a positioner, so a temperature series of
+  # datasets stacks on nanodac1_temp (the measured temperature; the set point and the heater
+  # power follow it and are not axes of their own)
+  scalars_from:
+    nanodac1_temp: "{scan}.2/measurement/nanodac1_temp"
+    nanodac1: "{scan}.2/measurement/nanodac1"
+    nanodac1_heater: "{scan}.2/measurement/nanodac1_heater"
+  coupled:
+    nanodac1_temp: [nanodac1, nanodac1_heater]
+  units:
+    nanodac1_temp: C
+    nanodac1: C
+    nanodac1_heater: percent
+
 detectors:
   pco_ff: {pixel_size_um: 6.5, shape: [2048, 2048], effective_pixel_nm: 235}
   pco_nf: {pixel_size_um: 6.5, shape: [2160, 2560], effective_pixel_nm: 235}

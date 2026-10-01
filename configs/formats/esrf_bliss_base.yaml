@@ -33,6 +33,19 @@ motors:
     ux: [samx, samy, samz, shexatx, shexaty, shexatz]
     uy: [samx, samy, samz, shexatx, shexaty, shexatz]
     uz: [samx, samy, samz, shexatx, shexaty, shexatz]
+    # the objective lens: obx and obz each drive a pair of motors
+    obx: [obx1, obx2]
+    obz: [obz1, obz2]
+  min_step:   # a change smaller than this between scans is the stage's drift, not a step (mm)
+    ux: 0.0005
+    uy: 0.0005
+    uz: 0.0005
+    samx: 0.0005
+    samy: 0.0005
+    samz: 0.0005
+    shexatx: 0.0005
+    shexaty: 0.0005
+    shexatz: 0.0005
   units:
     mu: deg
     chi: deg

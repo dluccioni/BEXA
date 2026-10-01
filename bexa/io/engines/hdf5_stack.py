@@ -22,7 +22,7 @@ from bexa.core.registry import register_engine
 from bexa.core.structure import ENERGY_DIM, Structure
 from bexa.core.units import mono_angle_to_energy
 from bexa.io.base import BaseSource
-from bexa.io.formats import FormatSpec
+from bexa.io.formats import FormatSpec, safe_format
 
 log = get_logger(__name__)
 
@@ -359,6 +359,14 @@ class Hdf5StackSource(BaseSource):
             for key, node in f[pos_path].items():
                 if isinstance(node, h5py.Dataset) and node.ndim == 0 and node.dtype.kind in "fiu":
                     scalars[key] = float(node[()])
+        # values recorded elsewhere in the master, as positioners of the scan: the temperature
+        # of a furnace sampled in the monitoring sub-scan BLISS writes next to an fscan, say
+        for name, template in (self.spec.motors.get("scalars_from") or {}).items():
+            path = safe_format(str(template), scan=self.scan, detector=self.detector)
+            if path in f and isinstance(f[path], h5py.Dataset):
+                values = np.asarray(f[path][()], dtype=float).ravel()
+                if values.size and np.isfinite(values).any():
+                    scalars[str(name)] = float(np.nanmean(values))
         return per_frame, scalars
 
     def _declared_motors(self, f: h5py.File) -> tuple[str, list[str], list[int]] | None:
