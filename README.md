@@ -980,8 +980,9 @@ st["frame_sum"].sel(chi=0, method="nearest").plot()
 
 The whole scan as a block-averaged volume `(motors..., y, x)` in memory, cached on disk in
 `scan.cache` so that the next call returns at once. `downsample` is an int for both pixel axes,
-`(ds_y, ds_x)`, or one factor per dim such as `(1, 1, 4, 4)` (a motor factor keeps every n-th
-grid point); `method` combines the pixel blocks (`"mean"`, `"sum"` or `"max"`); `apply_log`
+`(ds_y, ds_x)`, one factor per dim such as `(1, 1, 4, 4)`, or a mapping by name such as
+`{"mu": 2, "y": 4, "x": 4}` (a motor factor keeps every n-th grid point; names the scan lacks
+are ignored); `method` combines the pixel blocks (`"mean"`, `"sum"` or `"max"`); `apply_log`
 stores `log10(1 + I)`. Returns a `DataArray` named `preview` whose `y`, `x` coordinates are
 full-resolution pixel indices. The volume is checked against the memory budget before it is
 allocated (`MemoryError` with the size, the budget and the way out: a larger downsample, an
@@ -993,6 +994,7 @@ bexa takes block means).
 prev = scan.preview(downsample=(1, 1, 4, 4))     # (6, 16, 16, 20)
 prev.bexa.browse()                               # one slider per motor
 fresh = scan.preview(downsample=(1, 1, 4, 4), cache=False)   # computed again, the cache untouched
+scan.preview(downsample={"mu": 2, "y": 4, "x": 4}, cache=False).shape   # (6, 8, 16, 20): every second mu point
 ```
 
 #### `Scan.read`
@@ -1917,7 +1919,7 @@ res = scan.reduce([bexa.acc.Sum(), SquaredSum()])            # sum, squared_sum
 
 Resolve an ROI and a downsample request against a `Structure`: which frames to read, the pixel
 window, and the downsampled grid. Returns a `Plan`. Motor downsampling keeps every n-th grid
-point.
+point; the request takes every form `parse_downsample` does, a mapping by name included.
 
 ```python
 from bexa.core.reductions import make_plan
@@ -1962,14 +1964,20 @@ plan.window.full_shape, plan.window.shape, plan.window.coords()["x"][:3]   # (32
 `bexa.core.reductions.parse_downsample(downsample, structure)`
 
 Split a downsample request into motor factors and `(ds_y, ds_x)`: an int or a 2-tuple applies
-to the pixel axes only, and one factor per dim `(motor0, ..., ds_y, ds_x)` sets everything
-(the forms the v9 module accepted). Anything else raises with the expected forms.
+to the pixel axes only, one factor per dim `(motor0, ..., ds_y, ds_x)` sets everything (the
+forms the v9 module accepted), and a mapping by name, `{"mu": 2, "y": 4, "x": 4}`, sets what it
+names (motors of the structure, `y`, `x`; names the structure lacks are ignored, so one setting
+serves scans of different motors; a factor below 1 raises). A motor factor keeps every k-th grid
+point, so k times fewer frames are read; a pixel factor bins blocks of pixels. Anything else
+raises with the expected forms.
 
 ```python
 from bexa.core.reductions import parse_downsample
 
 parse_downsample(4, scan.structure)             # ((1, 1), (4, 4))
 parse_downsample((1, 2, 4, 4), scan.structure)  # ((1, 2), (4, 4))
+parse_downsample({"mu": 2, "y": 4, "x": 4}, scan.structure)   # ((1, 2), (4, 4)): by name
+parse_downsample({"phi": 2}, scan.structure)    # ((1, 1), (1, 1)): phi is not scanned here
 ```
 
 #### `block_reduce`
@@ -9372,7 +9380,8 @@ from disk. Optionally saves it and shows `bexa.viz.volume.projections_panel`.
 
 - `PATH`, `-p` / `--profile`, `-s` / `--sample`, `--scan`, `--detector`: the scan.
 - `--downsample TEXT` (default `8`): one integer for both pixel axes (8 x 8 blocks), two factors
-  `y,x`, or one factor per dim, motors first (`1,1,4,4`; a motor factor keeps every n-th point).
+  `y,x`, one factor per dim, motors first (`1,1,4,4`; a motor factor keeps every n-th point), or
+  factors by name (`mu=2,y=4,x=4`).
 - `--roi TEXT`: ROI text.
 - `--apply-log` / `--no-apply-log` (default `--no-apply-log`): store log10(1 + I).
 - `-o` / `--out PATH`: also save the volume, as zarr for a `.zarr` name, else HDF5 (`bexa.save`).
@@ -9881,12 +9890,13 @@ roi.get("chi"), parse_roi("")                          # (-0.2, 0.2), None
 `bexa.cli.scan_cmd.parse_downsample(text)`
 
 `--downsample` text to what `Scan.preview` and `Scan.reduce` take: one number gives an int, a
-comma list a tuple (`y,x`, or one factor per dim, motors first); empty text or `None` gives
-`None` (full resolution).
+comma list a tuple (`y,x`, or one factor per dim, motors first), `name=factor` pairs a dict by
+name; empty text or `None` gives `None` (full resolution).
 
 ```python
 from bexa.cli.scan_cmd import parse_downsample
 parse_downsample("4"), parse_downsample("4,4"), parse_downsample("1,1,4,4")   # 4, (4, 4), (1, 1, 4, 4)
+parse_downsample("mu=2,y=4,x=4")                 # {'mu': 2, 'y': 4, 'x': 4}
 ```
 
 #### `parse_scan`
