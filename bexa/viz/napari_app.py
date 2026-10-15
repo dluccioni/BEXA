@@ -16,7 +16,8 @@ import xarray as xr
 
 from bexa.analysis.rocking import motor_com
 from bexa.core.roi import ROI
-from bexa.viz.style import as_array, resolve_clim
+from bexa.viz import style
+from bexa.viz.style import as_array
 
 __all__ = [
     "LayerSpec",
@@ -59,7 +60,7 @@ def volume_layer(
         data = np.log10(1.0 + np.clip(data, 0, None))
     kwargs: dict[str, Any] = {
         "colormap": colormap,
-        "contrast_limits": [float(v) for v in resolve_clim(data, ("p", 1, 99))],
+        "contrast_limits": [float(v) for v in style.limits(data)],
         "rendering": rendering,
         "blending": "additive",
     }
@@ -83,7 +84,7 @@ def projection_layers(volume: Any, log: bool = True) -> dict[str, LayerSpec]:
             f"proj_{key}",
             {
                 "colormap": "magma",
-                "contrast_limits": [float(v) for v in resolve_clim(image, ("p", 1, 99))],
+                "contrast_limits": [float(v) for v in style.limits(image)],
             },
         )
     return out

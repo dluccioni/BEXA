@@ -20,8 +20,8 @@ from bexa.analysis.peaks import frame_moments
 from bexa.analysis.preprocess import box_mean
 from bexa.analysis.pump_probe import scan_axis_of
 from bexa.core.roi import ROI
+from bexa.viz import style
 from bexa.viz.animation import animate, save_gif
-from bexa.viz.style import resolve_clim
 
 log = get_logger(__name__)
 
@@ -133,7 +133,7 @@ def figure_set(
     if "image" in kinds:
         fig, ax = plt.subplots()
         total = c["roi_on"].sum(axis=0)
-        vmin, vmax = resolve_clim(total, ("p", 1, 99))
+        vmin, vmax = style.limits(total)
         ax.imshow(total, vmin=vmin, vmax=vmax)
         ax.set_title(f"{label} ROI sum (laser on)")
         save(fig, "image")

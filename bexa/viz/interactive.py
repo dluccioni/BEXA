@@ -11,7 +11,6 @@ Updates redraw only what changed, so stepping through a preview stays fast.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -19,7 +18,9 @@ import xarray as xr
 
 from bexa.core.roi import ROI
 from bexa.core.stacks import brightest, shared_limits, total_volume
-from bexa.viz.style import as_array, resolve_clim
+from bexa.viz import style
+from bexa.viz.sliders import SliderPanel, format_value, in_notebook, log_block, static_backend
+from bexa.viz.style import DEFAULT, as_array
 
 __all__ = [
     "Browser",
@@ -37,179 +38,12 @@ __all__ = [
 ]
 
 
-def _log_block(block: np.ndarray) -> np.ndarray:
-    return np.log10(1.0 + np.clip(block, 0, None))
-
-
-def _in_notebook() -> bool:
-    try:
-        from IPython import get_ipython
-
-        ip = get_ipython()
-        return ip is not None and "IPKernelApp" in ip.config
-    except ImportError:
-        return False
-
-
-def _static_backend() -> bool:
-    """True when figures are pictures (the inline backend): they cannot change once shown."""
-    import matplotlib
-
-    backend = matplotlib.get_backend().lower()
-    return "inline" in backend or backend in ("agg", "pdf", "svg", "ps", "cairo")
-
-
-def _format(value: Any) -> str:
-    """``0.1234`` for numbers, the plain text otherwise (a quantity name, for example)."""
-    if isinstance(value, (int, float, np.integer, np.floating)):
-        return f"{value:.4g}"
-    return str(value)
-
-
-class _SliderPanel:
-    """What the browsers share: one index per slider dim and the two slider back ends.
-
-    A subclass sets ``volume``, ``motor_dims``, ``index``, ``fig`` and ``title``
-    before calling :meth:`_init_sliders`, and implements :meth:`redraw`. The
-    data is read block by block through :meth:`_block`, so a volume opened
-    with :func:`bexa.io.cube.open_lazy` is never loaded whole.
-    """
-
-    volume: xr.DataArray
-    motor_dims: list[str]
-    index: dict[str, int]
-    fig: Any
-    title: Any
-    log: bool = False
-    _current_key: tuple[int, ...] | None = None
-    _current_block: np.ndarray | None = None
-
-    def _block(self) -> np.ndarray:
-        """The numpy block at the current slider positions (after ``log``), read once per move."""
-        key = tuple(self.index[d] for d in self.motor_dims)
-        if key != self._current_key or self._current_block is None:
-            block = as_array(self.volume.isel(dict(zip(self.motor_dims, key, strict=True))))
-            self._current_block = _log_block(block) if self.log else block
-            self._current_key = key
-        return self._current_block
-
-    def _limits(self, clim: Any, low: float = 1.0, high: float = 99.0) -> Any:
-        """``None`` for per-frame limits, else ``(vmin, vmax)``; shared limits need no full pass."""
-        if clim == "each":
-            return None
-        if clim == "shared":
-            return shared_limits(self.volume, low, high, log=self.log)
-        return clim
-
-    def _init_sliders(self, widgets: bool | None) -> None:
-        self._sliders: list[Any] = []
-        self._output: Any = None  # the output area that holds the figure with a static backend
-        use_widgets = _in_notebook() if widgets is None else widgets
-        if use_widgets:
-            self._ipywidgets()
-        else:
-            self._mpl_sliders()
-
-    def _title(self) -> str:
-        parts = []
-        for d in self.motor_dims:
-            value = (
-                self.volume.coords[d].values[self.index[d]]
-                if d in self.volume.coords
-                else self.index[d]
-            )
-            parts.append(f"{d} = {_format(value)}")
-        return ", ".join(parts)
-
-    def redraw(self) -> None:
-        """Redraw the artists for the current indices (implemented by the subclasses)."""
-        raise NotImplementedError
-
-    _syncing = False  # True while the code moves the knobs, so they do not call back
-
-    def update(self, **index: int) -> None:
-        """Move to new indices (``update(mu=12)``), put the knobs there and redraw."""
-        self.index.update({k: int(v) for k, v in index.items()})
-        self._sync_sliders()
-        self.redraw()
-        self.title.set_text(self._title())
-        if self._output is not None:
-            self._show()
-        else:
-            self.fig.canvas.draw_idle()
-
-    def _sync_sliders(self) -> None:
-        """Move the knobs to the current indices, so dragging one away and back returns here."""
-        sliders = getattr(self, "_sliders", None)
-        if not sliders:
-            return
-        self._syncing = True
-        try:
-            for dim, slider in zip(self.motor_dims, sliders, strict=True):
-                value = self.index[dim]
-                if hasattr(slider, "set_val"):  # matplotlib
-                    if int(slider.val) != value:
-                        slider.set_val(value)
-                elif slider.value != value:  # ipywidgets
-                    slider.value = value
-        finally:
-            self._syncing = False
-
-    def _moved(self, dim: str, value: float) -> None:
-        """A knob moved: follow it, unless the code is moving the knobs."""
-        if not self._syncing:
-            self.update(**{dim: int(value)})
-
-    def _show(self) -> None:
-        """Draw the figure again into its output area (static backends)."""
-        from IPython.display import display
-
-        with self._output:
-            self._output.clear_output(wait=True)
-            display(self.fig)
-
-    def _ipywidgets(self) -> None:
-        try:
-            import ipywidgets as widgets
-            from IPython.display import display
-        except ImportError:
-            self._mpl_sliders()
-            return
-        static = _static_backend()  # a picture per move is slow: redraw on release there
-        sliders = {
-            d: widgets.IntSlider(
-                min=0, max=self.volume.sizes[d] - 1, description=d, continuous_update=not static
-            )
-            for d in self.motor_dims
-        }
-        for name, slider in sliders.items():
-            slider.observe(lambda change, n=name: self._moved(n, change["new"]), names="value")
-        self._sliders = list(sliders.values())
-        if static:  # inline figures are pictures: show them in an output area and redraw there
-            import matplotlib.pyplot as plt
-
-            self._output = widgets.Output()
-            plt.close(self.fig)  # no second copy when the cell ends
-            display(widgets.VBox([*self._sliders, self._output]))
-            self._show()
-        else:
-            display(widgets.VBox(self._sliders))
-
-    def _mpl_sliders(self) -> None:
-        from matplotlib.widgets import Slider
-
-        self.fig.subplots_adjust(bottom=0.12 + 0.05 * len(self.motor_dims))
-        for i, d in enumerate(self.motor_dims):
-            rect = self.fig.add_axes([0.2, 0.04 + 0.05 * i, 0.6, 0.03])
-            slider = Slider(rect, d, 0, max(self.volume.sizes[d] - 1, 0), valinit=0, valstep=1)
-            slider.on_changed(self._slider_callback(d))
-            self._sliders.append(slider)
-
-    def _slider_callback(self, dim: str) -> Callable[[float], None]:
-        def moved(value: float) -> None:
-            self._moved(dim, value)
-
-        return moved
+# the shared machinery lives in bexa.viz.sliders; these names stay for the callers that use them
+_log_block = log_block
+_in_notebook = in_notebook
+_static_backend = static_backend
+_format = format_value
+_SliderPanel = SliderPanel
 
 
 class Browser(_SliderPanel):
@@ -221,18 +55,23 @@ class Browser(_SliderPanel):
         DataArray ``(motors..., y, x)``. A leading dim may also index different
         quantities (``xr.concat`` of maps with a ``quantity`` coordinate).
     clim
-        ``"each"`` rescales every frame; ``"shared"`` (default) uses global
-        percentiles; or an explicit ``(vmin, vmax)``.
+        ``"shared"`` (one scale for every frame, from the stack's statistics or
+        a sample of frames), ``("shared", lo, hi)``, ``"each"`` (every frame on
+        its own percentiles), ``("each", lo, hi)``, ``(vmin, vmax)`` or ``None``
+        (each); left at ``DEFAULT`` the style defaults decide, as for ``cmap``,
+        ``figsize`` and ``colorbar`` (:func:`bexa.viz.style.stack_mode`).
+        :meth:`set_clim` changes it on show.
     """
 
     def __init__(
         self,
         volume: xr.DataArray,
-        cmap: str | None = None,
-        clim: Any = "shared",
+        cmap: Any = DEFAULT,
+        clim: Any = DEFAULT,
         log: bool = False,
-        figsize: tuple[float, float] = (6, 5),
+        figsize: tuple[float, float] | None = None,
         widgets: bool | None = None,
+        colorbar: Any = DEFAULT,
     ) -> None:
         import matplotlib.pyplot as plt
 
@@ -242,13 +81,15 @@ class Browser(_SliderPanel):
         self.motor_dims = [str(d) for d in volume.dims[:-2]]
         self.index = {d: 0 for d in self.motor_dims}
         self.log = log
-        self.limits = self._limits(clim)
+        self.kind = "browse"
+        self._set_limits(clim)
         # No automatic layout: the slider axes are placed by hand below the image.
+        figsize = style.figure_size("browse", figsize) or (6, 5)
         self.fig, self.ax = plt.subplots(figsize=figsize, layout="none")
         frame = self._frame()
-        vmin, vmax = self.limits or resolve_clim(frame, ("p", 1, 99))
-        self.im = self.ax.imshow(frame, cmap=cmap, vmin=vmin, vmax=vmax)
-        self.fig.colorbar(self.im, ax=self.ax, fraction=0.046, pad=0.04)
+        vmin, vmax = self._frame_limits(frame)
+        self.im = self.ax.imshow(frame, cmap=style.colormap("browse", cmap), vmin=vmin, vmax=vmax)
+        style.colorbar(self.fig, self.im, self.ax, "browse", colorbar)
         self.title = self.ax.set_title(self._title())
         self._init_sliders(widgets)
 
@@ -264,7 +105,10 @@ class Browser(_SliderPanel):
         frame = self._frame()
         self.im.set_data(frame)
         if self.limits is None:
-            self.im.set_clim(*resolve_clim(frame, ("p", 1, 99)))
+            self.im.set_clim(*self._frame_limits(frame))
+
+    def _apply_limits(self) -> None:
+        self.im.set_clim(*self._frame_limits(self._frame()))
 
 
 def browse(volume: xr.DataArray, **kwargs: Any) -> Browser:
@@ -304,8 +148,14 @@ class VolumeBrowser(_SliderPanel):
         Isosurface level; by default the 90th percentile of the first volume,
         kept fixed so the surfaces of different conditions can be compared.
     clim
-        ``"shared"`` (percentiles of everything), ``"each"`` (per projection
-        and condition) or an explicit ``(vmin, vmax)``.
+        ``"shared"`` (one scale for everything), ``("shared", lo, hi)``,
+        ``"each"`` (per projection and condition), ``("each", lo, hi)``,
+        ``(vmin, vmax)`` or ``None``; left at ``DEFAULT`` the style defaults
+        decide (:func:`bexa.viz.style.stack_mode`). :meth:`set_clim` changes it
+        on show.
+    colorbar
+        One per projection when ``True``; off unless asked (the sliders sit
+        under the panels).
     """
 
     def __init__(
@@ -314,11 +164,12 @@ class VolumeBrowser(_SliderPanel):
         view: str = "projections",
         method: str = "max",
         log: bool = False,
-        clim: Any = "shared",
-        cmap: str | None = None,
+        clim: Any = DEFAULT,
+        cmap: Any = DEFAULT,
         threshold: float | None = None,
         figsize: tuple[float, float] | None = None,
         widgets: bool | None = None,
+        colorbar: Any = DEFAULT,
     ) -> None:
         import matplotlib.pyplot as plt
 
@@ -333,24 +184,31 @@ class VolumeBrowser(_SliderPanel):
         self.volume_dims = [str(d) for d in volume.dims[-3:]]
         self.motor_dims = [str(d) for d in volume.dims[:-3]]
         self.index = {d: 0 for d in self.motor_dims}
-        self.limits = self._limits(clim)
+        self.kind = "volume"
+        self._set_limits(clim)
         self.threshold = threshold
         self.images: list[Any] = []
+        cmap = style.colormap("volume", cmap)
+        with_bar = style.local_option("volume", "colorbar", colorbar, fallback=False)
         if view == "projections":
-            self.fig, self.axes = plt.subplots(1, 3, figsize=figsize or (12, 4), layout="none")
+            figsize = style.figure_size("volume", figsize, 1, 3, panel=(4, 4))
+            self.fig, self.axes = plt.subplots(1, 3, figsize=figsize, layout="none")
             z, y, x = self.volume_dims
             panels = [(y, x, z), (z, x, y), (z, y, x)]  # (rows, columns, reduced dim)
             for ax, image, (rows, cols, reduced) in zip(
                 self.axes, self._projections(), panels, strict=True
             ):
-                vmin, vmax = self.limits or resolve_clim(image, ("p", 1, 99))
+                vmin, vmax = self._frame_limits(image)
                 self.images.append(ax.imshow(image, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto"))
-                ax.set_title(f"{method} over {reduced}", fontsize=10)
+                ax.set_title(f"{method} over {reduced}", **style.title_font("volume"))
                 ax.set_xlabel(cols)
                 ax.set_ylabel(rows)
+                if with_bar:
+                    style.colorbar(self.fig, self.images[-1], ax, "volume", True)
             self.fig.subplots_adjust(wspace=0.35)
         else:
-            self.fig = plt.figure(figsize=figsize or (7, 7), layout="none")
+            figsize = style.figure_size("volume", figsize) or (7, 7)
+            self.fig = plt.figure(figsize=figsize, layout="none")
             self.ax = self.fig.add_subplot(1, 1, 1, projection="3d")
             self._draw_isosurface()
         self.title = self.fig.suptitle(self._title())
@@ -394,9 +252,14 @@ class VolumeBrowser(_SliderPanel):
             for im, image in zip(self.images, self._projections(), strict=True):
                 im.set_data(image)
                 if self.limits is None:
-                    im.set_clim(*resolve_clim(image, ("p", 1, 99)))
+                    im.set_clim(*self._frame_limits(image))
         else:
             self._draw_isosurface()
+
+    def _apply_limits(self) -> None:
+        if self.view == "projections":
+            for im, image in zip(self.images, self._projections(), strict=True):
+                im.set_clim(*self._frame_limits(image))
 
 
 def browse_volume(volume: xr.DataArray, **kwargs: Any) -> VolumeBrowser:
@@ -412,7 +275,7 @@ class RoiPicker:
     """
 
     def __init__(
-        self, image: Any, ax: Any = None, cmap: str | None = None, clim: Any = ("p", 1, 99)
+        self, image: Any, ax: Any = None, cmap: Any = DEFAULT, clim: Any = DEFAULT
     ) -> None:
         import matplotlib.pyplot as plt
         from matplotlib.widgets import RectangleSelector
@@ -420,11 +283,11 @@ class RoiPicker:
         self.image = image
         data = as_array(image)
         if ax is None:
-            self.fig, self.ax = plt.subplots()
+            self.fig, self.ax = plt.subplots(figsize=style.figure_size("roi_picker"))
         else:
             self.fig, self.ax = ax.figure, ax
-        vmin, vmax = resolve_clim(data, clim)
-        self.ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax)
+        vmin, vmax = style.limits(data, clim, "roi_picker")
+        self.ax.imshow(data, cmap=style.colormap("roi_picker", cmap), vmin=vmin, vmax=vmax)
         self.ax.set_title("drag a rectangle to select the ROI")
         self.roi: ROI | None = None
         buttons: Any = [1]  # the left button; the stub wants MouseButton, the code accepts ints
@@ -486,11 +349,24 @@ class RenderBrowser(_SliderPanel):
         DataArray ``(conditions..., z, y, x)``, for example previews stacked on ``samz``.
     height
         Height of the rendering in pixels.
+    title
+        A prefix of the title (the slider positions follow it).
     **render_kwargs
-        Passed to :func:`bexa.viz.volume.render` (``mode``, ``log``, ``scale``, ...).
+        Passed to :func:`bexa.viz.volume.render` (``mode``, ``log``, ``scale``, ``cmap``,
+        ...). ``clim`` takes the stack grammar of :func:`bexa.viz.style.stack_mode`:
+        ``"shared"`` (one scale for every condition: ``shared_limits`` at the style's
+        ``render_clim`` percentiles, the default), ``("shared", lo, hi)``, ``"each"``,
+        ``("each", lo, hi)``, ``(vmin, vmax)``; :meth:`restyle` and :meth:`set_clim`
+        change them on show.
     """
 
-    def __init__(self, volume: xr.DataArray, height: int = 600, **render_kwargs: Any) -> None:
+    def __init__(
+        self,
+        volume: xr.DataArray,
+        height: int = 600,
+        title: str | None = None,
+        **render_kwargs: Any,
+    ) -> None:
         try:
             import ipywidgets as widgets
             from IPython.display import display
@@ -505,12 +381,9 @@ class RenderBrowser(_SliderPanel):
         self.motor_dims = [str(d) for d in volume.dims[:-3]]
         self.index = {d: 0 for d in self.motor_dims}
         self.height = height
+        self.title_prefix = title
         self.render_kwargs = dict(render_kwargs)
-        if "clim" not in self.render_kwargs and volume.attrs.get("block_stats_dims") is not None:
-            # the stack knows its per-frame percentiles: one colour scale for every condition
-            self.render_kwargs["clim"] = shared_limits(
-                volume, 5, 99.5, log=bool(self.render_kwargs.get("log", False))
-            )
+        self._set_limits(self.render_kwargs.pop("clim", DEFAULT))
         self.figure: Any = None
         self._syncing = False
         self.output = widgets.Output()
@@ -525,9 +398,36 @@ class RenderBrowser(_SliderPanel):
         display(widgets.VBox([*self.sliders.values(), self.output]))
         self.update()
 
+    def _set_limits(self, clim: Any = DEFAULT) -> None:
+        """One colour scale for every condition, or each block on its own (see ``stack_mode``)."""
+        mode, values = style.stack_mode(clim, "render")
+        if mode == "shared":
+            log = bool(self.render_kwargs.get("log", False))
+            self.render_kwargs["clim"] = shared_limits(self.volume, values[0], values[1], log=log)
+        elif mode == "fixed":
+            self.render_kwargs["clim"] = values
+        else:
+            self.render_kwargs["clim"] = ("p", *values)  # render scales each block by itself
+
     def _moved(self, name: str, value: float) -> None:
         if not self._syncing:
             self.update(**{name: int(value)})
+
+    def _title(self) -> str:
+        text = super()._title()
+        return f"{self.title_prefix}: {text}" if self.title_prefix else text
+
+    def restyle(self, **render_kwargs: Any) -> None:
+        """Render with other settings (``mode``, ``cmap``, ``clim``, ``log``...) and show again."""
+        clim = render_kwargs.pop("clim", None)
+        self.render_kwargs.update(render_kwargs)
+        if clim is not None or "log" in render_kwargs:  # new units or a new spec: new limits
+            self._set_limits(DEFAULT if clim is None else clim)
+        self.update()
+
+    def set_clim(self, clim: Any) -> None:
+        """Change the colour scale (any ``stack_mode`` spec) and show the block again."""
+        self.restyle(clim=clim)
 
     def current(self) -> xr.DataArray:
         """The ``(z, y, x)`` block at the current slider positions."""

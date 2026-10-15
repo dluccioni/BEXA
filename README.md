@@ -36,7 +36,7 @@ lists the everyday jobs with the function that does each.
   - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.status](#bexacorestatus-the-state-of-a-scan) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.scan_table](#bexacorescan_table-the-rows-of-a-datasets-table) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
   - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
   - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis)
-  - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers)
+  - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.sliders](#bexavizsliders-what-the-slider-browsers-share) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers)
   - Pipelines: [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set) · [bexa.pipelines.xfel_cube](#bexapipelinesxfel_cube-pal-xfel-point-files-to-a-laser-onoff-cube) · [bexa.pipelines.cube_report](#bexapipelinescube_report-figures-and-gifs-of-one-cube) · [bexa.pipelines.auto_process](#bexapipelinesauto_process-the-beamtime-watcher) · [bexa.pipelines.benchmark](#bexapipelinesbenchmark-timings-and-baselines)
   - Synthetic data: [bexa.testing.demo](#bexatestingdemo-bexademo-synthetic-data-in-one-call) · [bexa.testing.synthetic](#bexatestingsynthetic-small-valid-files-for-every-layout-with-the-planted-truth)
   - Geometry and crystallography: [bexa.geometry.conventions](#bexageometryconventions-named-lab-frames-and-motor-stacks) · [bexa.geometry.detector](#bexageometrydetector-detector-and-beam-geometry) · [bexa.geometry.transforms](#bexageometrytransforms-pixels-to-angles-to-q-to-hkl) · [bexa.crystal.lattice](#bexacrystallattice-cells-d-spacings-and-reflections) · [bexa.crystal.cif](#bexacrystalcif-cell-and-space-group-from-cif-files) · [bexa.crystal.diffractometer](#bexacrystaldiffractometer-four-circle-motor-solutions) · [bexa.crystal.zone_axis](#bexacrystalzone_axis-the-zone-axis-from-one-reflection) · [bexa.crystal.omega_search](#bexacrystalomega_search-omega-where-two-peaks-share-a-mu-window) · [bexa.crystal.sample_frame](#bexacrystalsample_frame-sample-to-grain-matrix)
@@ -634,6 +634,8 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | a GIF or MP4 | `bexa.viz.animation.animate`, `bexa.viz.animation.save_gif`, `bexa.viz.animation.save_mp4` |
 | pump-probe figures | `bexa.viz.curves.on_off_diff`, `bexa.viz.curves.moments_vs_axis` |
 | figures for a paper | `bexa.viz.style.use("paper")` |
+| the colour limits, colormap, colourbar or size of one plot | the `clim`, `cmap`, `colorbar`, `figsize` keywords of every plot function (`bexa.viz.images.show`) |
+| the same for every plot of a notebook, or a figure already drawn | `bexa.viz.style.set`, `bexa.viz.style.context`, `bexa.viz.style.apply` |
 
 **Pipelines and the beamtime**
 
@@ -1731,10 +1733,11 @@ stacks.brightest(stacked)                               # the Dataset: its first
 #### `shared_limits`
 `bexa.core.stacks.shared_limits(volume, low=1.0, high=99.0, log=False)`
 
-Colour limits `(vmin, vmax)` shared by every frame of a volume, without loading all of it: the
-minimum of the per-frame `low`-th percentiles and the maximum of the `high`-th from the stack's
-statistics; an in-memory array under 256 MiB gets the exact percentiles, a larger or lazy one
-without statistics the same from a sample of 64 frames. `log=True` returns the limits of
+Colour limits `(vmin, vmax)` shared by every frame of a volume, without loading all of it: for
+the default `low=1, high=99` the minimum of the per-frame 1st percentiles and the maximum of
+the 99th from the stack's statistics; for other percentiles, or a volume without statistics,
+the pooled percentiles of the array itself when it is in memory under 256 MiB, else of a
+sample of 64 frames spread evenly over the leading dims. `log=True` returns the limits of
 `log10(1 + I)`, as the browsers show the data. `(0, 1)` when nothing is finite.
 
 ```python
@@ -4882,8 +4885,12 @@ browsers and `animate` their own figure. Each returns its figure and the artists
 on every entry) and never calls `plt.show()`: a notebook shows the figure by itself, a script
 calls `plt.show()` or `fig.savefig(...)`. Images get percentile colour limits by default,
 `clim=("p", 1, 99)`: the 1st and 99th percentiles of the finite values set the ends of the colour
-scale, so a few hot or dead pixels do not flatten the image. `bexa.viz.style` holds the two
-themes and the helpers the plotting modules share.
+scale, so a few hot or dead pixels do not flatten the image. Every plot function takes the same
+keywords for its looks (`clim`, `cmap`, `colorbar`, `scalebar`, `figsize`) and leaves them at
+`style.DEFAULT`, which means "take it from the style defaults": `style.set(...)` changes those
+once for a whole notebook, `style.context(...)` for a few cells, and `style.apply(fig, ...)`
+restyles a figure already drawn. `bexa.viz.style` holds those defaults, the colour-limit
+grammar, the two themes and the helpers the plotting modules share.
 
 ```python
 import bexa
@@ -4892,6 +4899,35 @@ from bexa.viz import style
 scan = bexa.demo("mosa")                         # synthetic chi x mu scan, 6 x 16 frames of 64 x 80 pixels
 res = scan.com(axes=("chi", "mu"), sigma=1.0)    # xarray.Dataset: com_chi, width_chi, com_mu, width_mu, total
 prev = scan.preview(downsample=(1, 1, 4, 4))     # DataArray (chi, mu, y, x) = (6, 16, 16, 20)
+```
+
+#### Customising plots
+
+What to change, and the three places to change it: the keyword of one call, `style.set` for
+every figure from then on (`style.context` for a `with` block), or `style.apply` on a figure
+already drawn. `bexa.plot`, the `.bexa` accessors, the panels of a reduce result
+(`res.bexa.plot()`), `tiles`, the browsers, `render` and the DFXM report all read the same
+defaults, so one settings cell at the top of a notebook sets every figure.
+
+| what | one call | every figure | afterwards |
+|---|---|---|---|
+| colour limits of an image | `clim=("p", 2, 98)`, `"p2-98"`, `(vmin, vmax)`, `None` | `style.set(clim="p2-98")` | `style.apply(fig, clim=(0, 500))` |
+| a stack (tiles, browsers, `animate`) | `clim="shared"`, `("shared", 2, 98)`, `"each"`, `(vmin, vmax)` | the same `clim` | `browser.set_clim("each")` |
+| colormap | `cmap="magma"` | `style.set(cmap="magma")` (COM maps: `diverging_cmap`) | `style.apply(fig, cmap="gray")` |
+| colourbars | `colorbar=False` | `style.set(colorbar=False)` | `style.apply(fig, colorbar_label="counts")` |
+| scalebar | `scalebar=235` (nm per pixel), `False` | `style.set(scalebar=False)` | |
+| figure size | `figsize=(5, 4)` | `style.set(figsize=(5, 4))` (single panels), `panel_size=(3, 3)` (each pane of a grid) | `style.apply(fig, figsize=(8, 8))` |
+| the span of a COM map | `span=0.1`, `span_fraction=0.5` | `style.set(com={"span": 0.1})` | |
+| one plot kind only | | `style.set(tiles={"per_row": 4, "title_size": 7})` | |
+| fonts, dpi, ticks | | `style.use("paper")`, `plt.rcParams` | |
+
+```python
+style.set(cmap="magma", clim="p2-98", colorbar=False)   # every image from here on
+fig, ax, im = bexa.plot(res["total"])            # magma, 2nd to 98th percentile, no colourbar
+with style.context(com={"span": 0.1}):           # a few cells with other defaults
+    fig, ax, im = bexa.plot(res["com_mu"])       # +/- 0.05 deg around the mean
+style.apply(fig, clim=(-0.2, 0.2), cmap="RdBu")  # change a figure already drawn
+style.reset()                                    # the shipped defaults again
 ```
 
 #### `use`
@@ -4908,13 +4944,184 @@ keeps the paper tick settings (`matplotlib.rcdefaults()` resets all); an unknown
 style.use("paper")                               # the figures from here on
 ```
 
+#### `set`
+`bexa.viz.style.set(**options)`
+
+Change the style defaults for every figure from here on. A global option (`clim`, `render_clim`,
+`cmap`, `diverging_cmap`, `span_fraction`, `figsize`, `panel_size`, `colorbar`,
+`colorbar_fraction`, `colorbar_pad`, `scalebar`, `title_size`: the fields of `PlotDefaults`)
+applies to every plot kind; a plot kind (the keys of `KINDS`: `image`, `tiles`, `com`, `width`,
+`projections`, `browse`, `volume`, `render`, `grid`, ...) takes a dict of keywords of its
+function, or of global options for that kind only, which win over the global values. An unknown
+option, kind or keyword raises `ValueError`.
+
+```python
+style.set(cmap="magma", colorbar=False)          # every image
+style.set(com={"span": 0.1}, tiles={"per_row": 4, "title_size": 7})   # COM maps and tile grids only
+style.defaults.cmap, style.defaults.kinds        # ('magma', {'com': {'span': 0.1}, 'tiles': {'per_row': 4, 'title_size': 7}})
+style.reset()
+```
+
+#### `reset`
+`bexa.viz.style.reset()`
+
+Back to the shipped defaults (`PlotDefaults()`); `rcParams` are not touched
+(`matplotlib.rcdefaults()` does that).
+
+```python
+style.set(cmap="gray")
+style.reset()
+style.defaults.cmap                              # None
+```
+
+#### `context`
+`bexa.viz.style.context(**options)`
+
+A `with` block with other defaults, the same `options` as `set`; the previous defaults come
+back when the block ends, whatever happens inside.
+
+```python
+with style.context(clim="p2-98", colorbar=False):
+    fig, ax, im = bexa.plot(res["total"])        # 2nd to 98th percentile, no colourbar
+im.get_clim()                                    # (10781.7, 27625.8)
+```
+
+#### `option`
+`bexa.viz.style.option(kind, name, value=DEFAULT, *, global_name=None, fallback=None)`
+
+Resolve one keyword the way every plot function does: the argument when it was given (anything
+but `DEFAULT` or `None`), else the kind's override from `style.set`, else the global default of
+that name (`global_name` when the global is called differently: a COM map's `cmap` is
+`diverging_cmap`), else `fallback` (the function's own literal). For plotting helpers of your
+own.
+
+```python
+style.option("image", "cmap", "gray")            # 'gray': given
+style.option("image", "cmap")                    # None: the global cmap is None (rcParams decide)
+with style.context(cmap="magma", tiles={"cmap": "gray"}):
+    style.option("image", "cmap"), style.option("tiles", "cmap")   # ('magma', 'gray')
+```
+
+#### `local_option`
+`bexa.viz.style.local_option(kind, name, value=DEFAULT, fallback=None)`
+
+Like `option` without the global: the argument, the kind's override or `fallback`. For keywords
+whose global value would be wrong for a kind: `tiles` and `VolumeBrowser` draw no colourbar
+unless asked, whatever `colorbar` says, and a COM map's `clim` overrides centre and span only
+when given.
+
+```python
+style.local_option("tiles", "colorbar", fallback=False)   # False, although style.defaults.colorbar is True
+```
+
+#### `limits`
+`bexa.viz.style.limits(data, clim=DEFAULT, kind="image")`
+
+The `(vmin, vmax)` of one image: `clim` when given (a `resolve_clim` spec), else the kind's or
+the global `clim` default (`render_clim` for the `render` kind); `clim=None` gives
+`(None, None)` (matplotlib scales by itself).
+
+```python
+style.limits(res["total"])                       # (10171.6, 27822.9): the default percentiles
+style.limits(res["total"], "p5-95")              # (12044.2, 27016.0)
+style.limits(res["total"], None)                 # (None, None)
+```
+
+#### `stack_mode`
+`bexa.viz.style.stack_mode(clim=DEFAULT, kind="image")`
+
+How a stack of frames (`tiles`, the browsers, `animate`) is scaled, from its `clim`:
+`("shared", (lo, hi))` for one scale over every frame at those percentiles (`"shared"`,
+`("shared", lo, hi)`, `("p", lo, hi)`, `"p2-98"`), `("each", (lo, hi))` for every frame on its
+own (`"each"`, `("each", lo, hi)`, `None`) and `("fixed", (vmin, vmax))` for a pair of numbers.
+Left at `DEFAULT`, the kind's or the global `clim` decides, its percentiles for the bare words.
+
+```python
+style.stack_mode("shared")                       # ('shared', (1.0, 99.0))
+style.stack_mode(("each", 2, 98))                # ('each', (2.0, 98.0))
+style.stack_mode((0, 500))                       # ('fixed', (0.0, 500.0))
+```
+
+#### `percentiles_of`
+`bexa.viz.style.percentiles_of(spec)`
+
+The `(lo, hi)` percentiles named by a spec (`("p", 2, 98)`, `("shared", 2, 98)`, `"p2-98"`);
+`(1, 99)` for a `(vmin, vmax)` pair; an unknown word raises `ValueError`.
+
+```python
+style.percentiles_of("p5-95")                    # (5.0, 95.0)
+style.percentiles_of((0, 500))                   # (1.0, 99.0)
+```
+
+#### `colormap`
+`bexa.viz.style.colormap(kind, cmap=DEFAULT)`
+
+The colormap of a plot kind: the argument, else the kind's override, else the global `cmap`
+(`diverging_cmap`, RdBu, for the `com` kind). `None` leaves `rcParams["image.cmap"]` in charge.
+
+```python
+style.colormap("image")                          # None
+style.colormap("com")                            # 'RdBu'
+```
+
+#### `colorbar`
+`bexa.viz.style.colorbar(fig, im, ax, kind="image", show=DEFAULT, label=None)`
+
+Draw the colourbar of `im` next to `ax` (`fig.colorbar` with the style's `colorbar_fraction`
+and `colorbar_pad`) when `show`, the kind's override or the global `colorbar` says so; returns
+the `Colorbar`, or `None` when none is drawn.
+
+```python
+fig, ax, im = bexa.plot(res["total"], colorbar=False)
+bar = style.colorbar(fig, im, ax, label="counts")   # add it afterwards
+```
+
+#### `figure_size`
+`bexa.viz.style.figure_size(kind, figsize=None, rows=1, cols=1, panel=None)`
+
+The figure size a plot function uses: `figsize` when given, else the kind's `figsize` override,
+else, for a single-panel figure (`panel=None`), the global `figsize` or `None` (the function's
+own size or `rcParams`); for a panel figure, `panel` inches per pane (the kind's or the global
+`panel_size` instead, when set) times `cols` and `rows`.
+
+```python
+style.figure_size("image")                       # None
+style.figure_size("tiles", rows=2, cols=3, panel=(3.2, 3.0))   # (9.6, 6.0)
+with style.context(panel_size=(2, 2)):
+    style.figure_size("tiles", rows=2, cols=3, panel=(3.2, 3.0))   # (6.0, 4.0)
+```
+
+#### `title_font`
+`bexa.viz.style.title_font(kind)`
+
+`{"fontsize": size}` for the pane titles of a kind (`title_size`, 9 by default), or `{}` when
+`title_size` is `None` (matplotlib's own size): `ax.set_title(name, **style.title_font("tiles"))`.
+
+```python
+style.title_font("tiles")                        # {'fontsize': 9}
+```
+
+#### `apply`
+`bexa.viz.style.apply(fig, clim=None, cmap=None, figsize=None, colorbar_label=None)`
+
+Restyle a figure already drawn: every image of every axes gets `clim` (a `resolve_clim` spec,
+applied to that image's own data in the units shown) and `cmap`, every colourbar the
+`colorbar_label`, the figure its `figsize` in inches. Arguments left `None` change nothing.
+Returns the figure.
+
+```python
+fig, axes = bexa.plot(res)                       # the panel of every map
+style.apply(fig, clim="p5-95", cmap="magma", figsize=(10, 7))
+```
+
 #### `resolve_clim`
 `bexa.viz.style.resolve_clim(data, clim=("p", 1, 99))`
 
 Turn a colour-limit spec into `(vmin, vmax)` for `data`: `("p", lo, hi)` gives the `lo` and
 `hi` percentiles of the finite values, `"p2-98"` is the short form, `(vmin, vmax)` comes back as
-floats and `None` gives `(None, None)` (matplotlib then scales by itself). The `clim` of
-`images.show`, `images.tiles`, `volume.render` and `interactive.RoiPicker` goes through it.
+floats, `None` gives `(None, None)` (matplotlib then scales by itself) and `DEFAULT` the global
+`clim`. The stack modes `"shared"` and `"each"` raise `ValueError` here: they belong to
+`stack_mode`. The `clim` of every image goes through it (`limits` adds the defaults).
 
 ```python
 style.resolve_clim(res["total"], ("p", 5, 95))   # (12044.2, 27016.0)
@@ -4987,6 +5194,17 @@ Constants:
 - `THEMES`: dict of theme name to settings, `{"paper": PAPER, "screen": SCREEN}`.
 - `PAPER`, `SCREEN`: the two rcParams dicts; update a copy and pass it to `plt.rcParams.update`
   for a variant.
+- `DEFAULT`: the marker every plot keyword starts at ("take it from the style defaults"); its
+  `repr` is `DEFAULT` and it cannot be used as a boolean.
+- `defaults`: the `PlotDefaults` instance that `set`, `context` and `reset` change; read it for
+  the current values (`style.defaults.clim`).
+- `PlotDefaults`: the dataclass of the defaults: `clim=("p", 1, 99)`, `render_clim=("p", 5, 99.5)`,
+  `cmap=None`, `diverging_cmap="RdBu"`, `span_fraction=0.2`, `figsize=None`, `panel_size=None`,
+  `colorbar=True`, `colorbar_fraction=0.046`, `colorbar_pad=0.04`, `scalebar=True`,
+  `title_size=9`, `kinds={}` (the per-kind overrides).
+- `GLOBAL_OPTIONS`: the names of those fields but `kinds`.
+- `KINDS`: dict of plot kind to `(module, function)`, what `set` validates a kind's keywords
+  against.
 
 ### bexa.viz.auto: one call picks the figure
 
@@ -5015,7 +5233,7 @@ function. A numpy array with three or more dims gets the dims `axis0, ..., y, x`
 |---|---|---|
 | `"image"` | `bexa.viz.images.show` | `(fig, ax, im)` |
 | `"com"` | `bexa.viz.maps.com_map` | `(fig, ax, im)` |
-| `"width"` | `maps.com_map` with `center="median"`, `cmap="viridis"` | `(fig, ax, im)` |
+| `"width"` | `maps.com_map` with `center="median"`, the `width` kind's overrides and `cmap` from the style (viridis) | `(fig, ax, im)` |
 | `"curve"` | `bexa.viz.curves.curve` | `(fig, ax)` |
 | `"rocking"` | `curves.rocking_curves` | `(fig, ax)` |
 | `"tiles"` | `images.tiles` | `(fig, axes)` |
@@ -5054,16 +5272,20 @@ auto.guess_kind(res)                             # 'grid'
 ```
 
 #### `grid`
-`bexa.viz.auto.grid(ds, per_row=3, max_panels=9, figsize=None, names=None)`
+`bexa.viz.auto.grid(ds, per_row=3, max_panels=9, figsize=None, names=None, panes=None, **options)`
 
 One panel per 2-D variable of a reduce result, each drawn by `plot` with the variable name as
 title, so COM and width maps get their colours and the rest are images. Takes the first
 `max_panels` 2-D variables or those in `names`, `per_row` to a row; spare axes are switched off.
-Returns `(fig, axes)`, `axes` a 2-D numpy array; `ValueError` when there is no 2-D variable.
-`plot(res)` and `res.bexa.plot()` call it (public, although not in the module's `__all__`).
+`options` (`cmap`, `clim`, `colorbar`, `scalebar`, ...) go to every pane and
+`panes={"com_mu": {"span": 0.1}}` to one variable; `figsize` defaults to 4.4 x 3.8 inches per
+pane (`style.set(panel_size=...)`). Returns `(fig, axes)`, `axes` a 2-D numpy array;
+`ValueError` when there is no 2-D variable. `plot(res)` and `res.bexa.plot()` call it (public,
+although not in the module's `__all__`).
 
 ```python
 fig, axes = auto.grid(res, names=["sum", "com_chi", "com_mu", "width_mu"], per_row=2)
+fig, axes = res.bexa.plot(cmap="magma", colorbar=False, panes={"com_mu": {"span": 0.1}})
 ```
 
 Constants:
@@ -5083,7 +5305,7 @@ peak = bexa.ROI(y=(16, 48), x=(20, 60))          # pixel window in full-resoluti
 ```
 
 #### `show`
-`bexa.viz.images.show(image, ax=None, clim=("p", 1, 99), cmap=None, log=False, roi=None, scalebar=True, title=None, colorbar=True, figsize=None, **imshow_kwargs)`
+`bexa.viz.images.show(image, ax=None, clim=DEFAULT, cmap=DEFAULT, log=False, roi=None, scalebar=DEFAULT, title=None, colorbar=DEFAULT, figsize=None, **imshow_kwargs)`
 
 Display a 2-D image (DataArray, numpy or cupy array) with percentile colour limits and a
 colourbar; returns `(fig, ax, im)`, `im` the matplotlib `AxesImage`. A DataArray is drawn in the
@@ -5091,8 +5313,10 @@ coordinates of its last two dims, the pixels whatever their names (`y`/`x`, or `
 preview binned on its own), so a preview's axes read in full-resolution pixels and ROI boxes
 line up; the axes are labelled after those dims and the title defaults to the array's name.
 
-- `clim`: a `bexa.viz.style.resolve_clim` spec; `log=True` shows `log10(1 + image)`, negative
-  values clipped to 0; `roi`: an `ROI` or `{name: ROI}`, drawn by `roi_overlay`.
+- `clim`, `cmap`, `scalebar`, `colorbar` and `figsize` left at `DEFAULT` come from the style
+  defaults (`bexa.viz.style.set`); `clim` is a `bexa.viz.style.resolve_clim` spec, `None` lets
+  matplotlib scale; `log=True` shows `log10(1 + image)`, negative values clipped to 0; `roi`:
+  an `ROI` or `{name: ROI}`, drawn by `roi_overlay`.
 - `scalebar`: `True` draws one when `attrs["effective_pixel_nm"]` is set, a number gives the nm
   per pixel (per unit of the `y`/`x` coordinates), `False` none; needs matplotlib-scalebar.
 - Other keywords go to `ax.imshow`; an input that is not 2-D raises `ValueError`.
@@ -5104,16 +5328,19 @@ fig, ax, im = image.bexa.plot(log=True)          # the same function through the
 ```
 
 #### `tiles`
-`bexa.viz.images.tiles(volume, axis=0, n=9, per_row=3, indices=None, clim="shared", cmap=None, log=False, titles=True, figsize=None)`
+`bexa.viz.images.tiles(volume, axis=0, n=9, per_row=3, indices=None, clim=DEFAULT, cmap=DEFAULT, log=False, titles=True, figsize=None, colorbar=DEFAULT)`
 
 A grid of images along one axis of a stack. For a DataArray, `axis` is a dim name or index, all
 other dims except the last two (the pixels, whatever their names) are summed away and each tile
 is titled from the coordinate
 (`mu = 0.3333`); for a numpy array the axis is moved to the front and tiles are titled
 `index = 5`. Shows `n` evenly spaced frames (or exactly `indices`), `per_row` to a row.
-`clim="shared"` puts all tiles on one scale (1st to 99th percentile of the frames shown),
-`"each"` scales every tile, a `resolve_clim` spec applies to each tile; `log=True` shows
-`log10(1 + I)`. Returns `(fig, axes)`, `axes` a 2-D numpy array (ticks removed, spares off).
+`clim` follows the stack grammar of `bexa.viz.style.stack_mode`: `"shared"` (the default: one
+scale for every tile, the style's percentiles of the frames shown), `("shared", 2, 98)`,
+`"each"` (every tile on its own), `("each", lo, hi)`, `(vmin, vmax)`; `log=True` shows
+`log10(1 + I)`. `colorbar=True` adds one colourbar for a shared scale, one per tile otherwise
+(none unless asked, or `style.set(tiles={"colorbar": True})`); `figsize` defaults to 3.2 x 3.0
+inches per tile. Returns `(fig, axes)`, `axes` a 2-D numpy array (ticks removed, spares off).
 
 ```python
 fig, axes = images.tiles(prev, axis="mu", n=8, per_row=4)                  # chi summed away
@@ -5182,7 +5409,7 @@ fig, ax = curves.rocking_curves({"peak": curve, "detector": stats["frame_sum"]},
 ```
 
 #### `curve`
-`bexa.viz.curves.curve(da, ax=None, label=None, **kwargs)`
+`bexa.viz.curves.curve(da, ax=None, label=None, figsize=None, **kwargs)`
 
 Line plot of a 1-D DataArray against its coordinate (the index when the dim has none). The
 legend label defaults to the array's name, the x label carries the coordinate's units, the y
@@ -5194,7 +5421,7 @@ fig, ax = curves.curve(stats["frame_com_y"], ax=ax, ls="--")
 ```
 
 #### `on_off_diff`
-`bexa.viz.curves.on_off_diff(ds, roi=None, axis=None, mode="diff", axes=None, figsize=(13, 4), title=None)`
+`bexa.viz.curves.on_off_diff(ds, roi=None, axis=None, mode="diff", axes=None, figsize=None, title=None)`
 
 The pump-probe figure of a cube with `frames(laser, <axis>, y, x)` (from `bexa.load` or
 `bexa.analysis.pump_probe`), in three panels: the image summed over laser and scan axis with the
@@ -5226,7 +5453,7 @@ fig, axes = curves.moments_vs_axis({"sum_on": on, "sum_off": off})      # one pa
 ```
 
 #### `linearity`
-`bexa.viz.curves.linearity(detector, i0, laser=None, ax=None, figsize=(5, 5))`
+`bexa.viz.curves.linearity(detector, i0, laser=None, ax=None, figsize=None)`
 
 Detector-linearity check: one point per shot or frame, detector signal on the x axis and the
 incident monitor I0 on the y axis. With `laser` flags (1 or `True` for on), laser-on points are
@@ -5252,11 +5479,13 @@ res = scan.com(axes=("chi", "mu"), sigma=1.0)    # com_chi, width_chi, com_mu, w
 ```
 
 #### `com_map`
-`bexa.viz.maps.com_map(com, ax=None, center="mean", span=None, span_fraction=0.2, cmap="RdBu", scalebar=True, title=None, colorbar=True, figsize=None)`
+`bexa.viz.maps.com_map(com, ax=None, center="mean", span=None, span_fraction=DEFAULT, cmap=DEFAULT, scalebar=DEFAULT, title=None, colorbar=DEFAULT, figsize=None, clim=None)`
 
 A centre-of-mass map with colour limits `center +/- span / 2`, so tilts around a reference read
 as red and blue. `center` is `"mean"`, `"median"` or a value in the map's units; `span`
-defaults to `span_fraction` (a fifth) of the map's range. The colourbar is labelled with the
+defaults to `span_fraction` (a fifth) of the map's range (`style.set(com={"span": 0.1})` sets it
+for every COM map); `clim` (a `resolve_clim` spec) replaces centre and span. `cmap` defaults
+to the style's `diverging_cmap` (RdBu). The colourbar is labelled with the
 name and `attrs["units"]` (`com_mu (deg)`), the title defaults to the name, ticks are removed and
 `scalebar` works as in `images.show`. For width maps use `center="median", cmap="viridis"`, as
 `bexa.plot` does for `width_*`. Returns `(fig, ax, im)`.
@@ -5269,7 +5498,7 @@ im.get_clim()                                                           # (-0.05
 ```
 
 #### `bivariate`
-`bexa.viz.maps.bivariate(map_a, map_b, ax=None, cmaps=(BLUE_RED, GREEN_PURPLE), labels=None, limits=(None, None), key=True, scalebar=True, title=None, figsize=None)`
+`bexa.viz.maps.bivariate(map_a, map_b, ax=None, cmaps=(BLUE_RED, GREEN_PURPLE), labels=None, limits=(None, None), key=True, scalebar=DEFAULT, title=None, figsize=None)`
 
 Two maps in one RGB image, for example the centre of mass in chi and in mu. Each map is
 normalised to 0..1 over its minimum and maximum (or the `(low, high)` pair in `limits`; NaN goes
@@ -5284,7 +5513,7 @@ fig, ax = maps.bivariate(res["com_chi"], res["com_mu"], limits=((-0.2, 0.2), Non
 ```
 
 #### `hsv_mosaicity`
-`bexa.viz.maps.hsv_mosaicity(map_a, map_b, ax=None, labels=None, key=True, scalebar=True, title=None, figsize=None)`
+`bexa.viz.maps.hsv_mosaicity(map_a, map_b, ax=None, labels=None, key=True, scalebar=DEFAULT, title=None, figsize=None)`
 
 darfix-style mosaicity image: hue from `map_a` and saturation from `map_b`, each normalised over
 its minimum and maximum, at full brightness, with an inset key; `labels`, `scalebar` and
@@ -5330,7 +5559,7 @@ fig, ax = maps.contour_quiver_overlay(res["total"], u, v, levels=6, step=4)
 ```
 
 #### `cluster_map`
-`bexa.viz.maps.cluster_map(labels, ax=None, cmap="tab10", title=None)`
+`bexa.viz.maps.cluster_map(labels, ax=None, cmap="tab10", title=None, figsize=None, colorbar=DEFAULT)`
 
 Integer cluster labels (from `bexa.analysis.segmentation`, for example) with a discrete
 colormap, no interpolation and a colourbar labelled `cluster`. Returns `(fig, ax, im)`.
@@ -5364,7 +5593,7 @@ stack = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Sum()], dim="samz")   # 
 ```
 
 #### `projections_panel`
-`bexa.viz.volume.projections_panel(data, method="sum", keys=None, log=False, cmap=None, figsize=None, backend="mpl")`
+`bexa.viz.volume.projections_panel(data, method="sum", keys=None, log=False, cmap=DEFAULT, figsize=None, backend="mpl", clim=DEFAULT, colorbar=DEFAULT)`
 
 Every projection of a volume in one figure: the detector image `xy`, each motor against each
 pixel axis (`chi_y`, `chi_x`, `mu_y`, `mu_x`) and each pair of motors (`chi_mu`). `data` is a
@@ -5372,9 +5601,11 @@ DataArray `(motors..., y, x)` (the last two dims are the pixels under any names;
 keep the `_y`, `_x` names) reduced with `method` (`"sum"`, `"max"`, `"mean"` or any other
 DataArray reduction), or a mapping of names to 2-D DataArrays such as
 `scan.reduce([bexa.acc.Projections()])` (every 2-D entry except `grid` becomes a panel). `keys`
-picks and orders panels; `log=True` shows `log10(1 + I)`. Each panel has its own 1st to 99th
-percentile limits, coordinate axes and colourbar, three to a row. Returns `(fig, axes)`, or with
-`backend="plotly"` a plotly figure of heatmaps.
+picks and orders panels; `log=True` shows `log10(1 + I)`. Each panel has its own limits from
+`clim` (one spec, the style's percentiles by default), coordinate axes and, with `colorbar`
+(the style's default), a colourbar, three to a row of 4.2 x 3.6 inches each (`figsize`, or the
+style's `panel_size`). Returns `(fig, axes)`, or with `backend="plotly"` a plotly figure of
+heatmaps with the same limits, colormap and size (90 pixels per inch).
 
 ```python
 fig, axes = volume.projections_panel(prev, log=True)             # xy, chi_y, chi_x, mu_y, mu_x, chi_mu
@@ -5395,7 +5626,7 @@ fig, axes = volume.slices_grid(prev, axis="chi", n=6, per_row=3, log=True)
 ```
 
 #### `isosurface`
-`bexa.viz.volume.isosurface(volume, threshold=None, ax=None, downsample=1, color="cyan", alpha=0.6, figsize=(8, 8), backend="mpl")`
+`bexa.viz.volume.isosurface(volume, threshold=None, ax=None, downsample=1, color="cyan", alpha=0.6, figsize=None, backend="mpl")`
 
 A 3-D surface of a volume at `threshold` (default: 90th percentile of the finite values). More
 than three dims are flattened to `(frames, y, x)`; `downsample` keeps every n-th voxel along
@@ -5410,7 +5641,7 @@ fig = volume.isosurface(stack["sum"], backend="plotly")
 ```
 
 #### `rlp_scatter`
-`bexa.viz.volume.rlp_scatter(coords, intensity, ax=None, threshold=None, cmap="viridis", point_size=20.0, alpha=0.8, log=False, backend="mpl", figsize=(8, 8))`
+`bexa.viz.volume.rlp_scatter(coords, intensity, ax=None, threshold=None, cmap="viridis", point_size=20.0, alpha=0.8, log=False, backend="mpl", figsize=None)`
 
 Integrated intensity at every motor point as a 3-D scatter in reciprocal-space (or angular)
 coordinates. `coords` maps exactly three names to arrays shaped like `intensity`, for example
@@ -5429,7 +5660,7 @@ fig = volume.rlp_scatter(grids, intensity, threshold=float(intensity.median()), 
 ```
 
 #### `render`
-`bexa.viz.volume.render(volume, mode="translucent", log=False, clim=("p", 5, 99.5), cmap="viridis", scale=(1.0, 1.0, 1.0), spacing=None, units="um", downsample=None, max_voxels=300000, surface_count=None, opacity=None, title=None)`
+`bexa.viz.volume.render(volume, mode="translucent", log=False, clim=DEFAULT, cmap=DEFAULT, scale=(1.0, 1.0, 1.0), spacing=None, units="um", downsample=None, max_voxels=300000, surface_count=None, opacity=None, title=None)`
 
 Volume rendering of a `(z, y, x)` stack with plotly (`go.Volume`): colour and opacity follow the
 intensity, and the figure rotates and zooms in the browser. Returns a plotly `Figure`; show it
@@ -5439,7 +5670,8 @@ with `show_plotly` or save it with `fig.write_html(path)`. `da.bexa.render(...)`
   translucent rendering and the Slices-to-Voxels app), `"mip"` keeps only the brightest voxels,
   like a maximum-intensity projection, `"iso"` draws one surface at the upper colour limit;
   `surface_count` and `opacity` override the mode's settings. `log=True` renders
-  `log10(1 + I)`; `clim` is a `resolve_clim` spec.
+  `log10(1 + I)`; `clim` is a `resolve_clim` spec, by default the style's `render_clim` (the 5th
+  and 99.5th percentiles), and `cmap` the style's `cmap` (viridis).
 - Axes (named after the last three dims) in pixels and layers, stretched by `scale` like napari's;
   with `spacing=(dz, dy, dx)`, the voxel size in `units`, they read in those units.
 - More than `max_voxels` voxels are block-averaged in `y` and `x` first (factor automatic, or
@@ -5513,25 +5745,28 @@ logged = prev.bexa.browse(log=True, clim="each")
 ```
 
 #### `Browser`
-`bexa.viz.interactive.Browser(volume, cmap=None, clim="shared", log=False, figsize=(6, 5), widgets=None)`
+`bexa.viz.interactive.Browser(volume, cmap=DEFAULT, clim=DEFAULT, log=False, figsize=None, widgets=None, colorbar=DEFAULT)`
 
 Step through the motor dims of a DataArray `(motors..., y, x)` one image at a time. Every dim
 but the last two (the pixels, whatever their names) gets a slider and the title shows the
 current values
 (`chi = -0.1, mu = 0.06667`); a leading dim may also index quantities (an `xr.concat` of maps
-with a `quantity` coordinate), whose names then show in the title. `clim="shared"` uses the 1st
-and 99th percentiles of the whole array (`shared_limits`: from the stack's statistics or a
-sample of frames, never a full pass over a large or lazy volume), `"each"` rescales every frame,
-`(vmin, vmax)` fixes the scale; `log=True` shows `log10(1 + I)`. A move reads one frame through
+with a `quantity` coordinate), whose names then show in the title. `clim` follows the stack
+grammar of `bexa.viz.style.stack_mode`: `"shared"` (the default: one scale for the whole array
+at the style's percentiles, from `shared_limits`: the stack's statistics or a sample of frames,
+never a full pass over a large or lazy volume), `("shared", 2, 98)`, `"each"` (every frame
+rescaled), `("each", lo, hi)`, `(vmin, vmax)`; `cmap`, `figsize` (6 x 5 inches) and `colorbar`
+follow the style defaults; `log=True` shows `log10(1 + I)`. A move reads one frame through
 `isel` and replaces the image data, so stepping is fast and a lazy volume is never loaded whole.
 Members:
 
 - `update(**index)`: set the view from code, see `Browser.update`.
+- `set_clim(clim)`: other colour limits on show, see `Browser.set_clim`.
 - `redraw()`: redraw the image for the current `index` (knobs and title unchanged).
 - `data`: property, the frame on show as a numpy array (after `log`), read once per move.
 - `fig`, `ax`, `im` (the `AxesImage`), `title` (its `Text`), `index` (dict of dim to position),
-  `motor_dims` (the slider dims), `limits` (`(vmin, vmax)`, `None` for `"each"`), `volume`,
-  `log`.
+  `motor_dims` (the slider dims), `limits` (`(vmin, vmax)`, `None` for `"each"`), `percentiles`
+  (those of the scale), `volume`, `log`.
 
 ```python
 b = interactive.Browser(prev, clim="each", widgets=False)   # matplotlib sliders under the image
@@ -5553,6 +5788,20 @@ b.update(chi=2, mu=8)
 b.title.get_text()                               # 'chi = -0.1, mu = 0.06667'
 b.update(mu=int(abs(prev["mu"] - 0.5).argmin()))   # the index of the mu value closest to 0.5
 b.fig.savefig("mu_0.5.png")
+```
+
+#### `Browser.set_clim`
+`bexa.viz.interactive.Browser.set_clim(clim)`
+
+Change the colour limits of a browser on show, any `stack_mode` spec (`"each"`,
+`("shared", 2, 98)`, `(vmin, vmax)`), and redraw. `VolumeBrowser` has the same method;
+`RenderBrowser.set_clim` renders the block again.
+
+```python
+b.set_clim("each")                               # every frame on its own 1st to 99th percentile
+b.limits                                         # None
+b.set_clim((0, 500))
+b.limits                                         # (0.0, 500.0)
 ```
 
 #### `compare`
@@ -5583,7 +5832,7 @@ view.update(**peak)
 ```
 
 #### `VolumeBrowser`
-`bexa.viz.interactive.VolumeBrowser(volume, view="projections", method="max", log=False, clim="shared", cmap=None, threshold=None, figsize=None, widgets=None)`
+`bexa.viz.interactive.VolumeBrowser(volume, view="projections", method="max", log=False, clim=DEFAULT, cmap=DEFAULT, threshold=None, figsize=None, widgets=None, colorbar=DEFAULT)`
 
 Show a volume and step through the conditions in front of it: the last three dims are the volume
 (`samz, y, x` for a z-stack) and every leading dim (`chi`, `mu`, `energy`, ...) gets a slider.
@@ -5591,13 +5840,16 @@ Show a volume and step through the conditions in front of it: the last three dim
 (`method="max"`) or sum (`"sum"`), updated in place; `view="isosurface"` redraws a marching-cubes
 surface at `threshold` on a 3-D axes (needs scikit-image; see the caveat of
 `bexa.viz.volume.isosurface`), by default the 90th percentile of the first block, kept fixed so
-conditions compare. `clim` and `log` as in `Browser`; one `(z, y, x)` block is read per move, so
+conditions compare. `clim`, `cmap` and `log` as in `Browser`; `colorbar=True` draws one per
+projection (none unless asked: the sliders sit under the panels); one `(z, y, x)` block is read
+per move, so
 a stack on disk browses without being loaded. Fewer than three dims, an unknown `view` or
 `method` raise `ValueError`. Members:
 
 - `current()`: the `(z, y, x)` numpy block at the current positions (after `log`).
 - `data`: property, the same block.
 - `update(**index)`: set the view from code, as `Browser.update`.
+- `set_clim(clim)`: other colour limits on show, as `Browser.set_clim`.
 - `redraw()`: redraw projections or surface for the current `index`.
 - `fig`, `axes` (projections) or `ax` (3-D axes, isosurface), `images` (the three
   `AxesImage`s), `title`, `index`, `motor_dims`, `volume_dims`, `threshold`, `view`, `method`,
@@ -5621,19 +5873,24 @@ rb = interactive.browse_render(vol, mode="mip", log=True, spacing=(1.0, 0.47, 0.
 ```
 
 #### `RenderBrowser`
-`bexa.viz.interactive.RenderBrowser(volume, height=600, **render_kwargs)`
+`bexa.viz.interactive.RenderBrowser(volume, height=600, title=None, **render_kwargs)`
 
 ipywidgets sliders for the leading dims of `(conditions..., z, y, x)`; the `(z, y, x)` block at
 the current position is drawn by `bexa.viz.volume.render` into an output area under them,
 `height` pixels tall, starting at once with the first condition. Each move costs one rendering,
-so the sliders act on release. `render_kwargs` go to `render` (`mode`, `log`, `spacing`, ...);
-when the volume carries a stack's per-frame statistics and no `clim` is given, every condition
-is drawn on one colour scale, `shared_limits(volume, 5, 99.5)` (of `log10(1 + I)` with
-`log=True`). Needs ipywidgets (`ImportError` otherwise; then `render(volume.isel(...))` per
-condition). Members:
+so the sliders act on release. `title` is a prefix of the title (the slider positions follow
+it). `render_kwargs` go to `render` (`mode`, `log`, `cmap`, `spacing`, ...); `clim` takes the
+stack grammar of `bexa.viz.style.stack_mode`: by default (`"shared"`) every condition is drawn
+on one colour scale, `shared_limits(volume, 5, 99.5)` (the style's `render_clim` percentiles,
+of `log10(1 + I)` with `log=True`; from the stack's statistics or a sample of frames),
+`("shared", lo, hi)` other percentiles, `"each"` or `("each", lo, hi)` every block on its own,
+`(vmin, vmax)` a fixed scale. Needs ipywidgets (`ImportError` otherwise; then
+`render(volume.isel(...))` per condition). Members:
 
 - `update(**index)`: move to new positions (`update(chi=2, mu=5)`), put the knobs there, render
   once and show it.
+- `restyle(**render_kwargs)`: render with other settings, see `RenderBrowser.restyle`;
+  `set_clim(clim)` does it for the colour scale.
 - `current()`: the `(z, y, x)` block at the current positions, as a DataArray.
 - `show(fig)`: draw any plotly figure into the output area.
 - `figure` (the last rendering), `sliders` (dict of dim to `IntSlider`), `output`, `index`,
@@ -5643,8 +5900,22 @@ condition). Members:
 ```python
 rb.update(chi=3, mu=7)
 rb.current().dims                                # ('samz', 'y', 'x')
-rb.render_kwargs["clim"]                         # (1.0414, 3.3208): one scale for every condition, from the stack's statistics
+rb.render_kwargs["clim"]                         # (1.0414, 2.6687): one scale for every condition, log10(1 + I)
 rb.figure.write_html("chi3_mu7.html")
+```
+
+#### `RenderBrowser.restyle`
+`bexa.viz.interactive.RenderBrowser.restyle(**render_kwargs)`
+
+Change how the blocks are rendered (`mode`, `cmap`, `opacity`, `spacing`, `log`, `clim`...)
+and render the current block again; the new settings stay for the next moves. A new `clim`
+(any `stack_mode` spec) or a change of `log` settles the colour scale again; `set_clim(clim)`
+is the short form.
+
+```python
+rb.restyle(mode="mip", cmap="magma")
+rb.set_clim(("shared", 10, 99))                  # one scale at other percentiles
+rb.render_kwargs["clim"]                         # (1.0414, 2.3198)
 ```
 
 #### `pick_roi`
@@ -5663,10 +5934,10 @@ peak = interactive.pick_roi(prev.sum(("chi", "mu")), block=True).roi   # script:
 ```
 
 #### `RoiPicker`
-`bexa.viz.interactive.RoiPicker(image, ax=None, cmap=None, clim=("p", 1, 99))`
+`bexa.viz.interactive.RoiPicker(image, ax=None, cmap=DEFAULT, clim=DEFAULT)`
 
-A matplotlib `RectangleSelector` on an image (percentile colour limits; on `ax` or a new
-figure). Each selection sets `roi` to `ROI(y=(y0, y1), x=(x0, x1))` with exclusive ends, in
+A matplotlib `RectangleSelector` on an image (colour limits and colormap from `clim`, `cmap` or
+the style defaults; on `ax` or a new figure). Each selection sets `roi` to `ROI(y=(y0, y1), x=(x0, x1))` with exclusive ends, in
 full-resolution pixels when the image has `y`/`x` coordinates (a preview's pixels are mapped
 back), else in the array's pixels, and writes the range in the title; the rectangle stays
 adjustable. Attributes: `roi` (`ROI` or `None`), `selector`, `fig`, `ax`, `image`.
@@ -5674,6 +5945,77 @@ adjustable. Attributes: `roi` (`ROI` or `None`), `selector`, `fig`, `ax`, `image
 ```python
 picker = interactive.RoiPicker(prev.isel(chi=3, mu=8), cmap="gray", clim=("p", 5, 99.5))
 picker.selector.extents                          # (xmin, xmax, ymin, ymax) of the rectangle, array pixels
+```
+
+### bexa.viz.sliders: what the slider browsers share
+
+`Browser`, `VolumeBrowser` and `RenderBrowser` build on `SliderPanel`: one index per leading
+dim, an ipywidgets slider per dim in a notebook (matplotlib's own sliders in a script), one
+block read per move and colour limits that are shared, per frame or fixed. Nothing here is
+called directly in a notebook; subclass `SliderPanel` for a browser of your own.
+
+```python
+import bexa
+from bexa.viz import sliders
+
+scan = bexa.demo("mosa")                         # chi x mu scan, 6 x 16 frames of 64 x 80 pixels
+prev = scan.preview(downsample=(1, 1, 4, 4))     # DataArray (chi, mu, y, x) = (6, 16, 16, 20)
+```
+
+#### `SliderPanel`
+`bexa.viz.sliders.SliderPanel()`
+
+The base of the browsers. A subclass sets `volume`, `motor_dims`, `index`, `fig` and `title`,
+calls `_init_sliders(widgets)` and implements `redraw()` and `_apply_limits()`; it inherits
+`update(**index)` (move, put the knobs there, redraw, refresh the figure), `set_clim(clim)`
+(any `bexa.viz.style.stack_mode` spec, applied on show), the block on show through `_block()`
+(one `isel` per move, `log10(1 + I)` when `log`) and the members `limits` (`(vmin, vmax)` for
+a shared or fixed scale, `None` per frame), `percentiles`, `kind` (the style kind its defaults
+come from), `_sliders` and `_output` (the output area of a static backend).
+
+```python
+from bexa.viz.interactive import Browser
+issubclass(Browser, sliders.SliderPanel)         # True
+```
+
+#### `log_block`
+`bexa.viz.sliders.log_block(block)`
+
+`log10(1 + block)` with negative values clipped to 0: how the browsers show intensities with
+`log=True`.
+
+```python
+sliders.log_block(prev.values[0, 0]).max()       # 1.824
+```
+
+#### `in_notebook`
+`bexa.viz.sliders.in_notebook()`
+
+`True` inside a Jupyter kernel (JupyterLab, VS Code interactive window), where ipywidgets can
+show; the browsers' `widgets=None` asks it.
+
+```python
+sliders.in_notebook()                            # False in a script
+```
+
+#### `static_backend`
+`bexa.viz.sliders.static_backend()`
+
+`True` when matplotlib's backend makes pictures (`inline`, Agg, PDF, SVG): the browsers then
+redraw into an output area and the sliders act on release.
+
+```python
+sliders.static_backend()                         # True under the inline backend or Agg
+```
+
+#### `format_value`
+`bexa.viz.sliders.format_value(value)`
+
+A slider value for a title: numbers with four significant digits (`0.06667`), anything else as
+text (a quantity name).
+
+```python
+sliders.format_value(0.0666667), sliders.format_value("com")   # ('0.06667', 'com')
 ```
 
 ### bexa.viz.animation: GIF and MP4 of a stack
@@ -5687,13 +6029,15 @@ vol = scan.read()                                # DataArray (mu, y, x) = (25, 6
 ```
 
 #### `animate`
-`bexa.viz.animation.animate(volume, axis=0, clim="shared", cmap=None, interval=200, title_fmt="{dim} = {value:.3g}", normalize=None, figsize=(6, 5))`
+`bexa.viz.animation.animate(volume, axis=0, clim=DEFAULT, cmap=DEFAULT, interval=200, title_fmt="{dim} = {value:.3g}", normalize=None, figsize=None, colorbar=DEFAULT)`
 
 A matplotlib `FuncAnimation` stepping through `axis` of a 3-D stack (DataArray or numpy; reduce
 larger arrays to three dims first), a frame every `interval` ms when shown, with a colourbar and
 the title `title_fmt` filled with `dim` and the coordinate `value` (`index` and the position for
-numpy). `clim="shared"` uses the 1st and 99th percentiles of the stack, `"each"` rescales every
-frame, `(vmin, vmax)` fixes the scale. `normalize` is applied to every frame first (for example
+numpy). `clim` follows the stack grammar of `bexa.viz.style.stack_mode` (`"shared"`, the
+default: the style's percentiles of the whole stack; `("shared", lo, hi)`; `"each"`;
+`("each", lo, hi)`; `(vmin, vmax)`); `cmap`, `figsize` (6 x 5 inches) and `colorbar` follow
+the style defaults. `normalize` is applied to every frame first (for example
 a division by a background box, as the legacy scripts did). Keep the returned object; save it
 with `save_gif` or `save_mp4`, or show it with `IPython.display.HTML(anim.to_jshtml())`.
 
@@ -5908,19 +6252,21 @@ model.build_volume(log=True).shape                        # (5, 20, 24)
 ### bexa.notebook: Jupyter and VS Code helpers
 
 #### `setup`
-`bexa.notebook.setup(backend="widget", wide=True, autoreload=False, log_level="INFO")`
+`bexa.notebook.setup(backend="widget", wide=True, autoreload=False, log_level="INFO", theme=None)`
 
 Configure a Jupyter kernel for bexa; call it once at the top of a notebook. It sends bexa's log
 messages to the cell output at `log_level` (outside IPython it does only this and says so), runs
 `%matplotlib <backend>` with `"widget"` (ipympl, interactive figures; `"inline"` with a warning
 when ipympl is missing), `"inline"` or `"qt"`, loads `%autoreload 2` when `autoreload=True`
 (edited bexa modules reload by themselves), and with `wide=True` widens the output cells to the
-window. Changes the IPython session's state; returns `None`.
+window. `theme="screen"` or `"paper"` applies that `bexa.viz.style` theme (fonts, dpi, ticks)
+to matplotlib, in or outside IPython. Changes the IPython session's state; returns `None`.
 
 ```python
 import bexa
 bexa.notebook.setup()                                    # widget backend, wide cells, INFO logs in the cell
 bexa.notebook.setup(backend="inline", autoreload=True, log_level="DEBUG")
+bexa.notebook.setup(theme="paper")                       # the paper theme for every figure
 ```
 
 #### `show_plotly`
@@ -5962,7 +6308,7 @@ work = Path(tempfile.mkdtemp())          # any folder for the outputs
 ```
 
 #### `report`
-`bexa.pipelines.dfxm_report.report(scan, out_dir, roi=None, downsample=4, sigma=3.0, device="auto", apply_log=False, dpi=150, prefix=None, show_progress=False)`
+`bexa.pipelines.dfxm_report.report(scan, out_dir, roi=None, downsample=4, sigma=3.0, device="auto", apply_log=False, dpi=150, prefix=None, show_progress=False, plot_options=None)`
 
 One streaming pass with the `Sum`, `Max`, `Projections`, `Preview` and (for a scan with motors)
 `MotorCOM(axes=<every motor>, sigma=sigma, moments=2)` accumulators, then the figures.
@@ -5976,7 +6322,9 @@ Writes into `out_dir` (created if missing) `<prefix>_sum.png`, `_max.png`, `_pro
 `_width_<motor>.png` per motor, `_bivariate.png` (the centres of mass of the first two motors in
 one colour image) and `_results.h5` (every array, with provenance, for `bexa.load`). `prefix`
 defaults to the scan name; maps get a scalebar when the effective pixel size is known (needs
-matplotlib-scalebar). Returns `{name: Path}`. The command is `bexa scan report PATH -o figures/
+matplotlib-scalebar). `plot_options` are style defaults for these figures only, as
+`bexa.viz.style.set` takes them (`{"cmap": "magma", "colorbar": False, "com": {"span": 0.1}}`);
+the session's defaults are untouched. Returns `{name: Path}`. The command is `bexa scan report PATH -o figures/
 [--roi y=700:1500,x=800:1800] [--downsample 4] [--sigma 3] [--apply-log]`.
 
 ```python
@@ -5986,6 +6334,7 @@ written["com_mu"].name   # 'demo_mosa_com_mu.png'
 res = bexa.load(written["results"])        # xarray.Dataset: sum, max, xy, chi_mu, preview, com_mu, ...
 res["com_mu"].shape                        # (32, 40): binned 2 x 2 like the pass
 report(scan, work / "grain", roi=bexa.ROI(y=(8, 56), x=(10, 70)), downsample=None, prefix="grain")
+report(scan, work / "magma", device="cpu", plot_options={"cmap": "magma", "com": {"span": 0.1}})
 ```
 
 ### bexa.pipelines.xfel_cube: PAL-XFEL point files to a laser on/off cube

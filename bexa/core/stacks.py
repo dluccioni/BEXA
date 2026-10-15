@@ -201,24 +201,41 @@ def brightest(volume: Any, over: Any = None, name: str | None = None) -> dict[st
     return {d: int(i) for d, i in zip(kept, position, strict=True)}
 
 
+def _sampled_limits(
+    volume: xr.DataArray, low: float, high: float, log: bool, max_frames: int = 64
+) -> tuple[float, float]:
+    """Percentile limits of a small in-memory array, else of ``max_frames`` of its frames."""
+    lead = tuple(volume.shape[:-2])
+    dims = [str(d) for d in volume.dims[:-2]]
+    if is_lazy(volume) or volume.nbytes > IN_MEMORY_LIMIT:
+        n = int(np.prod(lead)) if lead else 1
+        chosen = np.linspace(0, n - 1, min(max_frames, n)).round().astype(int)
+        frames = []
+        for flat in chosen:
+            position = np.unravel_index(int(flat), lead) if lead else ()
+            frames.append(_as_array(volume.isel(dict(zip(dims, position, strict=True)))))
+        data = np.stack(frames)
+    else:
+        data = _as_array(volume)
+    if log:
+        data = np.log10(1.0 + np.clip(data, 0, None))
+    return _percentile_limits(data, low, high)
+
+
 def shared_limits(
     volume: xr.DataArray, low: float = 1.0, high: float = 99.0, log: bool = False
 ) -> tuple[float, float]:
     """Colour limits shared by every frame of a volume, without loading all of it.
 
-    The stack's per-frame percentiles give ``(min of the 1st, max of the 99th)``;
-    a small in-memory array gets the exact percentiles; a large or lazy one the
-    same from a sample of 64 frames. ``log`` applies ``log10(1 + I)`` to the
-    limits, as the browsers show the data.
+    The stack's per-frame percentiles give ``(min of the 1st, max of the 99th)``
+    when those are the percentiles asked. Other percentiles, or a volume without
+    statistics, come from the array itself when it is small and in memory, else
+    from a sample of 64 frames spread evenly over the leading dims. ``log``
+    applies ``log10(1 + I)`` first, as the browsers show the data.
     """
-    stats = _stats_from_attrs(volume)
-    if stats is None and not is_lazy(volume) and volume.nbytes <= IN_MEMORY_LIMIT:
-        data = _as_array(volume)
-        if log:
-            data = np.log10(1.0 + np.clip(data, 0, None))
-        return _percentile_limits(data, low, high)
+    stats = _stats_from_attrs(volume) if (float(low), float(high)) == (1.0, 99.0) else None
     if stats is None:
-        stats = block_stats(volume, max_frames=64)
+        return _sampled_limits(volume, low, high, log)
     p1, p99 = stats["p1"], stats["p99"]
     finite = np.isfinite(p1) & np.isfinite(p99)
     if not finite.any():

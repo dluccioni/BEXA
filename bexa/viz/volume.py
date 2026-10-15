@@ -8,8 +8,9 @@ from typing import Any
 import numpy as np
 import xarray as xr
 
+from bexa.viz import style
 from bexa.viz.images import tiles
-from bexa.viz.style import as_array, dim_label, resolve_clim
+from bexa.viz.style import DEFAULT, as_array, dim_label
 
 __all__ = ["isosurface", "projections_panel", "render", "rlp_scatter", "show_plotly", "slices_grid"]
 
@@ -35,15 +36,19 @@ def projections_panel(
     method: str = "sum",
     keys: list[str] | None = None,
     log: bool = False,
-    cmap: str | None = None,
+    cmap: Any = DEFAULT,
     figsize: tuple[float, float] | None = None,
     backend: str = "mpl",
+    clim: Any = DEFAULT,
+    colorbar: Any = DEFAULT,
 ) -> Any:
     """Panel of every projection of a volume: ``xy``, motor-vs-pixel and motor-vs-motor maps.
 
     Accepts a volume ``(motors..., y, x)`` or the result dict of the
     :class:`bexa.core.reductions.Projections` accumulator. Returns
     ``(fig, axes)``; with ``backend="plotly"`` an interactive plotly figure.
+    ``clim`` (one spec, applied to every pane's own values), ``cmap``,
+    ``colorbar`` and ``figsize`` follow the style defaults when left out.
     """
     projections = (
         _projections_from_volume(data, method) if isinstance(data, xr.DataArray) else dict(data)
@@ -54,16 +59,19 @@ def projections_panel(
     n = len(projections)
     cols = min(3, n) or 1
     rows = int(np.ceil(n / cols))
+    size = style.figure_size("projections", figsize, rows, cols, panel=(4.2, 3.6))
+    cmap = style.colormap("projections", cmap)
+    with_bar = style.option("projections", "colorbar", colorbar, fallback=True)
     if backend == "plotly":
-        return _projections_plotly(projections, rows, cols, log, cmap)
+        return _projections_plotly(projections, rows, cols, log, cmap, clim, with_bar, size)
     import matplotlib.pyplot as plt
 
-    fig, axes = plt.subplots(rows, cols, figsize=figsize or (4.2 * cols, 3.6 * rows), squeeze=False)
+    fig, axes = plt.subplots(rows, cols, figsize=size, squeeze=False)
     for ax, (name, arr) in zip(axes.ravel(), projections.items(), strict=False):
         values = as_array(arr)
         if log:
             values = np.log10(1.0 + np.clip(values, 0, None))
-        vmin, vmax = resolve_clim(values, ("p", 1, 99))
+        vmin, vmax = style.limits(values, clim, "projections")
         d0, d1 = arr.dims
         extent = None
         if (
@@ -76,17 +84,24 @@ def projections_panel(
             c1 = np.asarray(arr.coords[d1].values, dtype=float)
             extent = [c1[0], c1[-1], c0[-1], c0[0]]
         im = ax.imshow(values, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto", extent=extent)
-        ax.set_title(name, fontsize=9)
+        ax.set_title(name, **style.title_font("projections"))
         ax.set_xlabel(dim_label(arr, str(d1)))
         ax.set_ylabel(dim_label(arr, str(d0)))
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        style.colorbar(fig, im, ax, "projections", with_bar)
     for ax in axes.ravel()[n:]:
         ax.axis("off")
     return fig, axes
 
 
 def _projections_plotly(
-    projections: Mapping[str, xr.DataArray], rows: int, cols: int, log: bool, cmap: str | None
+    projections: Mapping[str, xr.DataArray],
+    rows: int,
+    cols: int,
+    log: bool,
+    cmap: Any,
+    clim: Any,
+    colorbar: bool,
+    size: tuple[float, float] | None,
 ) -> Any:
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
@@ -96,7 +111,7 @@ def _projections_plotly(
         values = as_array(arr)
         if log:
             values = np.log10(1.0 + np.clip(values, 0, None))
-        vmin, vmax = resolve_clim(values, ("p", 1, 99))
+        vmin, vmax = style.limits(values, clim, "projections")
         d0, d1 = arr.dims
         x = np.asarray(arr.coords[d1].values) if d1 in arr.coords else None
         y = np.asarray(arr.coords[d0].values) if d0 in arr.coords else None
@@ -109,7 +124,7 @@ def _projections_plotly(
                 zmax=vmax,
                 colorscale=cmap or "Viridis",
                 name=name,
-                showscale=i == 0,
+                showscale=colorbar and i == 0,
             ),
             row=i // cols + 1,
             col=i % cols + 1,
@@ -117,7 +132,8 @@ def _projections_plotly(
         row, col = i // cols + 1, i % cols + 1
         fig.update_xaxes(title_text=dim_label(arr, str(d1)), row=row, col=col)
         fig.update_yaxes(title_text=dim_label(arr, str(d0)), autorange="reversed", row=row, col=col)
-    fig.update_layout(height=320 * rows, width=380 * cols)
+    width, height = size or (4.2 * cols, 3.6 * rows)
+    fig.update_layout(height=int(90 * height), width=int(90 * width))  # 90 px per inch
     return fig
 
 
@@ -138,7 +154,7 @@ def isosurface(
     downsample: int = 1,
     color: str = "cyan",
     alpha: float = 0.6,
-    figsize: tuple[float, float] = (8, 8),
+    figsize: tuple[float, float] | None = None,
     backend: str = "mpl",
 ) -> Any:
     """3-D isosurface of a volume (needs scikit-image; plotly with ``backend="plotly"``).
@@ -174,7 +190,7 @@ def isosurface(
         raise ImportError("isosurface needs scikit-image: pip install scikit-image") from exc
     verts, faces, _, _ = marching_cubes(np.nan_to_num(data), level=threshold)
     if ax is None:
-        fig = plt.figure(figsize=figsize)
+        fig = plt.figure(figsize=style.figure_size("isosurface", figsize) or (8, 8))
         ax = fig.add_subplot(1, 1, 1, projection="3d")
     else:
         fig = ax.figure
@@ -200,7 +216,7 @@ def rlp_scatter(
     alpha: float = 0.8,
     log: bool = False,
     backend: str = "mpl",
-    figsize: tuple[float, float] = (8, 8),
+    figsize: tuple[float, float] | None = None,
 ) -> Any:
     """Scatter of integrated intensity in 3-D reciprocal (or angular) coordinates.
 
@@ -239,7 +255,7 @@ def rlp_scatter(
     import matplotlib.pyplot as plt
 
     if ax is None:
-        fig = plt.figure(figsize=figsize)
+        fig = plt.figure(figsize=style.figure_size("rlp", figsize) or (8, 8))
         ax = fig.add_subplot(1, 1, 1, projection="3d")
     else:
         fig = ax.figure
@@ -271,8 +287,8 @@ def render(
     volume: Any,
     mode: str = "translucent",
     log: bool = False,
-    clim: Any = ("p", 5, 99.5),
-    cmap: str = "viridis",
+    clim: Any = DEFAULT,
+    cmap: Any = DEFAULT,
     scale: Sequence[float] = (1.0, 1.0, 1.0),
     spacing: Sequence[float] | None = None,
     units: str = "um",
@@ -298,7 +314,9 @@ def render(
     Stacks with more than ``max_voxels`` voxels are block-averaged in ``y`` and ``x`` first
     (``downsample`` sets the factor by hand); the browser cannot rotate much more than that.
     The averaged voxels keep the pixel size, so the axes stay right. The figure rotates and
-    zooms in the browser; in a notebook show it with :func:`show_plotly`.
+    zooms in the browser; in a notebook show it with :func:`show_plotly`. ``clim`` defaults
+    to the style's ``render_clim`` (the 5th and 99.5th percentiles) and ``cmap`` to its
+    ``cmap`` (viridis).
     """
     import plotly.graph_objects as go
 
@@ -315,7 +333,8 @@ def render(
         data = block_reduce(data, factor, factor, "mean")
     if log:
         data = np.log10(1.0 + np.clip(data, 0, None))
-    vmin, vmax = resolve_clim(data, clim)
+    vmin, vmax = style.limits(data, clim, "render")
+    cmap = style.colormap("render", cmap) or "viridis"
     if vmin is None or vmax is None or not vmax > vmin:
         finite = data[np.isfinite(data)]
         vmin, vmax = (float(finite.min()), float(finite.max())) if finite.size else (0.0, 1.0)

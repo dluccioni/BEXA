@@ -63,6 +63,7 @@ _SECTIONS: list[tuple[str, str]] = [
     ("Optics: conversions", "bexa.optics.conversions"),
     ("Optics: attenuation", "bexa.optics.attenuation"),
     ("Optics: Bragg magnifier", "bexa.optics.bragg_magnifier"),
+    ("Plots: style", "bexa.viz.style"),
     ("Plots: auto", "bexa.viz.auto"),
     ("Plots: images", "bexa.viz.images"),
     ("Plots: curves", "bexa.viz.curves"),

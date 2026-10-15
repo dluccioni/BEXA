@@ -13,8 +13,9 @@ from typing import Any
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap, hsv_to_rgb
 
-from bexa.viz.images import add_scalebar
-from bexa.viz.style import as_array, new_axes, pixel_size_nm
+from bexa.viz import style
+from bexa.viz.images import add_scalebar, scalebar_nm
+from bexa.viz.style import DEFAULT, as_array, new_axes
 
 __all__ = [
     "bivariate",
@@ -42,12 +43,9 @@ def _normalize(
     return np.clip((np.nan_to_num(data, nan=lo) - lo) / span, 0, 1), (lo, hi)
 
 
-def _scalebar(ax: Any, scalebar: Any, source: Any) -> None:
-    nm = None
-    if scalebar is True:
-        nm = pixel_size_nm(source)
-    elif isinstance(scalebar, (int, float)) and not isinstance(scalebar, bool):
-        nm = float(scalebar)
+def _scalebar(ax: Any, kind: str, scalebar: Any, source: Any) -> None:
+    """Draw the scalebar the argument or the style asks for (``True``: from the attrs)."""
+    nm = scalebar_nm(style.option(kind, "scalebar", scalebar, fallback=True), source)
     if nm:
         add_scalebar(ax, nm)
 
@@ -57,12 +55,13 @@ def com_map(
     ax: Any = None,
     center: float | str = "mean",
     span: float | None = None,
-    span_fraction: float = 0.2,
-    cmap: Any = "RdBu",
-    scalebar: Any = True,
+    span_fraction: Any = DEFAULT,
+    cmap: Any = DEFAULT,
+    scalebar: Any = DEFAULT,
     title: str | None = None,
-    colorbar: bool = True,
+    colorbar: Any = DEFAULT,
     figsize: tuple[float, float] | None = None,
+    clim: Any = None,
 ) -> tuple[Any, Any, Any]:
     """A centre-of-mass map with limits ``center +/- span / 2``.
 
@@ -72,29 +71,41 @@ def com_map(
         ``"mean"``, ``"median"`` or a value.
     span
         Width of the colour scale; default ``span_fraction`` of the map's range
-        (the notebooks used a fifth of the motor range).
+        (the notebooks used a fifth of the motor range). ``style.set(com={"span": 0.1})``
+        sets it for every COM map.
+    cmap
+        Default the style's ``diverging_cmap`` (``"RdBu"``).
+    clim
+        Explicit limits instead of centre and span: ``(vmin, vmax)``, ``("p", lo, hi)``
+        or ``"p2-98"``.
     """
-    fig, ax = new_axes(ax, figsize)
+    fig, ax = new_axes(ax, style.figure_size("com", figsize))
     data = as_array(com)
     finite = data[np.isfinite(data)]
-    if isinstance(center, str):
-        c = float(np.mean(finite)) if center == "mean" else float(np.median(finite))
+    clim = style.local_option("com", "clim", clim)
+    if clim is not None:
+        vmin, vmax = style.resolve_clim(data, clim)
     else:
-        c = float(center)
-    if span is None:
-        span = span_fraction * float(np.ptp(finite)) if finite.size else 1.0
-    im = ax.imshow(data, cmap=cmap, vmin=c - span / 2, vmax=c + span / 2)
+        if isinstance(center, str):
+            c = float(np.mean(finite)) if center == "mean" else float(np.median(finite))
+        else:
+            c = float(center)
+        span = style.option("com", "span", span)
+        if span is None:
+            fraction = style.option("com", "span_fraction", span_fraction, fallback=0.2)
+            span = fraction * float(np.ptp(finite)) if finite.size else 1.0
+        vmin, vmax = c - span / 2, c + span / 2
+    im = ax.imshow(data, cmap=style.colormap("com", cmap), vmin=vmin, vmax=vmax)
     unit = com.attrs.get("units", "") if hasattr(com, "attrs") else ""
-    if colorbar:
-        label = str(getattr(com, "name", "") or "centre of mass") + (f" ({unit})" if unit else "")
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label=label)
+    label = str(getattr(com, "name", "") or "centre of mass") + (f" ({unit})" if unit else "")
+    style.colorbar(fig, im, ax, "com", colorbar, label=label)
     if title is None and hasattr(com, "name") and com.name:
         title = str(com.name)
     if title:
         ax.set_title(title)
     ax.set_xticks([])
     ax.set_yticks([])
-    _scalebar(ax, scalebar, com)
+    _scalebar(ax, "com", scalebar, com)
     return fig, ax, im
 
 
@@ -106,7 +117,7 @@ def bivariate(
     labels: tuple[str, str] | None = None,
     limits: tuple[tuple[float, float] | None, tuple[float, float] | None] = (None, None),
     key: bool = True,
-    scalebar: Any = True,
+    scalebar: Any = DEFAULT,
     title: str | None = None,
     figsize: tuple[float, float] | None = None,
 ) -> tuple[Any, Any]:
@@ -118,7 +129,7 @@ def bivariate(
     """
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-    fig, ax = new_axes(ax, figsize)
+    fig, ax = new_axes(ax, style.figure_size("bivariate", figsize))
     a, lim_a = _normalize(as_array(map_a), limits[0])
     b, lim_b = _normalize(as_array(map_b), limits[1])
     cmap_a, cmap_b = cmaps
@@ -141,7 +152,7 @@ def bivariate(
         inset.set_xlabel(labels[0], fontsize=7)
         inset.set_ylabel(labels[1], fontsize=7)
         inset.tick_params(labelsize=6)
-    _scalebar(ax, scalebar, map_a)
+    _scalebar(ax, "bivariate", scalebar, map_a)
     return fig, ax
 
 
@@ -151,14 +162,14 @@ def hsv_mosaicity(
     ax: Any = None,
     labels: tuple[str, str] | None = None,
     key: bool = True,
-    scalebar: Any = True,
+    scalebar: Any = DEFAULT,
     title: str | None = None,
     figsize: tuple[float, float] | None = None,
 ) -> tuple[Any, Any]:
     """darfix-style mosaicity image: hue from ``map_a``, saturation from ``map_b``."""
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
-    fig, ax = new_axes(ax, figsize)
+    fig, ax = new_axes(ax, style.figure_size("hsv", figsize))
     h, lim_a = _normalize(as_array(map_a))
     s, lim_b = _normalize(as_array(map_b))
     rgb = hsv_to_rgb(np.stack([h, s, np.ones_like(h)], axis=-1))
@@ -180,7 +191,7 @@ def hsv_mosaicity(
         inset.set_xlabel(labels[0], fontsize=7)
         inset.set_ylabel(labels[1], fontsize=7)
         inset.tick_params(labelsize=6)
-    _scalebar(ax, scalebar, map_a)
+    _scalebar(ax, "hsv", scalebar, map_a)
     return fig, ax
 
 
@@ -213,7 +224,7 @@ def vector_field(
     import matplotlib.pyplot as plt
 
     if ax is None:
-        fig = plt.figure(figsize=figsize or (8, 6))
+        fig = plt.figure(figsize=style.figure_size("vector_field", figsize) or (8, 6))
         ax = fig.add_subplot(1, 1, 1)
     else:
         fig = ax.figure
@@ -271,12 +282,17 @@ def contour_quiver_overlay(
 
 
 def cluster_map(
-    labels: Any, ax: Any = None, cmap: str = "tab10", title: str | None = None
+    labels: Any,
+    ax: Any = None,
+    cmap: str = "tab10",
+    title: str | None = None,
+    figsize: tuple[float, float] | None = None,
+    colorbar: Any = DEFAULT,
 ) -> tuple[Any, Any, Any]:
     """Show integer cluster labels with a discrete colormap."""
-    fig, ax = new_axes(ax)
+    fig, ax = new_axes(ax, style.figure_size("cluster", figsize))
     im = ax.imshow(as_array(labels), cmap=cmap, interpolation="nearest")
-    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="cluster")
+    style.colorbar(fig, im, ax, "cluster", colorbar, label="cluster")
     if title:
         ax.set_title(title)
     return fig, ax, im

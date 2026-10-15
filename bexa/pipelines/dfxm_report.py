@@ -20,7 +20,7 @@ from bexa.core.reductions import Max, MotorCOM, Preview, Projections, Sum
 from bexa.core.roi import ROI
 from bexa.core.scan import Scan
 from bexa.io.cube import save
-from bexa.viz import images, maps, volume
+from bexa.viz import auto, images, maps, style, volume
 
 log = get_logger(__name__)
 
@@ -38,12 +38,15 @@ def report(
     dpi: int = 150,
     prefix: str | None = None,
     show_progress: bool = False,
+    plot_options: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
     """Compute and save the standard DFXM figures and arrays for ``scan``.
 
     Files written to ``out_dir`` (``<prefix>_...``):
     ``sum.png``, ``max.png``, ``projections.png``, ``tiles.png``, ``com_<motor>.png``,
     ``width_<motor>.png``, ``bivariate.png`` (two motors), and ``results.h5`` with every array.
+    ``plot_options`` are style defaults for these figures only, as
+    :func:`bexa.viz.style.set` takes them (``{"cmap": "magma", "com": {"span": 0.1}}``).
 
     Returns
     -------
@@ -71,6 +74,22 @@ def report(
         written[name] = path
 
     nm = scan.geometry.effective_pixel_nm if scan.geometry is not None else None
+    with style.context(**(plot_options or {})):
+        _figures(scan, results, motors, nm, savefig)
+
+    dataset = xr.Dataset({k: v for k, v in results.items() if isinstance(v, xr.DataArray)})
+    dataset.attrs.update(results["sum"].attrs)
+    path = save(dataset, out_dir / f"{prefix}_results.h5")
+    written["results"] = path
+    matplotlib.use(interactive_backend, force=False)
+    log.info("report for %s written to %s (%d files)", scan.name, out_dir, len(written))
+    return written
+
+
+def _figures(
+    scan: Scan, results: dict[str, Any], motors: list[str], nm: float | None, savefig: Any
+) -> None:
+    """Draw and save the standard figures from the reduce ``results``."""
     for key in ("sum", "max"):
         fig, _, _ = images.show(results[key], scalebar=nm or False, title=f"{scan.name} {key}")
         savefig(fig, key)
@@ -91,12 +110,8 @@ def report(
         for m in motors:
             fig, _, _ = maps.com_map(results[f"com_{m}"], scalebar=nm or False, title=f"COM {m}")
             savefig(fig, f"com_{m}")
-            fig, _, _ = maps.com_map(
-                results[f"width_{m}"],
-                center="median",
-                cmap="viridis",
-                scalebar=nm or False,
-                title=f"width {m}",
+            fig, _, _ = auto.plot(
+                results[f"width_{m}"], kind="width", scalebar=nm or False, title=f"width {m}"
             )
             savefig(fig, f"width_{m}")
         if len(motors) >= 2:
@@ -108,11 +123,3 @@ def report(
                 title=f"{scan.name} centre of mass",
             )
             savefig(fig, "bivariate")
-
-    dataset = xr.Dataset({k: v for k, v in results.items() if isinstance(v, xr.DataArray)})
-    dataset.attrs.update(results["sum"].attrs)
-    path = save(dataset, out_dir / f"{prefix}_results.h5")
-    written["results"] = path
-    matplotlib.use(interactive_backend, force=False)
-    log.info("report for %s written to %s (%d files)", scan.name, out_dir, len(written))
-    return written

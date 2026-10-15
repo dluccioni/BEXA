@@ -25,6 +25,7 @@ def setup(
     wide: bool = True,
     autoreload: bool = False,
     log_level: str = "INFO",
+    theme: str | None = None,
 ) -> None:
     """Configure the kernel for bexa.
 
@@ -37,8 +38,15 @@ def setup(
         Let output cells use the full window width.
     autoreload
         Reload edited bexa modules automatically (handy while developing).
+    theme
+        ``"screen"`` or ``"paper"``: apply that :mod:`bexa.viz.style` theme to
+        matplotlib (fonts, dpi, ticks); ``None`` leaves ``rcParams`` alone.
     """
     configure(log_level, stream=sys.stdout, force=True)
+    if theme is not None:
+        from bexa.viz.style import use
+
+        use(theme)
     if not in_ipython():
         log.info("not running under IPython; nothing to set up")
         return

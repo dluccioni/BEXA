@@ -8,7 +8,8 @@ from typing import Any
 import numpy as np
 
 from bexa.core.roi import ROI
-from bexa.viz.style import as_array, dim_label, new_axes, pixel_size_nm, resolve_clim
+from bexa.viz import style
+from bexa.viz.style import DEFAULT, as_array, dim_label, new_axes, percentile_limits, pixel_size_nm
 
 __all__ = ["add_scalebar", "roi_overlay", "show", "tiles"]
 
@@ -65,16 +66,25 @@ def roi_overlay(
     return patches
 
 
+def scalebar_nm(scalebar: Any, source: Any) -> float | None:
+    """Nanometres per pixel for a ``scalebar`` argument: a number, or the attrs of ``source``."""
+    if isinstance(scalebar, (int, float)) and not isinstance(scalebar, bool):
+        return float(scalebar)
+    if scalebar is True:
+        return pixel_size_nm(source)
+    return None
+
+
 def show(
     image: Any,
     ax: Any = None,
-    clim: Any = ("p", 1, 99),
-    cmap: str | None = None,
+    clim: Any = DEFAULT,
+    cmap: Any = DEFAULT,
     log: bool = False,
     roi: ROI | dict[str, ROI] | None = None,
-    scalebar: bool | float = True,
+    scalebar: Any = DEFAULT,
     title: str | None = None,
-    colorbar: bool = True,
+    colorbar: Any = DEFAULT,
     figsize: tuple[float, float] | None = None,
     **imshow_kwargs: Any,
 ) -> tuple[Any, Any, Any]:
@@ -85,7 +95,10 @@ def show(
     image
         2-D DataArray (uses its ``y``/``x`` coordinates) or array.
     clim
-        ``("p", 1, 99)`` for percentiles, ``(vmin, vmax)`` or ``None``.
+        ``("p", 1, 99)`` for percentiles, ``"p2-98"``, ``(vmin, vmax)`` or
+        ``None`` (matplotlib's own scaling). Left at ``DEFAULT``, like ``cmap``,
+        ``scalebar``, ``colorbar`` and ``figsize``, the style defaults decide
+        (:mod:`bexa.viz.style`).
     log
         Show ``log10(1 + image)``.
     scalebar
@@ -96,28 +109,32 @@ def show(
     -------
     (fig, ax, image_artist)
     """
-    fig, ax = new_axes(ax, figsize)
+    fig, ax = new_axes(ax, style.figure_size("image", figsize))
     data = as_array(image)
     if data.ndim != 2:
         raise ValueError(f"show() needs a 2-D image; got shape {data.shape}")
     if log:
         data = np.log10(1.0 + np.clip(data, 0, None))
-    vmin, vmax = resolve_clim(data, clim)
+    vmin, vmax = style.limits(data, clim, "image")
     extent = _extent(image)
-    im = ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax, extent=extent, **imshow_kwargs)
+    im = ax.imshow(
+        data,
+        cmap=style.colormap("image", cmap),
+        vmin=vmin,
+        vmax=vmax,
+        extent=extent,
+        **imshow_kwargs,
+    )
     ax.set_xlabel(dim_label(image, "x"))
     ax.set_ylabel(dim_label(image, "y"))
     if title is None and hasattr(image, "name") and image.name:
         title = str(image.name)
     if title:
         ax.set_title(title)
-    if colorbar:
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    style.colorbar(fig, im, ax, "image", colorbar)
     if roi is not None:
         roi_overlay(ax, roi)
-    nm = scalebar if isinstance(scalebar, (int, float)) and not isinstance(scalebar, bool) else None
-    if scalebar is True:
-        nm = pixel_size_nm(image)
+    nm = scalebar_nm(style.option("image", "scalebar", scalebar, fallback=True), image)
     if nm:
         add_scalebar(ax, nm)
     return fig, ax, im
@@ -129,11 +146,12 @@ def tiles(
     n: int = 9,
     per_row: int = 3,
     indices: Sequence[int] | None = None,
-    clim: Any = "shared",
-    cmap: str | None = None,
+    clim: Any = DEFAULT,
+    cmap: Any = DEFAULT,
     log: bool = False,
     titles: bool = True,
     figsize: tuple[float, float] | None = None,
+    colorbar: Any = DEFAULT,
 ) -> tuple[Any, np.ndarray]:
     """Grid of images taken along one axis of a stack.
 
@@ -145,7 +163,13 @@ def tiles(
     axis
         Index or dim name to step along.
     clim
-        ``"shared"`` (one scale for all tiles), ``"each"``, or an explicit spec.
+        ``"shared"`` (one scale for every tile, the default percentiles),
+        ``("shared", lo, hi)``, ``"each"`` (every tile on its own scale),
+        ``("each", lo, hi)``, ``(vmin, vmax)`` or ``None`` (each); see
+        :func:`bexa.viz.style.stack_mode`.
+    colorbar
+        One colourbar for the grid when the scale is shared, one per tile
+        otherwise. Off unless asked, here or with ``style.set(tiles={"colorbar": True})``.
     """
     import matplotlib.pyplot as plt
 
@@ -171,21 +195,30 @@ def tiles(
     if indices is None:
         indices = np.unique(np.linspace(0, data.shape[0] - 1, min(n, data.shape[0])).astype(int))
     rows = int(np.ceil(len(indices) / per_row))
-    fig, axes = plt.subplots(
-        rows, per_row, figsize=figsize or (3.2 * per_row, 3.0 * rows), squeeze=False
-    )
-    shared = resolve_clim(data[list(indices)], ("p", 1, 99)) if clim == "shared" else None
+    figsize = style.figure_size("tiles", figsize, rows, per_row, panel=(3.2, 3.0))
+    fig, axes = plt.subplots(rows, per_row, figsize=figsize, squeeze=False)
+    mode, values = style.stack_mode(clim, "tiles")
+    shared: tuple[float, float] | None = None
+    if mode == "shared":
+        shared = percentile_limits(data[list(indices)], *values)
+    elif mode == "fixed":
+        shared = values
+    with_bar = style.local_option("tiles", "colorbar", colorbar, fallback=False)
+    cmap = style.colormap("tiles", cmap)
+    im = None
     for k, ax in enumerate(axes.ravel()):
         if k >= len(indices):
             ax.axis("off")
             continue
         i = int(indices[k])
-        vmin, vmax = (
-            shared if shared else resolve_clim(data[i], ("p", 1, 99) if clim == "each" else clim)
-        )
-        ax.imshow(data[i], cmap=cmap, vmin=vmin, vmax=vmax)
+        vmin, vmax = shared or percentile_limits(data[i], *values)
+        im = ax.imshow(data[i], cmap=cmap, vmin=vmin, vmax=vmax)
         if titles:
-            ax.set_title(f"{label} = {coords[i]:.4g}", fontsize=9)
+            ax.set_title(f"{label} = {coords[i]:.4g}", **style.title_font("tiles"))
         ax.set_xticks([])
         ax.set_yticks([])
+        if with_bar and shared is None:
+            style.colorbar(fig, im, ax, "tiles", True)
+    if with_bar and shared is not None and im is not None:
+        style.colorbar(fig, im, axes.ravel().tolist(), "tiles", True)
     return fig, axes

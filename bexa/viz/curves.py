@@ -9,17 +9,22 @@ import numpy as np
 import xarray as xr
 
 from bexa.core.roi import ROI
+from bexa.viz import style
 from bexa.viz.images import roi_overlay
-from bexa.viz.style import as_array, dim_label, new_axes, resolve_clim
+from bexa.viz.style import as_array, dim_label, new_axes
 
 __all__ = ["curve", "linearity", "moments_vs_axis", "on_off_diff", "rocking_curves"]
 
 
 def curve(
-    da: xr.DataArray, ax: Any = None, label: str | None = None, **kwargs: Any
+    da: xr.DataArray,
+    ax: Any = None,
+    label: str | None = None,
+    figsize: tuple[float, float] | None = None,
+    **kwargs: Any,
 ) -> tuple[Any, Any]:
-    """Line plot of a 1-D DataArray against its coordinate."""
-    fig, ax = new_axes(ax)
+    """Line plot of a 1-D DataArray against its coordinate (``kwargs`` go to ``ax.plot``)."""
+    fig, ax = new_axes(ax, style.figure_size("curve", figsize))
     dim = da.dims[0]
     x = da.coords[dim].values if dim in da.coords else np.arange(da.size)
     ax.plot(x, as_array(da), label=label or (str(da.name) if da.name else None), **kwargs)
@@ -44,7 +49,7 @@ def on_off_diff(
     axis: str | None = None,
     mode: str = "diff",
     axes: Any = None,
-    figsize: tuple[float, float] = (13, 4),
+    figsize: tuple[float, float] | None = None,
     title: str | None = None,
 ) -> tuple[Any, np.ndarray]:
     """Three panels: summed image with the ROI, on/off curves, and their difference.
@@ -61,11 +66,12 @@ def on_off_diff(
     axis = _axis_of(ds, axis)
     frames = ds["frames"]
     if axes is None:
+        figsize = style.figure_size("on_off", figsize, 1, 3, panel=(13 / 3, 4))
         fig, axes = plt.subplots(1, 3, figsize=figsize)
     else:
         fig = axes[0].figure
     total = frames.sum(("laser", axis))
-    vmin, vmax = resolve_clim(total, ("p", 1, 99))
+    vmin, vmax = style.limits(total, kind="on_off")
     axes[0].imshow(as_array(total), vmin=vmin, vmax=vmax)
     if roi is not None:
         roi_overlay(axes[0], roi)
@@ -124,9 +130,8 @@ def moments_vs_axis(
     cols = min(3, n) or 1
     rows = int(np.ceil(n / cols))
     if axes is None:
-        fig, axes = plt.subplots(
-            rows, cols, figsize=figsize or (4.2 * cols, 3.2 * rows), squeeze=False
-        )
+        figsize = style.figure_size("moments", figsize, rows, cols, panel=(4.2, 3.2))
+        fig, axes = plt.subplots(rows, cols, figsize=figsize, squeeze=False)
     else:
         fig = np.asarray(axes).ravel()[0].figure
     for ax, (base, parts) in zip(np.asarray(axes).ravel(), bases.items(), strict=False):
@@ -166,7 +171,7 @@ def rocking_curves(
     ``curves`` is a 1-D DataArray or ``{label: DataArray}``; ``fits`` maps the
     same labels to ``(x, y)`` arrays or fit results with ``best_fit``.
     """
-    fig, ax = new_axes(ax, figsize)
+    fig, ax = new_axes(ax, style.figure_size("rocking", figsize))
     items = {"": curves} if isinstance(curves, xr.DataArray) else dict(curves)
     for label, da in items.items():
         dim = da.dims[0]
@@ -193,10 +198,14 @@ def rocking_curves(
 
 
 def linearity(
-    detector: Any, i0: Any, laser: Any = None, ax: Any = None, figsize: tuple[float, float] = (5, 5)
+    detector: Any,
+    i0: Any,
+    laser: Any = None,
+    ax: Any = None,
+    figsize: tuple[float, float] | None = None,
 ) -> tuple[Any, Any]:
     """Detector signal against the incident monitor, split by laser state when given."""
-    fig, ax = new_axes(ax, figsize)
+    fig, ax = new_axes(ax, style.figure_size("linearity", figsize) or (5, 5))
     d = as_array(detector)
     m = as_array(i0)
     if laser is None:

@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 import xarray as xr
 
-from bexa.viz import curves, images, interactive, maps, volume
+from bexa.viz import curves, images, interactive, maps, style, volume
 
 __all__ = ["KINDS", "guess_kind", "plot"]
 
@@ -80,8 +80,10 @@ def plot(obj: Any, kind: str | None = None, **kwargs: Any) -> Any:
         return images.show(obj, **kwargs)
     if kind == "com":
         return maps.com_map(obj, **kwargs)
-    if kind == "width":
-        return maps.com_map(obj, **{"center": "median", "cmap": "viridis", **kwargs})
+    if kind == "width":  # a width map: median-centred, sequential; its own overrides in style
+        options = {"center": "median", **style.defaults.kinds.get("width", {}), **kwargs}
+        options["cmap"] = style.option("width", "cmap", kwargs.get("cmap"), fallback="viridis")
+        return maps.com_map(obj, **options)
     if kind == "curve":
         return curves.curve(obj, **kwargs)
     if kind == "rocking":
@@ -109,19 +111,24 @@ def grid(
     max_panels: int = 9,
     figsize: tuple[float, float] | None = None,
     names: list[str] | None = None,
+    panes: dict[str, dict[str, Any]] | None = None,
+    **options: Any,
 ) -> tuple[Any, np.ndarray]:
-    """One panel per 2-D variable of a reduce result: maps as maps, the rest as images."""
+    """One panel per 2-D variable of a reduce result: maps as maps, the rest as images.
+
+    ``options`` (``cmap``, ``clim``, ``colorbar``, ``scalebar``, ...) go to every
+    pane; ``panes={"com_mu": {"span": 0.1}}`` to one variable only.
+    """
     import matplotlib.pyplot as plt
 
     chosen = names or [str(k) for k in ds.data_vars if ds[k].ndim == 2][:max_panels]
     if not chosen:
         raise ValueError("the dataset has no 2-D variable to show")
     rows = math.ceil(len(chosen) / per_row)
-    fig, axes = plt.subplots(
-        rows, per_row, figsize=figsize or (4.4 * per_row, 3.8 * rows), squeeze=False
-    )
+    figsize = style.figure_size("grid", figsize, rows, per_row, panel=(4.4, 3.8))
+    fig, axes = plt.subplots(rows, per_row, figsize=figsize, squeeze=False)
     for ax, name in zip(axes.ravel(), chosen, strict=False):
-        plot(ds[name], ax=ax, title=name)
+        plot(ds[name], ax=ax, title=name, **{**options, **(panes or {}).get(name, {})})
     for ax in axes.ravel()[len(chosen) :]:
         ax.axis("off")
     return fig, axes
