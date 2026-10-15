@@ -13,6 +13,7 @@ import multiprocessing as mp
 import os
 import queue
 import threading
+import weakref
 from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from typing import Generic, TypeVar
@@ -93,22 +94,22 @@ class Prefetcher(Generic[T]):
     """
 
     def __init__(self, iterable: Iterable[T], depth: int = 2) -> None:
-        self._source = iter(iterable)
         self._queue: queue.Queue = queue.Queue(maxsize=max(1, depth))
         self._stop = threading.Event()
-        self._thread = threading.Thread(target=self._run, daemon=True, name="bexa-prefetch")
+        # the thread holds no reference to the prefetcher, so the prefetcher is collected as
+        # soon as its consumer lets go, and the thread stops then or at the latest when the
+        # interpreter exits: a generator left open (next(iter(scan.batches()))) never keeps
+        # the process alive, which a producer blocked inside HDF5 at exit otherwise does
+        self._thread = threading.Thread(
+            target=_produce,
+            args=(iter(iterable), self._queue, self._stop),
+            daemon=True,
+            name="bexa-prefetch",
+        )
         self._started = False
-
-    def _run(self) -> None:
-        try:
-            for item in self._source:
-                if self._stop.is_set():
-                    break
-                self._queue.put(item)
-        except BaseException as exc:  # forwarded to the consumer
-            self._queue.put(_ExceptionWrapper(exc))
-        finally:
-            self._queue.put(_SENTINEL)
+        self._finalizer = weakref.finalize(
+            self, _stop_producer, self._stop, self._queue, self._thread
+        )
 
     def __iter__(self) -> Iterator[T]:
         if not self._started:
@@ -123,10 +124,40 @@ class Prefetcher(Generic[T]):
             yield item
 
     def close(self) -> None:
-        """Stop the producer thread early (drains one item so it can exit)."""
-        self._stop.set()
-        with contextlib.suppress(queue.Empty):
-            self._queue.get_nowait()
+        """Stop the producer thread early and wait for it (at most two seconds)."""
+        self._finalizer()
+
+
+def _produce(source: Iterator[object], pending: queue.Queue, stop: threading.Event) -> None:
+    """The prefetch thread: queue the items of ``source``, then a sentinel; errors go too."""
+    try:
+        for item in source:
+            if not _offer(pending, stop, item):
+                break
+    except BaseException as exc:  # forwarded to the consumer
+        _offer(pending, stop, _ExceptionWrapper(exc))
+    finally:
+        _offer(pending, stop, _SENTINEL)
+
+
+def _offer(pending: queue.Queue, stop: threading.Event, item: object) -> bool:
+    """Queue an item, giving up when the consumer is gone; False means stop producing."""
+    while not stop.is_set():
+        try:
+            pending.put(item, timeout=0.2)
+            return True
+        except queue.Full:
+            continue
+    return False
+
+
+def _stop_producer(stop: threading.Event, pending: queue.Queue, thread: threading.Thread) -> None:
+    """Tell a prefetch thread to stop, free its queue and wait for it (with a limit)."""
+    stop.set()
+    with contextlib.suppress(queue.Empty):
+        pending.get_nowait()
+    if thread.is_alive():
+        thread.join(timeout=2.0)
 
 
 class _ExceptionWrapper:
