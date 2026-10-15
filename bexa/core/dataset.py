@@ -28,17 +28,37 @@ from bexa.core.backend import memory_budget, resolve_device
 from bexa.core.parallel import default_workers, process_pool
 from bexa.core.provenance import build_attrs, fingerprint, to_json
 from bexa.core.reductions import make_plan
+from bexa.core.registry import engines
 from bexa.core.resources import usable_cpus
 from bexa.core.scan import Scan, _resolve_cache, _resolve_spec, combine_sources, list_scans
 from bexa.core.scan import open as open_scan
-from bexa.core.structure import ENERGY_DIM, _group_values
+from bexa.core.scan_table import (
+    FIXED_COLUMNS,
+    LEAD_COLUMNS,
+    arrange,
+    compact_columns,
+    followers,
+    min_steps,
+    placeholder_row,
+    scan_row,
+)
+from bexa.core.status import FINISHED, ScanNotReadyError, ScanStatus, status_filter
+from bexa.core.structure import ENERGY_DIM, _group_values, same_partition
+from bexa.io.formats import load_spec
 
 log = get_logger(__name__)
 
-__all__ = ["Dataset", "common_grid", "open_dataset", "regrid", "stack", "varying"]
+__all__ = [
+    "FIXED_COLUMNS",
+    "LEAD_COLUMNS",
+    "Dataset",
+    "common_grid",
+    "open_dataset",
+    "regrid",
+    "stack",
+    "varying",
+]
 
-LEAD_COLUMNS = ("id", "dataset")
-FIXED_COLUMNS = ("scan", "type", "title", "motors", "shape", "ranges", "frames", "missing")
 STATS_SUFFIXES = ("_block_total", "_block_p1", "_block_p99")
 # stacks on disk are bexa's own files: lzf writes ten times faster than gzip and reads four
 # times faster, which the browsers feel at every slider move
@@ -78,10 +98,18 @@ class _Folder:
     open_kwargs: dict[str, Any]
     list_kwargs: dict[str, Any]
     numbers: list[int] | None = field(default=None, repr=False)
+    _spec: Any = field(default=None, repr=False)
+
+    @property
+    def spec(self) -> Any:
+        """The format spec of the folder, loaded once (by name: the sniffing was done)."""
+        if self._spec is None and self.list_kwargs.get("format"):
+            self._spec = load_spec(self.list_kwargs["format"])
+        return self._spec
 
     def scans(self) -> list[int]:
-        if self.numbers is None:
-            self.numbers = list_scans(self.path, **self.list_kwargs)
+        if self.numbers is None:  # a scan folder without a file yet is a scan that just started
+            self.numbers = list_scans(self.path, require_files=False, **self.list_kwargs)
         return list(self.numbers)
 
     def open(self, scan: Any, **kwargs: Any) -> Scan:
@@ -89,6 +117,15 @@ class _Folder:
         if "profile" in options:
             return open_scan(scan=scan, **options)
         return open_scan(self.path, scan=scan, **options)
+
+    def status(self, number: int) -> ScanStatus:
+        """The status of one scan read from its files alone, for a scan that cannot be opened."""
+        spec = self.spec
+        engine = engines.get(spec.engine) if spec is not None else None
+        if engine is None or not hasattr(engine, "scan_status"):
+            return ScanStatus.UNREADABLE
+        detector = self.list_kwargs.get("detector")
+        return engine.scan_status(spec, self.path.parent, self.path.name, number, detector)
 
 
 class Dataset:
@@ -193,6 +230,9 @@ class Dataset:
         self._where: dict[int, tuple[int, int]] = {}
         self._table: pd.DataFrame | None = None
         self._scans: dict[int, Scan] = {}
+        # the table rows and the problems of the scans that could not be read, by (folder, number)
+        self._rows: dict[tuple[int, int], dict[str, Any]] = {}
+        self._problems: dict[tuple[int, int], str] = {}
 
     # ------------------------------------------------------------- basics
     @property
@@ -214,16 +254,52 @@ class Dataset:
         """The dataset folders, in the order their scans are numbered."""
         return list(self.paths)
 
-    def refresh(self) -> Dataset:
-        """Forget the cached scan list, table and handles (for a dataset still being written)."""
-        for scan in self._scans.values():
-            scan.close()
+    def refresh(self, everything: bool = False) -> Dataset:
+        """Look at the folders again: new scans appear, unfinished ones are read anew.
+
+        The scans that were complete or aborted keep their handles and table
+        rows (their files do not change any more); the running, empty and
+        unreadable ones are forgotten and read again by the next :meth:`table`.
+        ``everything=True`` closes and forgets every scan.
+        """
+        kept_rows: dict[tuple[int, int], dict[str, Any]] = {}
+        if not everything:
+            kept_rows = {
+                key: row for key, row in self._rows.items() if ScanStatus(row["status"]) in FINISHED
+            }
+        kept_scans: dict[tuple[int, int], Scan] = {}
+        for scan_id, scan in self._scans.items():
+            key = self._where.get(scan_id)
+            if key is not None and key in kept_rows:
+                kept_scans[key] = scan
+            else:
+                scan.close()
         self._scans.clear()
         for folder in self._folders:
             folder.numbers = None
         self._ids = None
         self._table = None
+        self._rows = kept_rows
+        self._problems = {}
+        for scan_id, key in self._where_now().items():  # the ids may have moved
+            if key in kept_scans:
+                self._scans[scan_id] = kept_scans[key]
+        self._rows = {key: row for key, row in self._rows.items() if key in self._where.values()}
         return self
+
+    def _where_now(self) -> dict[int, tuple[int, int]]:
+        """``{id: (folder index, scan number)}`` after listing the folders again."""
+        _ = self.scans  # rebuilds the ids and their places
+        return dict(self._where)
+
+    @property
+    def problems(self) -> dict[int, str]:
+        """Why a scan has a placeholder row in the table, by id (empty when all could be read)."""
+        return {
+            scan_id: self._problems[key]
+            for scan_id, key in self._where.items()
+            if key in self._problems
+        }
 
     def clear_cache(self) -> int:
         """Delete every cached result of the dataset's cache; returns the number of files."""
@@ -244,13 +320,31 @@ class Dataset:
         return f"Dataset({self.name!r}, {len(self)} scans, {self.path})"
 
     def scan(self, number: int) -> Scan:
-        """Open one scan by id (handles are kept until :meth:`refresh` or :meth:`close`)."""
+        """Open one scan by id (handles are kept until :meth:`refresh` or :meth:`close`).
+
+        A scan that is still running opens and reads as far as its files go;
+        one with nothing to read yet (running without a frame, empty,
+        unreadable) raises :class:`bexa.core.status.ScanNotReadyError`, which
+        names its status.
+        """
         number = int(number)
         if number not in self._scans:
             if number not in self.scans:
                 raise ValueError(f"scan {number} is not in the dataset; available: {self.scans}")
             k, scan_number = self._where[number]
-            self._scans[number] = self._folders[k].open(scan_number)
+            folder = self._folders[k]
+            try:
+                self._scans[number] = folder.open(scan_number)
+            except ScanNotReadyError as exc:
+                exc.scan = number
+                raise
+            except (OSError, KeyError, IndexError, ValueError) as exc:
+                status = folder.status(scan_number)
+                raise ScanNotReadyError(
+                    f"scan {number} of {folder.name} is {status}: {type(exc).__name__}: {exc}",
+                    status,
+                    number,
+                ) from exc
         return self._scans[number]
 
     def __getitem__(self, key: Any) -> Scan | list[Scan]:
@@ -271,72 +365,49 @@ class Dataset:
 
     # -------------------------------------------------------------- table
     def table(self, refresh: bool = False, compact: bool = False) -> pd.DataFrame:
-        """One row per scan: type, title, motors, shape, ranges, frames, energy and positioners.
+        """One row per scan: status, type, motors, shape, ranges, frames, energy, positioners.
 
         Every scalar positioner of the master file becomes a column, so the
         table can be filtered by ``samz``, ``ccmth`` or any other fixed motor.
-        ``compact=True`` drops the positioner columns that never change and the
-        ``missing`` column when no scan has missing frames.
+        A scan that cannot be read yet (running without a frame, empty,
+        unreadable) keeps a row with its status and nothing else, and its
+        reason is in :attr:`problems`; one such scan never hides the others.
+        ``refresh=True`` looks at the folders again first (:meth:`refresh`).
+        ``compact=True`` drops the positioner columns that never change, the
+        ``missing`` column when no scan has missing frames and the ``status``
+        column when every scan is complete.
         """
-        if self._table is None or refresh:
+        if refresh:
+            self.refresh()
+        if self._table is None:
             rows = []
+            several = len(self._folders) > 1
             for scan_id in self.scans:
                 k, number = self._where[scan_id]
-                s = self.scan(scan_id).structure
-                row: dict[str, Any] = {"id": scan_id}
-                if len(self._folders) > 1:
-                    row["dataset"] = self._folders[k].name
-                row.update(
-                    {
-                        "scan": number,
-                        "type": s.scan_type,
-                        "title": s.title,
-                        "motors": " x ".join(s.motor_dims),
-                        "shape": " x ".join(str(n) for n in s.motor_shape),
-                        "ranges": "; ".join(
-                            f"{d} {s.coords[d].min():.5g}..{s.coords[d].max():.5g}"
-                            for d in s.motor_dims
-                        ),
-                        "frames": s.n_frames,
-                        "missing": s.n_missing,
-                        "energy_keV": s.energy_keV,
-                    }
-                )
-                row.update({k: v for k, v in s.scalars.items() if k not in row})
-                rows.append(row)
-            table = pd.DataFrame(rows)
-            if not table.empty:
-                lead = [c for c in LEAD_COLUMNS if c in table.columns]
-                fixed = [*lead, *FIXED_COLUMNS, "energy_keV"]
-                positioners = sorted(c for c in table.columns if c not in fixed)
-                table = table[[*fixed, *positioners]]
-            self._table = table
+                folder = self._folders[k]
+                row = self._rows.get((k, number))
+                if row is None:
+                    name = folder.name if several else None
+                    try:
+                        row = scan_row(self.scan(scan_id), scan_id, number, name)
+                    except ScanNotReadyError as exc:
+                        row = placeholder_row(scan_id, number, exc.status, name)
+                        self._problems[(k, number)] = str(exc)
+                        log.warning("%s", exc)
+                    self._rows[(k, number)] = row
+                rows.append({**row, "id": scan_id})
+            self._table = arrange(rows)
         table = self._table.copy()
         if compact and not table.empty:
-            positioners = [
-                c for c in table.columns if c not in (*LEAD_COLUMNS, *FIXED_COLUMNS, "energy_keV")
-            ]
-            dropped = [c for c in positioners if table[c].nunique(dropna=True) <= 1]
-            spec = self.scan(self.scans[0]).spec  # a motor kept under a legacy name too: once
-            aliases = (spec.motors.get("aliases", {}) or {}) if spec is not None else {}
-            for logical, physical in aliases.items():
-                names = [physical] if isinstance(physical, str) else list(physical)
-                if logical in positioners and any(
-                    p in positioners and table[logical].equals(table[p]) for p in names
-                ):
-                    dropped.append(logical)
-            for leader, followers in _followers(spec).items():  # samz follows uz: once too
-                if leader in positioners and leader not in dropped:
-                    dropped.extend(f for f in followers if f in positioners)
-            for name, step in _min_steps(spec).items():  # a drift below the motor's step
-                if name in positioners and name not in dropped:
-                    column = pd.to_numeric(table[name], errors="coerce")
-                    if column.notna().any() and float(column.max() - column.min()) < step:
-                        dropped.append(name)
-            if not table["missing"].any():
-                dropped.append("missing")
-            table = table.drop(columns=sorted(set(dropped)))
+            table = table.drop(columns=compact_columns(table, self._spec_for_table()))
         return table
+
+    def _spec_for_table(self) -> Any:
+        """The spec the compact table judges aliases, followers and drift by."""
+        for scan in self._scans.values():
+            if scan.spec is not None:
+                return scan.spec
+        return self._folders[0].spec
 
     def info(self) -> str:
         """The table as text, with the folder on top."""
@@ -358,6 +429,7 @@ class Dataset:
         type: str | None = None,
         motors: str | Sequence[str] | None = None,
         where: Callable[[pd.Series], bool] | None = None,
+        status: Any = "finished",
         **positioners: Any,
     ) -> list[int]:
         """Scan ids chosen by hand and/or by content.
@@ -373,16 +445,31 @@ class Dataset:
             The scanned motors, exactly: ``"mu"`` or ``("chi", "mu")``.
         where
             A callable on a table row returning True to keep the scan.
+        status
+            Which scan statuses to keep: ``"finished"`` (complete and aborted,
+            whose files do not change any more; the default), ``"complete"``,
+            ``"any"``, a status name or a tuple of names. A scan named in
+            ``scans`` but left out for its status is reported once.
         **positioners
             A table column with a value (``samz=0.5``, matched within 1e-9) or
             an inclusive ``(low, high)`` range; ``energy_keV`` and ``dataset``
             work too.
         """
         numbers = _scan_numbers(scans, self.scans)
+        allowed = status_filter(status)
         if type is None and motors is None and where is None and not positioners:
-            return numbers
+            if allowed is None:
+                return numbers
+            return self._with_status(numbers, allowed, explicit=scans is not None)
         table = self.table()
         table = table[table["id"].isin(numbers)]
+        if allowed is not None:
+            keep = table["status"].isin([s.value for s in allowed])
+            if scans is not None and not keep.all():
+                self._report_left_out(
+                    [(int(r["id"]), str(r["status"])) for _, r in table[~keep].iterrows()]
+                )
+            table = table[keep]
         if type is not None:
             table = table[table["type"] == type]
         if motors is not None:
@@ -404,6 +491,32 @@ class Dataset:
             keep = np.asarray([bool(where(row)) for _, row in table.iterrows()], dtype=bool)
             table = table[keep]
         return [int(n) for n in table["id"]]
+
+    def _status_of(self, scan_id: int) -> ScanStatus:
+        """The status of one scan: from its table row when there is one, else from its files."""
+        key = self._where[scan_id]
+        row = self._rows.get(key)
+        if row is not None:
+            return ScanStatus(row["status"])
+        try:
+            return self.scan(scan_id).status
+        except ScanNotReadyError as exc:
+            return exc.status
+
+    def _with_status(
+        self, numbers: list[int], allowed: frozenset[ScanStatus], explicit: bool
+    ) -> list[int]:
+        """The ids whose status is allowed; the others reported when they were named."""
+        statuses = {n: self._status_of(n) for n in numbers}
+        kept = [n for n in numbers if statuses[n] in allowed]
+        if explicit and len(kept) < len(numbers):
+            self._report_left_out([(n, str(statuses[n])) for n in numbers if n not in kept])
+        return kept
+
+    @staticmethod
+    def _report_left_out(dropped: list[tuple[int, str]]) -> None:
+        listed = ", ".join(f"scan {n} is {status}" for n, status in dropped)
+        log.warning("%s: left out of the selection (status='any' keeps them)", listed)
 
     def select(self, scans: Any = None, **criteria: Any) -> list[Scan]:
         """The scans of :meth:`select_numbers`, opened."""
@@ -480,25 +593,9 @@ def _coordinate(scan: Scan, dim: str, index: int) -> float:
     raise ValueError(f"{scan.name} records no positioner {dim!r}; available: {available}")
 
 
-def _min_steps(spec: Any) -> dict[str, float]:
-    """``{motor: step}`` from the spec's ``motors.min_step``: smaller changes are drift."""
-    steps = (spec.motors.get("min_step", {}) or {}) if spec is not None else {}
-    return {str(name): float(step) for name, step in steps.items()}
-
-
-def _followers(spec: Any) -> dict[str, list[str]]:
-    """``{leader: [followers]}`` from the spec's ``motors.coupled`` (``uz`` drives ``samz``)."""
-    coupled = (spec.motors.get("coupled", {}) or {}) if spec is not None else {}
-    return {
-        str(leader): [names] if isinstance(names, str) else [str(n) for n in names]
-        for leader, names in coupled.items()
-    }
-
-
-def _same_partition(a: np.ndarray, b: np.ndarray) -> bool:
-    """True when two label arrays split the scans into the same groups (lockstep motors)."""
-    pairs = set(zip(a.tolist(), b.tolist(), strict=True))
-    return len(pairs) == len(set(a.tolist())) == len(set(b.tolist()))
+_min_steps = min_steps
+_followers = followers
+_same_partition = same_partition
 
 
 def varying(
@@ -579,9 +676,9 @@ def varying(
             del found[logical]
     # the motors a stepping leader drives follow it: not axes of their own
     coupled = _followers(spec)
-    for leader, followers in coupled.items():
+    for leader, driven in coupled.items():
         if leader in found:
-            for name in followers:
+            for name in driven:
                 found.pop(name, None)
     for name in [ignore] if isinstance(ignore, str) else list(ignore or []):
         found.pop(name, None)  # never an axis, by request
@@ -705,6 +802,16 @@ def stack(
     scans = list(scans)
     if not scans:
         raise ValueError("no scans to stack")
+    for scan in scans:  # a scan still running or stopped early: its results cover what it has
+        status = getattr(scan, "status", ScanStatus.COMPLETE)
+        if status != ScanStatus.COMPLETE:
+            log.warning(
+                "%s scan %s is %s: its results cover the %d frames it has",
+                scan.name,
+                getattr(scan.source, "scan", "?"),
+                status,
+                scan.n_frames,
+            )
     accumulators = list(accumulators)
     dims, centers, positions = _grid(scans, dim, coords, tolerance, ignore)
     grid_coords: dict[str, np.ndarray] | None = None

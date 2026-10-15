@@ -91,6 +91,11 @@ class FormatSpec(BaseModel):
     def known_motors(self) -> list[str]:
         return list(self.motors.get("known", []))
 
+    def min_steps(self) -> dict[str, float]:
+        """``{motor: step}`` from ``motors.min_step``: a smaller change is drift, not a move."""
+        steps = self.motors.get("min_step", {}) or {}
+        return {str(name): float(step) for name, step in steps.items()}
+
     def motor_aliases(self, name: str) -> list[str]:
         """Names to try in the file for the logical motor ``name`` (``z1`` -> ``samz``)."""
         aliases = self.motors.get("aliases", {}) or {}
@@ -198,10 +203,10 @@ def load_spec(
 
 # ----------------------------------------------------------------- matching
 def _h5_has(path: Path, item: str) -> bool:
-    import h5py
+    from bexa.io.h5files import open_h5
 
     try:
-        with h5py.File(path, "r") as f:
+        with open_h5(path, retry=False) as f:
             return item in f
     except OSError:
         return False
@@ -209,11 +214,11 @@ def _h5_has(path: Path, item: str) -> bool:
 
 def _h5_scan_numbers(path: Path, limit: int = 3) -> list[int]:
     """Scan numbers from BLISS-style top-level keys ``"7.1"``."""
-    import h5py
+    from bexa.io.h5files import open_h5
 
     numbers: list[int] = []
     try:
-        with h5py.File(path, "r") as f:
+        with open_h5(path, retry=False) as f:
             for key in f:
                 m = re.fullmatch(r"(\d+)\.1", key)
                 if m:
@@ -295,10 +300,10 @@ def _fingerprint_checks(spec: FormatSpec, path: Path) -> list[bool]:
         target = path if not is_dir else None
         ok = False
         if target is not None and target.suffix in _H5_SUFFIXES:
-            import h5py
+            from bexa.io.h5files import open_h5
 
             try:
-                with h5py.File(target, "r") as f:
+                with open_h5(target, retry=False) as f:
                     ok = all(
                         safe_format(group, scan=1) in f
                         and all(a in f[safe_format(group, scan=1)].attrs for a in attrs)

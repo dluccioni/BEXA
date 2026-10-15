@@ -10,6 +10,7 @@ the way the legacy scripts computed them, for parity tests.
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,6 +22,12 @@ from scipy import ndimage
 from scipy.special import erf
 
 from bexa.core.units import energy_to_mono_angle
+from bexa.io.scan_commands import CONTINUOUS_COMMANDS
+
+# step scans that move their motors together (one point of every motor per frame)
+LOCKSTEP_COMMANDS = frozenset({"a2scan", "d2scan", "a3scan", "d3scan", "lookupscan"})
+SCAN_STARTED = "2026-10-01T14:04:09.683031+02:00"
+SCAN_ENDED = "2026-10-01T14:19:46.816806+02:00"
 
 try:  # ESRF detector files are compressed with bitshuffle+lz4
     import hdf5plugin
@@ -148,6 +155,10 @@ def make_esrf_scan(
     centers: Mapping[str, float | np.ndarray] | None = None,
     widths: Mapping[str, float | np.ndarray] | None = None,
     monitors: Mapping[str, float] | None = None,
+    state: str = "finished",
+    motor_lag: int = 0,
+    empty_last_file: bool = False,
+    command: str | None = None,
 ) -> SyntheticEsrfScan:
     """Write one ESRF BLISS scan (master file plus detector files).
 
@@ -155,7 +166,26 @@ def make_esrf_scan(
     ----------
     motors
         ``(name, n_points)`` per scanned motor, slow first. One motor gives an
-        fscan1d, two an fscan2d.
+        fscan1d, two an fscan2d. Any name is allowed: a motor the spec does
+        not know is still recorded per frame and among the positioners.
+    command
+        The scan command to write as the title instead of the fscan family:
+        ``"dmesh"`` or ``"amesh"`` (a step mesh, whose title counts intervals
+        and whose master has no ``fscan_parameters``), ``"ascan"``, a lockstep
+        command (``"a2scan"``: every motor steps at every frame, so all motors
+        need the same number of points), or any other word (a beamline macro).
+    state
+        ``"finished"`` (the default) writes the start and end times, the end
+        reason (``SUCCESS``, or ``USER_ABORT`` when ``partial`` frames are
+        missing) and the writer status ``SUCCEEDED``, as BLISS does when a scan
+        ends; ``"running"`` writes the start time and the status ``RUNNING``
+        only, as for a scan still going; ``"legacy"`` writes none of them.
+    motor_lag
+        Frames whose readbacks the master does not hold yet: the per-frame
+        channels stop that many frames before the detector files do.
+    empty_last_file
+        Add a detector file of zero bytes after the real ones, as the file the
+        detector has opened but not flushed yet.
     monitors
         Slow channels sampled during the scan, ``{"nanodac1_temp": 50.0}``,
         written to the monitoring sub-scan ``<scan>.2`` as BLISS does for a
@@ -184,12 +214,18 @@ def make_esrf_scan(
         ``"slow_major"`` (fast motor loops inside the slow one) or ``"snake"``
         (fast motor reverses on every other slow step).
     partial
-        Number of frames missing at the end, as in an aborted scan.
+        Number of frames missing at the end, as in an aborted scan; every
+        frame may be missing (a scan that has just started).
     """
+    if state not in ("finished", "running", "legacy"):
+        raise ValueError(f"state must be finished, running or legacy; got {state!r}")
     rng = np.random.default_rng(seed)
     root = Path(root)
     names = [m[0] for m in motors]
     shape = tuple(m[1] for m in motors)
+    lockstep = command in LOCKSTEP_COMMANDS
+    if lockstep and len(set(shape)) != 1:
+        raise ValueError(f"{command} steps every motor at once: give them the same points")
     ccmth = energy_to_mono_angle(energy_keV, "Si111")
     default_ranges = {
         "mu": (-1.0, 1.0),
@@ -203,20 +239,31 @@ def make_esrf_scan(
         lo, hi = (ranges or {}).get(name, default_ranges.get(name, (0.0, 1.0)))
         coords[name] = np.linspace(lo, hi, n)
 
-    # acquisition order: slow-major, with optional snake on the fast axis
-    grids = np.meshgrid(*[coords[n] for n in names], indexing="ij")
-    per_frame_full = {n: g.reshape(-1).copy() for n, g in zip(names, grids, strict=True)}
-    if order == "snake" and len(names) == 2:
-        fast = per_frame_full[names[1]].reshape(shape)
-        fast[1::2] = fast[1::2, ::-1]
-        per_frame_full[names[1]] = fast.reshape(-1)
-    n_total = int(np.prod(shape))
+    # acquisition order: slow-major, with optional snake on the fast axis; a lockstep command
+    # moves every motor at every frame
+    if lockstep:
+        per_frame_full = {n: np.asarray(coords[n], dtype=float).copy() for n in names}
+        n_total = int(shape[0])
+    else:
+        grids = np.meshgrid(*[coords[n] for n in names], indexing="ij")
+        per_frame_full = {n: g.reshape(-1).copy() for n, g in zip(names, grids, strict=True)}
+        if order == "snake" and len(names) == 2:
+            fast = per_frame_full[names[1]].reshape(shape)
+            fast[1::2] = fast[1::2, ::-1]
+            per_frame_full[names[1]] = fast.reshape(-1)
+        n_total = int(np.prod(shape))
     n_frames = n_total - partial
+    if n_frames < 0:
+        raise ValueError(f"partial={partial} is more than the {n_total} frames of the scan")
     per_frame = {n: v[:n_frames] for n, v in per_frame_full.items()}
 
-    frames, truth = _peak_frames(
-        per_frame, frame_shape, amplitude, background, rng, noise, curve, centers, widths
-    )
+    H, W = frame_shape
+    if n_frames:
+        frames, truth = _peak_frames(
+            per_frame, frame_shape, amplitude, background, rng, noise, curve, centers, widths
+        )
+    else:  # a scan that has just started: nothing taken yet
+        frames, truth = np.zeros((0, H, W), dtype=np.float32), {}
     stored = np.clip(np.rint(frames), 0, np.iinfo(dtype).max).astype(dtype)
 
     dataset_dir = root / dataset
@@ -230,7 +277,6 @@ def make_esrf_scan(
     per_file = -(-n_total // n_files)
     bounds = sorted({min(i * per_file, n_frames) for i in range(n_files + 1)})
     detector_files = []
-    H, W = frame_shape
     for i in range(len(bounds) - 1):
         start, stop = int(bounds[i]), int(bounds[i + 1])
         path = scan_folder / f"{detector}_{i:04d}.h5"
@@ -245,8 +291,14 @@ def make_esrf_scan(
             f["entry_0000/measurement/data"] = h5py.SoftLink(ds.name)
             f["entry_0000"].attrs["NX_class"] = "NXentry"
         detector_files.append(path)
+    if n_frames == 0 or empty_last_file:  # a file the detector opened and has not flushed
+        path = scan_folder / f"{detector}_{len(detector_files):04d}.h5"
+        path.touch()
+        detector_files.append(path)
 
     # ---- master file -----------------------------------------------------
+    recorded = max(n_frames - motor_lag, 0)  # frames whose readbacks the master holds
+    continuous = command is None or command in CONTINUOUS_COMMANDS
     with h5py.File(master, "a") as f:
         entry = f.require_group(f"{scan}.1")
         if layout != "2024":  # what LIMA records about the files: frames planned, frames per file
@@ -254,9 +306,9 @@ def make_esrf_scan(
             acq.create_dataset("acq_nb_frames", data=np.int64(n_total))
             ctrl = entry.require_group(f"instrument/{detector}/ctrl_parameters")
             ctrl.create_dataset("saving_frame_per_file", data=np.int64(per_file))
-        if layout != "2024" and len(names) >= 1:
+        if layout != "2024" and len(names) >= 1 and continuous:
             fs = entry.require_group("instrument/fscan_parameters")
-            scan_type = f"fscan{len(names)}d"
+            scan_type = command or f"fscan{len(names)}d"
             fs.create_dataset("scan_type", data=scan_type)
             fs.create_dataset("scan_name", data=scan_type)
             # the motor keys BLISS writes: motor / slow + fast / slow1 + slow2 + fast (slow1 outer)
@@ -266,16 +318,24 @@ def make_esrf_scan(
             for key, name, n in zip(keys, names, shape, strict=True):
                 fs.create_dataset(key, data=name)
                 fs.create_dataset(key.replace("motor", "npoints"), data=n)
-        title = " ".join(f"{n} {coords[n][0]:g} {coords[n][-1]:g} {len(coords[n])}" for n in names)
-        entry.create_dataset("title", data=f"fscan{len(names)}d {title} 0.05")
+        if continuous:  # the fscan family: start, step, points per motor
+            blocks = [f"{n} {coords[n][0]:g} {coords[n][-1]:g} {len(coords[n])}" for n in names]
+            title = f"{command or f'fscan{len(names)}d'} {' '.join(blocks)} 0.05"
+        elif lockstep:  # SPEC syntax: the ranges, then the intervals every motor shares
+            blocks = [f"{n} {coords[n][0]:g} {coords[n][-1]:g}" for n in names]
+            title = f"{command} {' '.join(blocks)} {shape[0] - 1} 0.1"
+        else:  # a step scan or mesh: start, stop, intervals per motor
+            blocks = [f"{n} {coords[n][0]:g} {coords[n][-1]:g} {len(coords[n]) - 1}" for n in names]
+            title = f"{command} {' '.join(blocks)} 0.1"
+        entry.create_dataset("title", data=title)
         meas = entry.require_group("measurement")
         for name, values in per_frame.items():
-            meas.create_dataset(name, data=values.astype(np.float64))
-        meas.create_dataset("elapsed_time", data=np.arange(n_frames) * 0.05)
+            meas.create_dataset(name, data=values[:recorded].astype(np.float64))
+        meas.create_dataset("elapsed_time", data=np.arange(recorded) * 0.05)
         pos = entry.require_group("instrument/positioners")
         scalars = {
-            "mu": float(per_frame.get("mu", coords.get("mu", np.zeros(1)))[0]),
-            "chi": float(per_frame.get("chi", np.zeros(1))[0]),
+            "mu": float(per_frame_full.get("mu", coords.get("mu", np.zeros(1)))[0]),
+            "chi": float(per_frame_full.get("chi", np.zeros(1))[0]),
             "phi": 0.0,
             "samz": 0.0,
             "ffz": 100.0,
@@ -295,18 +355,28 @@ def make_esrf_scan(
         for name in names:  # BLISS also records the scanned motors as arrays here
             if name in pos:
                 del pos[name]
-            pos.create_dataset(name, data=per_frame[name].astype(np.float64))
-        if layout == "F2026":  # the master also reaches the frames, as one virtual dataset
+            pos.create_dataset(name, data=per_frame[name][:recorded].astype(np.float64))
+        if layout == "F2026" and n_frames:  # the master also reaches the frames, as one VDS
             virtual = h5py.VirtualLayout(shape=(n_frames, H, W), dtype=dtype)
-            for i, path in enumerate(detector_files):
+            for i in range(len(bounds) - 1):
                 start, stop = int(bounds[i]), int(bounds[i + 1])
                 virtual[start:stop] = h5py.VirtualSource(
-                    str(path),
+                    str(detector_files[i]),
                     ESRF_FRAMES_PATH.format(detector=detector),
                     shape=(stop - start, H, W),
                 )
             entry.create_virtual_dataset(f"instrument/{detector}/image", virtual)
         entry.attrs["NX_class"] = "NXentry"
+        if state != "legacy":  # when the scan started and, once it has, how it ended
+            entry.create_dataset("start_time", data=SCAN_STARTED)
+            writer = entry.require_group("writer")
+            writer.create_dataset("date", data=SCAN_STARTED)
+            if state == "finished":
+                entry.create_dataset("end_time", data=SCAN_ENDED)
+                entry.create_dataset("end_reason", data="SUCCESS" if partial == 0 else "USER_ABORT")
+                writer.create_dataset("status", data="SUCCEEDED")
+            else:
+                writer.create_dataset("status", data="RUNNING")
         if monitors:  # the monitoring sub-scan: a value sampled over the scan's duration
             monitor = f.require_group(f"{scan}.2")
             monitor.create_dataset("title", data=f"fscan{len(names)}d")
@@ -333,6 +403,67 @@ def make_esrf_scan(
         energy_keV=energy_keV,
         frames=frames,
         truth=truth,
+    )
+
+
+@dataclass
+class SyntheticBeamtime:
+    """What :func:`make_esrf_beamtime` wrote: scans in every state a beamtime leaves them in."""
+
+    root: Path
+    dataset: str
+    master: Path
+    scans: dict[int, SyntheticEsrfScan]
+    complete: list[int]
+    aborted: int
+    running: int
+    empty: int
+    stray: Path
+
+    @property
+    def dataset_dir(self) -> Path:
+        return self.root / self.dataset
+
+
+def make_esrf_beamtime(
+    root: str | Path,
+    dataset: str = "beamtime",
+    frame_shape: tuple[int, int] = (24, 32),
+    **kwargs: Any,
+) -> SyntheticBeamtime:
+    """A dataset as a beamtime leaves it, for testing readers against unfinished scans.
+
+    Scans 1 to 3 are complete chi x mu scans, scan 4 was aborted (its last
+    five frames are missing), scan 5 is running with some frames taken, scan
+    6 has just started and holds no frame, and a folder named
+    ``scan0004_old`` that is not a scan sits next to them. ``kwargs`` go to
+    every :func:`make_esrf_scan` call (``layout``, ``n_files``...).
+    """
+    root = Path(root)
+    common: dict[str, Any] = {
+        "frame_shape": frame_shape,
+        "n_files": 2,
+        "motors": (("chi", 3), ("mu", 8)),
+        **kwargs,
+    }
+    scans: dict[int, SyntheticEsrfScan] = {}
+    for number in (1, 2, 3):
+        scans[number] = make_esrf_scan(root, dataset, scan=number, seed=number, **common)
+    scans[4] = make_esrf_scan(root, dataset, scan=4, seed=4, partial=5, **common)
+    scans[5] = make_esrf_scan(root, dataset, scan=5, seed=5, partial=9, state="running", **common)
+    scans[6] = make_esrf_scan(root, dataset, scan=6, seed=6, partial=24, state="running", **common)
+    stray = root / dataset / "scan0004_old"
+    shutil.copytree(scans[4].scan_folder, stray)
+    return SyntheticBeamtime(
+        root=root,
+        dataset=dataset,
+        master=scans[1].master,
+        scans=scans,
+        complete=[1, 2, 3],
+        aborted=4,
+        running=5,
+        empty=6,
+        stray=stray,
     )
 
 

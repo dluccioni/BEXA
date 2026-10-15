@@ -30,6 +30,8 @@ __all__ = [
     "ROI",
     "Dataset",
     "Scan",
+    "ScanNotReadyError",
+    "ScanStatus",
     "__version__",
     "acc",
     "analysis",
@@ -64,6 +66,8 @@ _LAZY_ATTRS: dict[str, tuple[str, str]] = {
     "open": ("bexa.core.scan", "open"),
     "open_profile": ("bexa.core.scan", "open_profile"),
     "Scan": ("bexa.core.scan", "Scan"),
+    "ScanStatus": ("bexa.core.status", "ScanStatus"),
+    "ScanNotReadyError": ("bexa.core.status", "ScanNotReadyError"),
     "list_scans": ("bexa.core.scan", "list_scans"),
     "Dataset": ("bexa.core.dataset", "Dataset"),
     "open_dataset": ("bexa.core.dataset", "open_dataset"),
@@ -105,6 +109,7 @@ if TYPE_CHECKING:  # pragma: no cover - static analysis only
     from bexa.core.roi import ROI
     from bexa.core.scan import Scan, list_scans, open, open_profile
     from bexa.core.settings import show as settings
+    from bexa.core.status import ScanNotReadyError, ScanStatus
     from bexa.io.cube import load, save
     from bexa.testing.demo import demo
     from bexa.viz.auto import plot

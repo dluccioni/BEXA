@@ -13,7 +13,6 @@ from __future__ import annotations
 import contextlib
 import re
 import threading
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -25,33 +24,12 @@ from bexa.core.registry import register_engine
 from bexa.core.structure import Structure
 from bexa.io.base import BaseSource
 from bexa.io.formats import FormatSpec
+from bexa.io.scan_commands import ScanCommand, ScanMotor  # noqa: F401  (the PAL command types)
+from bexa.io.scan_commands import parse_scan_command as parse_scan_command_general
 
 log = get_logger(__name__)
 
 SCAN_GROUP_RE = re.compile(r"scan(\d+)")
-
-
-@dataclass
-class ScanMotor:
-    """One ``name start stop npoints`` block of a scan command."""
-
-    name: str
-    start: float
-    stop: float
-    npoints: int
-
-
-@dataclass
-class ScanCommand:
-    """A parsed spec-like scan command."""
-
-    command: str
-    motors: list[ScanMotor]
-    text: str
-
-    @property
-    def shape(self) -> tuple[int, ...]:
-        return tuple(m.npoints for m in self.motors)
 
 
 def _decode(value: Any) -> str:
@@ -70,7 +48,9 @@ def parse_scan_command(
     """Parse ``... a2scan m1 s1 e1 n1 m2 s2 e2 n2 time`` into its motors.
 
     The command word may be preceded by other tokens (a scan number, a
-    timestamp), so the first known command word is used.
+    timestamp), so the first known command word is used; the third number of
+    a block counts points here, as the PAL files write it. The general parser
+    is :func:`bexa.io.scan_commands.parse_scan_command`.
     """
     tokens = text.split()
     known = [i for i, token in enumerate(tokens) if token in one_motor or token in two_motor]
@@ -78,16 +58,12 @@ def parse_scan_command(
         raise ValueError(f"no known scan command in {text!r}")
     i = known[0]
     n_motors = 1 if tokens[i] in one_motor else 2
-    motors = []
-    pos = i + 1
-    for _ in range(n_motors):
-        try:
-            name, start, stop, npoints = tokens[pos : pos + 4]
-        except ValueError:
-            raise ValueError(f"incomplete motor block in {text!r}") from None
-        motors.append(ScanMotor(name, float(start), float(stop), int(float(npoints))))
-        pos += 4
-    return ScanCommand(tokens[i], motors, text)
+    if len(tokens) < i + 1 + 4 * n_motors:
+        raise ValueError(f"incomplete motor block in {text!r}")
+    command = parse_scan_command_general(" ".join(tokens[i:]), intervals=False)
+    if len(command.motors) < n_motors:
+        raise ValueError(f"incomplete motor block in {text!r}")
+    return ScanCommand(command.command, command.motors[:n_motors], text)
 
 
 @register_engine("spec_h5")

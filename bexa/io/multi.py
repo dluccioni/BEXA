@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 from bexa.core.provenance import to_json
+from bexa.core.status import ScanStatus, worst
 from bexa.core.structure import Structure
 from bexa.io.base import BaseSource, Source
 
@@ -107,6 +108,11 @@ class MultiScanSource(BaseSource):
                 [p.structure() for p in self.parts], self.dim, self.coords
             )
         return self._structure
+
+    @property
+    def status(self) -> ScanStatus:
+        """The status of the series: that of the part the least can be read from."""
+        return worst(getattr(p, "status", ScanStatus.COMPLETE) for p in self.parts)
 
     def scalars(self) -> dict[str, float]:
         return dict(self.parts[0].scalars())

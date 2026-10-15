@@ -60,6 +60,14 @@ class Structure:
         Photon energy when known.
     title
         The command as recorded by the control system (``fscan2d chi ... mu ...``).
+    planned_shape, planned_frames
+        What the scan was meant to be: points per declared motor and frames in
+        all, when the files say (``None`` otherwise). A scan stopped early has
+        fewer frames than planned; see :attr:`n_missing`.
+    motor_names
+        Every name the file lists as a motor (the positioners of the control
+        system), scanned or not: the per-frame channels among them are the
+        motors a reader may choose as dims.
     """
 
     motor_dims: tuple[str, ...]
@@ -74,6 +82,9 @@ class Structure:
     units: dict[str, str] = field(default_factory=dict)
     energy_keV: float | None = None
     title: str = ""
+    planned_shape: tuple[int, ...] | None = None
+    planned_frames: int | None = None
+    motor_names: frozenset[str] = field(default_factory=frozenset)
     _grid_of_frame: np.ndarray | None = field(default=None, repr=False, compare=False)
 
     # ------------------------------------------------------------------ basics
@@ -95,12 +106,16 @@ class Structure:
 
     @property
     def is_complete(self) -> bool:
-        """True when every grid position has a frame."""
-        return bool((self.frame_index >= 0).all())
+        """True when every grid position has a frame and no planned frame is missing."""
+        return self.n_missing == 0
 
     @property
     def n_missing(self) -> int:
-        return int((self.frame_index < 0).sum())
+        """Grid points without a frame, or planned frames not taken, whichever is more."""
+        holes = int((self.frame_index < 0).sum())
+        if self.planned_frames is not None:
+            return max(holes, int(self.planned_frames) - int(self.n_frames))
+        return holes
 
     def __post_init__(self) -> None:
         self.frame_index = np.asarray(self.frame_index, dtype=np.int64).reshape(self.motor_shape)
@@ -158,11 +173,13 @@ class Structure:
             raise ValueError("one slice per motor dim is required")
         index = self.frame_index[region]
         coords = {d: self.coords[d][r] for d, r in zip(self.motor_dims, region, strict=True)}
-        return replace(
+        return replace(  # a part of the grid is not the plan any more
             self,
             motor_shape=index.shape,
             coords=coords,
             frame_index=index,
+            planned_shape=None,
+            planned_frames=None,
             _grid_of_frame=None,
         )
 
@@ -171,9 +188,11 @@ class Structure:
 
     def describe(self) -> str:
         """Multi-line human summary used by ``bexa info``."""
+        frames = f"{self.n_frames} frames"
+        if self.planned_frames is not None and self.planned_frames != self.n_frames:
+            frames += f" of {self.planned_frames} planned"
         lines = [
-            f"scan type {self.scan_type}: dims {self.dims}, shape {self.shape}, "
-            f"{self.n_frames} frames"
+            f"scan type {self.scan_type}: dims {self.dims}, shape {self.shape}, {frames}"
             + (f", {self.n_missing} grid points missing" if self.n_missing else ""),
         ]
         if self.title:
@@ -325,6 +344,7 @@ class Structure:
                 per_frame[name] = np.concatenate([p.per_frame[name] for p in parts])
         coords_all = {dim: np.asarray(coords, dtype=float)}
         coords_all.update({d: first.coords[d] for d in first.motor_dims})
+        planned = [p.planned_frames for p in parts]
         stacked = cls(
             motor_dims=(dim, *first.motor_dims),
             motor_shape=(len(parts), *first.motor_shape),
@@ -338,8 +358,16 @@ class Structure:
             units=dict(first.units),
             energy_keV=first.energy_keV,
             title=first.title,
+            planned_frames=sum(planned) if all(p is not None for p in planned) else None,  # type: ignore[arg-type]
+            motor_names=frozenset().union(*(p.motor_names for p in parts)),
         )
         return stacked
+
+
+def same_partition(a: np.ndarray, b: np.ndarray) -> bool:
+    """True when two label arrays split the items into the same groups (lockstep motors)."""
+    pairs = set(zip(a.tolist(), b.tolist(), strict=True))
+    return len(pairs) == len(set(a.tolist())) == len(set(b.tolist()))
 
 
 def _group_values(values: np.ndarray, tolerance: float | None) -> tuple[np.ndarray, np.ndarray]:

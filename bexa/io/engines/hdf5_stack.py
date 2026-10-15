@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import re
 import threading
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -19,40 +20,43 @@ import numpy as np
 
 from bexa._log import get_logger
 from bexa.core.registry import register_engine
+from bexa.core.status import ScanNotReadyError, ScanStatus
 from bexa.core.structure import ENERGY_DIM, Structure
 from bexa.core.units import mono_angle_to_energy
 from bexa.io.base import BaseSource
-from bexa.io.formats import FormatSpec, safe_format
+from bexa.io.engines.hdf5_master import (
+    FALLBACK_MOTORS,
+    MOTOR_KEYS,
+    collapse_lockstep,
+    decide,
+    declared_motors,
+    discover_motors,
+    entry_state,
+    read_motor_table,
+    read_title,
+)
+from bexa.io.formats import FormatSpec
+from bexa.io.h5files import open_h5
+from bexa.io.scan_commands import parse_scan_command
 
 log = get_logger(__name__)
 
-# Motors v9 looked for when no scan description is available.
-FALLBACK_MOTORS = ("mu", "chi", "phi", "theta", "omega", "delta", "gamma", "ux", "uy", "uz")
-# the datasets of fscan_parameters that name the scanned motors, slowest loop first: BLISS
-# writes ``motor`` for an fscan, ``slow_motor``/``fast_motor`` for an fscan2d and
-# ``slow1_motor``/``slow2_motor``/``fast_motor`` for an fscan3d (slow1 is the outer loop);
-# the ``outer``/``middle``/``inner`` names are accepted too
-MOTOR_KEYS = (
-    "outer_motor",
-    "slow1_motor",
-    "slow_motor",
-    "middle_motor",
-    "slow2_motor",
-    "slow3_motor",
-    "inner_motor",
-    "fast_motor",
-    "motor",
-)
+__all__ = ["FALLBACK_MOTORS", "MOTOR_KEYS", "Hdf5StackSource"]
+
 MIN_CACHE_BYTES = 8 * 1024**2
 MAX_CACHE_BYTES = 512 * 1024**2
+SCAN_FOLDER = re.compile(r"scan(\d+)")
 
 
-def _decode(value: Any) -> Any:
-    if isinstance(value, bytes):
-        return value.decode()
-    if isinstance(value, np.ndarray) and value.dtype.kind in "SO" and value.ndim == 0:
-        return _decode(value[()])
-    return value
+def _file_indices(files: Sequence[Path]) -> list[int] | None:
+    """The numbers LIMA puts in the file names (``pco_ff_0003.h5`` -> 3), or ``None``."""
+    found: list[int] = []
+    for path in files:
+        match = re.search(r"(\d+)\.[^.]+$", path.name)
+        if match is None:
+            return None
+        found.append(int(match.group(1)))
+    return found
 
 
 def _next_prime(n: int) -> int:
@@ -82,6 +86,10 @@ class Hdf5StackSource(BaseSource):
         Detector name (``pco_ff``, ``pco_nf``, ...); default: first detector of the spec.
     energy_keV
         Overrides the energy derived from the monochromator angle.
+    motors
+        Per-frame channels to use as the dims instead of the ones the scan
+        declares (``["ccmth", "chi", "mu"]`` for the mono angle in degrees
+        instead of the energy; a motor's encoder instead of the motor).
     """
 
     name = "hdf5_stack"
@@ -96,6 +104,7 @@ class Hdf5StackSource(BaseSource):
         detector: str | None = None,
         energy_keV: float | None = None,
         master: str | Path | None = None,
+        motors: Sequence[str] | None = None,
     ) -> None:
         super().__init__(spec)
         self.root = Path(root)
@@ -103,6 +112,7 @@ class Hdf5StackSource(BaseSource):
         self.scan = int(scan)
         self.detector = detector or next(iter(spec.detectors), "pco_ff")
         self._energy_override = energy_keV
+        self._motors = [str(m) for m in motors] if motors else None
         self.master = Path(master) if master else self.root / spec.path("master", dataset=dataset)
         self.scan_folder = self.root / spec.path("scan_folder", dataset=dataset, scan=self.scan)
         self.frames_path = spec.path("frames", detector=self.detector)
@@ -111,6 +121,12 @@ class Hdf5StackSource(BaseSource):
         )
         self._local = threading.local()
         self._structure: Structure | None = None
+        self._status: ScanStatus | None = None
+        self._problem: str | None = None
+        self._layout_known = False
+        self._frame_shape: tuple[int, int] = (0, 0)
+        self._dtype: np.dtype = np.dtype(np.uint16)
+        self._chunks: tuple[int, ...] | None = None
         self._scan_files()
 
     # ----------------------------------------------------------- discovery
@@ -139,48 +155,82 @@ class Hdf5StackSource(BaseSource):
 
     @classmethod
     def list_scans(
-        cls, spec: FormatSpec, root: str | Path, dataset: str, detector: str | None = None
+        cls,
+        spec: FormatSpec,
+        root: str | Path,
+        dataset: str,
+        detector: str | None = None,
+        require_files: bool = True,
     ) -> list[int]:
-        """Scan numbers that have detector files for ``detector``."""
+        """Scan numbers of the ``scanNNNN`` folders, those with files for ``detector`` by default.
+
+        A folder named differently (``scan0007_old``) is not a scan and is left
+        out; ``require_files=False`` lists a scan folder that holds no detector
+        file yet (a scan that has just started).
+        """
         root = Path(root)
         detector = detector or next(iter(spec.detectors), "pco_ff")
         pattern = spec.path("detector_files", detector=detector)
         found = []
-        for folder in sorted((root / dataset).glob("scan[0-9]*")):
-            if folder.is_dir() and any(folder.glob(pattern)):
-                found.append(int(folder.name[4:]))
+        for folder in sorted((root / dataset).glob("scan*")):
+            match = SCAN_FOLDER.fullmatch(folder.name)
+            if match is None or not folder.is_dir():
+                if folder.is_dir():
+                    log.debug("%s is not a scan folder; skipped", folder)
+                continue
+            if require_files and not any(folder.glob(pattern)):
+                continue
+            found.append(int(match.group(1)))
         return found
 
     def _scan_files(self) -> None:
+        """Find the detector files and count their frames; none yet is not an error."""
         pattern = self.spec.path("detector_files", detector=self.detector)
         files = sorted(p for p in self.scan_folder.glob(pattern) if p.is_file())
-        if not files:
-            raise FileNotFoundError(
-                f"no {self.detector} files matching {pattern!r} in {self.scan_folder}"
-            )
+        self._layout_known = False
         meta = self._files_from_master(files)
         if meta is None:
             meta = self._files_by_opening(files)
         self._files = meta
-        self._n_frames = meta[-1][2] + meta[-1][1]
+        self._n_frames = meta[-1][2] + meta[-1][1] if meta else 0
+        if not self._layout_known:  # nothing readable yet: the shape the spec gives the detector
+            shape = self.spec.detector_info(self.detector).get("shape")
+            self._frame_shape = (int(shape[0]), int(shape[1])) if shape else (0, 0)
+            self._dtype = np.dtype(np.uint16)
+            self._chunks = None
 
     def _frame_layout(self, ds: Any) -> None:
         self._frame_shape = (int(ds.shape[1]), int(ds.shape[2]))
         self._dtype = np.dtype(ds.dtype)
         self._chunks = tuple(ds.chunks) if ds.chunks else None
+        self._layout_known = True
+
+    def _count_frames(self, path: Path) -> int | None:
+        """Frames in one detector file, or ``None`` while the file cannot be read yet."""
+        try:
+            with open_h5(path) as f:
+                if self.frames_path not in f:
+                    return None
+                ds = f[self.frames_path]
+                if not self._layout_known:
+                    self._frame_layout(ds)
+                return int(ds.shape[0])
+        except OSError:
+            return None
 
     def _files_by_opening(self, files: list[Path]) -> list[tuple[Path, int, int]]:
-        """Frames per file by opening every file: the sure way, and the slow one on a share."""
+        """Frames per file by opening every file: the sure way, and the slow one on a share.
+
+        A file that cannot be read yet (the one the detector is writing) ends
+        the list: the frames stop at the file before it.
+        """
         meta: list[tuple[Path, int, int]] = []
         offset = 0
         for path in files:
-            with h5py.File(path, "r") as f:
-                if self.frames_path not in f:
-                    raise KeyError(f"{path} has no dataset {self.frames_path!r}")
-                ds = f[self.frames_path]
-                n = int(ds.shape[0])
-                if not meta:
-                    self._frame_layout(ds)
+            n = self._count_frames(path)
+            if n is None:
+                log.info("%s cannot be read yet; the frames stop at the file before it", path)
+                break
             meta.append((path, n, offset))
             offset += n
         return meta
@@ -194,15 +244,17 @@ class Hdf5StackSource(BaseSource):
         (``master_frames``: the frame shape and dtype). Only the last file is
         opened, to count its frames, which is what a scan still being written
         or an aborted one changes. Over a network share this is the difference
-        between one file open and sixty-four. ``None`` when the master does not
-        say, or when the files do not add up: then every file is opened.
+        between one file open and sixty-four. A scan still being written has
+        fewer files than the master announces; a last file that cannot be read
+        yet is left out. ``None`` when the master does not say, or when the
+        files do not add up: then every file is opened.
         """
         layout = self.spec.layout
         if "frames_total" not in layout or "frames_per_file" not in layout:
             return None
         fields = {"scan": self.scan, "detector": self.detector}
         try:
-            with h5py.File(self.master, "r") as f:
+            with open_h5(self.master, retry=False) as f:
                 total_path = self.spec.path("frames_total", **fields)
                 per_path = self.spec.path("frames_per_file", **fields)
                 if total_path not in f or per_path not in f:
@@ -214,18 +266,24 @@ class Hdf5StackSource(BaseSource):
                 if vds_path is not None and vds_path in f:
                     self._frame_layout(f[vds_path])
                     self._chunks = None
-                else:
-                    vds_path = None
         except (OSError, KeyError, ValueError, TypeError):
             return None
-        if total <= 0 or per_file <= 0 or len(files) != -(-total // per_file):
+        indices = _file_indices(files)
+        if total <= 0 or per_file <= 0 or len(files) > -(-total // per_file):
             return None
-        with h5py.File(files[-1], "r") as f:  # the last file: its count is the one that varies
-            if self.frames_path not in f:
-                raise KeyError(f"{files[-1]} has no dataset {self.frames_path!r}")
-            last = int(f[self.frames_path].shape[0])
-            if vds_path is None:
-                self._frame_layout(f[self.frames_path])
+        if indices is not None and indices != list(range(len(files))):
+            return None  # a file is missing in the middle: count what is there
+        if not files:
+            return []
+        last = self._count_frames(files[-1])  # the last file: its count is the one that varies
+        if last is None:
+            log.info("%s cannot be read yet; the frames stop at the file before it", files[-1])
+            files = files[:-1]
+            if not files:
+                return []
+            last = self._count_frames(files[-1])
+            if last is None:
+                return None
         meta: list[tuple[Path, int, int]] = []
         offset = 0
         for i, path in enumerate(files):
@@ -287,7 +345,7 @@ class Hdf5StackSource(BaseSource):
             handles = self._local.handles = {}
         f = handles.get(path)
         if f is None or not f.id.valid:
-            f = h5py.File(path, "r", **self._cache_settings())
+            f = open_h5(path, **self._cache_settings())
             handles[path] = f
         return f
 
@@ -335,64 +393,68 @@ class Hdf5StackSource(BaseSource):
         self.close()
         self._scan_files()
         self._structure = None
+        self._status = None
+        self._problem = None
         return self
 
     # ----------------------------------------------------------- structure
-    def structure(self) -> Structure:
+    def structure(self, motors: Sequence[str] | None = None) -> Structure:
+        """The scan's grid; ``motors`` names other per-frame channels as the dims (not kept)."""
+        if motors is not None:
+            return self._build_structure([str(m) for m in motors])
         if self._structure is None:
-            self._structure = self._build_structure()
+            self._structure = self._build_structure(self._motors)
         return self._structure
 
-    def _read_motor_table(self, f: h5py.File) -> tuple[dict[str, np.ndarray], dict[str, float]]:
-        """Per-frame channels (length n_frames) and scalar positioners."""
-        per_frame: dict[str, np.ndarray] = {}
-        scalars: dict[str, float] = {}
-        meas_path = self.spec.motor_path("per_frame", scan=self.scan, motor="").rstrip("/")
-        if meas_path in f:
-            for key, node in f[meas_path].items():
-                if isinstance(node, h5py.Dataset) and node.ndim == 1 and node.dtype.kind in "fiu":
-                    values = node[()]
-                    if len(values) >= self._n_frames:
-                        per_frame[key] = np.asarray(values[: self._n_frames], dtype=float)
-        pos_path = self.spec.motor_path("scalar", scan=self.scan, motor="").rstrip("/")
-        if pos_path in f:
-            for key, node in f[pos_path].items():
-                if isinstance(node, h5py.Dataset) and node.ndim == 0 and node.dtype.kind in "fiu":
-                    scalars[key] = float(node[()])
-        # values recorded elsewhere in the master, as positioners of the scan: the temperature
-        # of a furnace sampled in the monitoring sub-scan BLISS writes next to an fscan, say
-        for name, template in (self.spec.motors.get("scalars_from") or {}).items():
-            path = safe_format(str(template), scan=self.scan, detector=self.detector)
-            if path in f and isinstance(f[path], h5py.Dataset):
-                values = np.asarray(f[path][()], dtype=float).ravel()
-                if values.size and np.isfinite(values).any():
-                    scalars[str(name)] = float(np.nanmean(values))
-        return per_frame, scalars
+    @property
+    def status(self) -> ScanStatus:
+        """The state of the scan, from its master entry (see :func:`hdf5_master.decide`)."""
+        if self._status is None:
+            try:
+                self.structure()
+            except ScanNotReadyError:
+                pass  # the status was settled before the error was raised
+            except (OSError, KeyError, IndexError, ValueError) as exc:
+                self._status = ScanStatus.UNREADABLE
+                self._problem = f"{type(exc).__name__}: {exc}"
+        return self._status if self._status is not None else ScanStatus.UNREADABLE
 
-    def _declared_motors(self, f: h5py.File) -> tuple[str, list[str], list[int]] | None:
-        """(scan_type, motor names slow first, points per motor) from the scan description."""
-        template = self.spec.motors.get("structure")
-        if not template:
-            return None
-        group_path = self.spec.motor_path("structure", scan=self.scan)
-        if group_path not in f:
-            return None
-        g = f[group_path]
-        scan_type = None
-        for key in ("scan_type", "scan_name"):
-            if key in g:
-                scan_type = str(_decode(g[key][()]))
-                break
-        if scan_type is None:
-            return None
-        names: list[str] = []
-        counts: list[int] = []
-        for motor_key in MOTOR_KEYS:
-            if motor_key in g:
-                count_key = motor_key.replace("motor", "npoints")
-                names.append(str(_decode(g[motor_key][()])))
-                counts.append(int(g[count_key][()]) if count_key in g else 0)
-        return scan_type, names, counts
+    @property
+    def problem(self) -> str | None:
+        """What went wrong reading the scan, when its status is unreadable."""
+        return self._problem
+
+    @classmethod
+    def scan_status(
+        cls,
+        spec: FormatSpec,
+        root: str | Path,
+        dataset: str,
+        scan: int,
+        detector: str | None = None,
+    ) -> ScanStatus:
+        """The status of one scan, opening and closing its files (no source is kept)."""
+        try:
+            source = cls(spec, root, dataset, scan, detector)
+        except (OSError, KeyError, IndexError, ValueError):
+            return ScanStatus.UNREADABLE
+        try:
+            return source.status
+        finally:
+            source.close()
+
+    def with_motors(self, motors: Sequence[str]) -> Hdf5StackSource:
+        """The same scan read with ``motors`` (per-frame channels) as its dims."""
+        return Hdf5StackSource(
+            self.spec,
+            self.root,
+            self.dataset,
+            self.scan,
+            self.detector,
+            self._energy_override,
+            self.master,
+            motors=motors,
+        )
 
     def _energies(self, angles: np.ndarray) -> np.ndarray:
         """Energies in keV of per-frame monochromator angles, with the spec's crystal."""
@@ -401,19 +463,17 @@ class Hdf5StackSource(BaseSource):
         angles = np.asarray(angles, dtype=float)
         return np.asarray(mono_angle_to_energy(angles, d_spacing or crystal), dtype=float)
 
-    def _build_structure(self) -> Structure:
-        with h5py.File(self.master, "r") as f:
-            if self._entry not in f:
-                raise KeyError(f"scan {self.scan} ({self._entry!r}) not found in {self.master}")
-            per_frame, scalars = self._read_motor_table(f)
-            declared = self._declared_motors(f)
-            title_path = f"{self._entry}/title"
-            title = str(_decode(f[title_path][()])) if title_path in f else ""
+    def _logical_names(
+        self, channels: dict[str, np.ndarray], scalars: dict[str, float]
+    ) -> dict[str, str]:
+        """``{physical: logical}`` for the motors the beamline renamed, copying their values.
 
-        # A motor the beamline renamed (mu -> mu_new1) keeps its logical name everywhere:
-        # in the per-frame channels, the positioners and the motors the scan declares. A
-        # physical name the spec lists under ``known`` is a motor of its own (``samz`` with
-        # its legacy alias ``z1``), so only unknown names are renamed.
+        A motor the beamline renamed (mu -> mu_new1) keeps its logical name
+        everywhere: in the per-frame channels, the positioners and the motors
+        the scan declares. A physical name the spec lists under ``known`` is a
+        motor of its own (``samz`` with its legacy alias ``z1``), so only
+        unknown names are renamed.
+        """
         aliases = self.spec.motors.get("aliases", {}) or {}
         known = set(self.spec.known_motors())
         logical_name: dict[str, str] = {}
@@ -421,51 +481,89 @@ class Hdf5StackSource(BaseSource):
             for name in [physical] if isinstance(physical, str) else physical:
                 if name not in known:
                     logical_name[name] = logical
-                if name in per_frame and logical not in per_frame:
-                    per_frame[logical] = per_frame[name]
+                if name in channels and logical not in channels:
+                    channels[logical] = channels[name]
                 if name in scalars and logical not in scalars:
                     scalars[logical] = scalars[name]
+        return logical_name
 
-        order: list[str] | None = None
-        scan_type = "list"
-        if declared:
-            scan_type, names, _counts = declared
-            names = [logical_name.get(n, n) for n in names]
-            order = [n for n in names if n in per_frame]
-            if len(order) != len(names):
-                log.warning(
-                    "%s scan %d declares motors %s but the master only records %s",
-                    self.dataset,
+    def _build_structure(self, motors: list[str] | None) -> Structure:
+        with open_h5(self.master) as f:
+            state = entry_state(f, self._entry, self.spec, self.scan, self.detector)
+            if not state.present:
+                self._status = ScanStatus.RUNNING
+                raise ScanNotReadyError(
+                    f"scan {self.scan} ({self._entry!r}) is not in {self.master} yet",
+                    ScanStatus.RUNNING,
                     self.scan,
-                    names,
-                    list(per_frame),
                 )
-        if not order:
-            candidates = list(dict.fromkeys([*self.spec.known_motors(), *FALLBACK_MOTORS]))
-            order = [
-                m
-                for m in candidates
-                if m in per_frame
-                and np.std(per_frame[m]) > 1e-6
-                and m != self.spec.energy.get("from")
-            ]
-            if len(order) > 3:
-                order = order[:3]
-            scan_type = f"fscan{len(order)}d" if order else "list"
+            table = read_motor_table(f, self.spec, self.scan, self.detector)
+            declared = declared_motors(f, self.spec, self.scan)
+            title = read_title(f, self._entry)
+        channels, scalars = table.channels, table.scalars
+        logical_name = self._logical_names(channels, scalars)
+        known = self.spec.known_motors()
+        motor_names = table.motor_names | set(known) | set(FALLBACK_MOTORS)
+        command = (
+            parse_scan_command(title, motor_names=motor_names | set(channels)) if title else None
+        )
+        # the frames the master describes: while a scan runs, its master lags or leads the
+        # detector files, so the readbacks of the scanned motors say how far the scan goes
+        named = declared[1] if declared else (command.names if command is not None else [])
+        n = self._n_frames
+        for name in (logical_name.get(m, m) for m in named):
+            if name in channels:
+                n = min(n, len(channels[name]))
+        if n < self._n_frames:
+            log.info(
+                "%s scan %d: the master records %d of the %d frames on disk so far",
+                self.dataset,
+                self.scan,
+                n,
+                self._n_frames,
+            )
+            self._n_frames = n
+        per_frame = {k: v[:n] for k, v in channels.items() if len(v) >= n}
+        planned: int | None = state.planned_frames
+        if planned is None and declared and declared[2] and all(c > 0 for c in declared[2]):
+            planned = int(np.prod(declared[2]))
+        if planned is None and command is not None:
+            planned = command.n_points
+        if n == 0:
+            self._status = decide(state, 0, planned)
+            raise ScanNotReadyError(
+                f"scan {self.scan} of {self.dataset} is {self._status}: no frame to read yet",
+                self._status,
+                self.scan,
+            )
+        choice = discover_motors(
+            per_frame, declared, command, motor_names, known, self.spec.min_steps(), logical_name
+        )
+        order, scan_type, planned_shape = choice.order, choice.scan_type, choice.planned_shape
+        if motors is not None:  # the reader's choice of dims
+            order = [logical_name.get(m, m) for m in motors]
+            unknown = [m for m in order if m not in per_frame]
+            if unknown:
+                raise ValueError(
+                    f"{self.dataset} scan {self.scan} records no motor {unknown}; "
+                    f"choose from {choice.candidates}"
+                )
+            order, _ = collapse_lockstep(order, per_frame)
+            planned_shape = None
 
         units = dict(self.spec.motors.get("units", {}) or {})
         energy = self._energy(per_frame, scalars)
         if order:
-            motors = {m: per_frame[m] for m in order}
+            arrays = {m: per_frame[m] for m in order}
             source = self.spec.energy.get("from")
-            if source in motors:
+            if source in arrays and motors is None:  # the angle itself was asked for
                 # the monochromator angle was stepped inside the scan (an energy mosa): the dim
                 # is the energy, in keV, and the angle stays a per-frame channel
-                motors = {(ENERGY_DIM if m == source else m): v for m, v in motors.items()}
-                motors[ENERGY_DIM] = self._energies(per_frame[source])
+                arrays = {(ENERGY_DIM if m == source else m): v for m, v in arrays.items()}
+                arrays[ENERGY_DIM] = self._energies(per_frame[source])
                 units[ENERGY_DIM] = "keV"
             structure = Structure.from_per_frame(
-                motors,
+                arrays,
                 self._frame_shape,
                 order=None,  # the readbacks say which loop is outer; ties keep the declared order
                 scan_type=scan_type,
@@ -476,17 +574,21 @@ class Hdf5StackSource(BaseSource):
                 {k: v for k, v in per_frame.items() if k not in structure.per_frame}
             )
             structure.scalars.update(scalars)
-            structure.title = title
-            return structure
-        structure = Structure.frames_only(
-            self._n_frames,
-            self._frame_shape,
-            per_frame=per_frame,
-            scalars=scalars,
-            units=units,
-            energy_keV=energy,
-        )
+        else:
+            structure = Structure.frames_only(
+                self._n_frames,
+                self._frame_shape,
+                per_frame=per_frame,
+                scalars=scalars,
+                units=units,
+                energy_keV=energy,
+                scan_type=scan_type if scan_type != f"fscan{len(order)}d" else "list",
+            )
         structure.title = title
+        structure.planned_shape = planned_shape
+        structure.planned_frames = planned
+        structure.motor_names = frozenset(motor_names)
+        self._status = decide(state, self._n_frames, planned)
         return structure
 
     def _energy(self, per_frame: dict[str, np.ndarray], scalars: dict[str, float]) -> float | None:

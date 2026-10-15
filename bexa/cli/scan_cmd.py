@@ -63,6 +63,33 @@ def open_from_options(
     return open_scan(path, scan=scan_sel, detector=detector)
 
 
+@scan_app.command("list")
+def scan_list(
+    path: Path = typer.Argument(..., help="Dataset folder or master file."),
+    status: str = typer.Option(
+        "any", help="any, finished, complete, running, aborted, empty or unreadable."
+    ),
+    full: bool = typer.Option(
+        False, "--full", help="Every positioner column, not the compact table."
+    ),
+) -> None:
+    """List the scans of a dataset with their status (scans still running included)."""
+    from bexa.core.dataset import open_dataset
+    from bexa.core.status import ScanStatus, status_filter
+
+    ds = open_dataset(path, cache=False)
+    table = ds.table(compact=not full)
+    allowed = status_filter(status)
+    if allowed is not None:
+        if "status" in table.columns:
+            table = table[table["status"].isin([s.value for s in allowed])]
+        elif ScanStatus.COMPLETE not in allowed:  # the compact table dropped it: all complete
+            table = table.iloc[0:0]
+    typer.echo(table.to_string(index=False) if not table.empty else "no scans")
+    for scan_id, problem in ds.problems.items():
+        typer.echo(f"scan {scan_id}: {problem}")
+
+
 @scan_app.command("info")
 def scan_info(
     path: Path | None = typer.Argument(None, help=PATH_HELP),

@@ -22,6 +22,7 @@ from bexa.core import accessor as _accessor  # noqa: F401  (registers the .bexa 
 from bexa.core.cache import Cache
 from bexa.core.registry import engines
 from bexa.core.roi import ROI
+from bexa.core.status import ScanStatus
 from bexa.core.structure import Structure
 from bexa.io.base import Source
 from bexa.io.formats import FormatSpec, best_spec, load_spec, match_spec
@@ -114,14 +115,53 @@ class Scan:
     def is_multi(self) -> bool:
         return isinstance(self.source, MultiScanSource)
 
+    @property
+    def status(self) -> ScanStatus:
+        """The state of the scan: complete, running, aborted, empty or unreadable."""
+        status = getattr(self.source, "status", None)
+        if isinstance(status, ScanStatus):
+            return status
+        return ScanStatus.COMPLETE if self.structure.is_complete else ScanStatus.ABORTED
+
+    def with_dims(self, motors: Sequence[str]) -> Scan:
+        """The same scan with ``motors`` (per-frame channels) as the dims of its grid.
+
+        ``["ccmth", "chi", "mu"]`` reads an energy mosa with the monochromator
+        angle in degrees instead of the energy, ``["chi", "mu_enc"]`` a scan
+        with a motor's encoder instead of the motor; channels that step
+        together collapse to the first named. The choice goes into the recipe,
+        so the scan reopens the same way in a worker, and into the cache keys.
+        """
+        chosen = [str(m) for m in motors]
+        opened = Scan(
+            self.source.with_motors(chosen),
+            self.spec,
+            geometry=self.geometry,
+            crystal=self.crystal,
+            name=self.name,
+            cache=self.cache,
+            profile=self.profile,
+            cache_reductions=self.cache_reductions,
+            hkl_center=self.hkl_center,
+        )
+        opened.roi = self.roi
+        _ = opened.structure  # built now: a wrong motor name fails here, not later
+        if self.recipe is not None:
+            opened.recipe = {**self.recipe, "motors": chosen}
+        return opened
+
     def info(self) -> str:
         """Human summary: files, structure, ROI, memory estimates."""
         s = self.structure
         frame_mb = s.frame_shape[0] * s.frame_shape[1] * 4 / 1e6
+        status = f"  status: {self.status}"
+        if s.planned_frames is not None and s.planned_frames != s.n_frames:
+            status += f", {s.n_frames} of {s.planned_frames} planned frames"
         lines = [
             f"{self.name}: {type(self.source).__name__}"
             + (f" ({self.spec.name})" if self.spec else ""),
             s.describe(),
+            status,
             f"  frame {s.frame_shape}, stored {self.source.dtype}, "
             f"{frame_mb:.1f} MB per frame as float32, "
             f"{frame_mb * s.n_frames / 1e3:.2f} GB for the stack",
@@ -214,6 +254,7 @@ class Scan:
         rows: list[tuple[str, str]] = [
             ("format", type(self.source).__name__ + (f" ({self.spec.name})" if self.spec else "")),
             ("scan", s.scan_type + (f": {s.title}" if s.title else "")),
+            ("status", str(self.status)),
             ("dims", " x ".join(f"{d}[{n}]" for d, n in zip(s.dims, s.shape, strict=True))),
         ]
         for d in s.motor_dims:
@@ -464,6 +505,7 @@ def open(
     crystal: Any = None,
     cache: Cache | str | Path | bool | None = True,
     cache_reductions: bool | None = None,
+    motors: Sequence[str] | None = None,
     **kwargs: Any,
 ) -> Scan:
     """Open a scan from a path, or from a beamtime profile and a sample name.
@@ -493,7 +535,12 @@ def open(
     cache_reductions
         Keep reduction results in the disk cache like previews. Off by default
         for a path; on for a profile with a ``processed_root``.
+    motors
+        Per-frame channels to use as the dims instead of the ones the scan
+        declares (see :meth:`Scan.with_dims`); layouts with numbered scans only.
     """
+    if motors is not None:
+        kwargs["motors"] = [str(m) for m in motors]
     if path is None or profile is not None:
         if path is not None:
             raise ValueError("give either a path or a profile, not both")
@@ -633,12 +680,18 @@ def open_profile(
 
 
 def list_scans(
-    path: str | Path, *, format: str | None = None, detector: str | None = None
+    path: str | Path,
+    *,
+    format: str | None = None,
+    detector: str | None = None,
+    require_files: bool = True,
 ) -> list[int]:
-    """Scan numbers of a dataset that hold detector files (layouts with numbered scans).
+    """Scan numbers of a dataset (layouts with numbered scans).
 
     ``path`` is a dataset folder, its master file or one of its ``scanNNNN``
-    folders. Layouts without numbered scans give an empty list.
+    folders. By default only scans with detector files count;
+    ``require_files=False`` lists a scan folder that holds none yet (a scan
+    that has just started). Layouts without numbered scans give an empty list.
     """
     path = Path(str(path).split("::")[0])
     spec = _resolve_spec(path, format, None)
@@ -651,4 +704,5 @@ def list_scans(
         root, dataset = path.parent.parent, path.parent.name
     else:
         root, dataset = path.parent, path.name
-    return [int(number) for number in engine.list_scans(spec, root, dataset, detector)]
+    numbers = engine.list_scans(spec, root, dataset, detector, require_files=require_files)
+    return [int(number) for number in numbers]

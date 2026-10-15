@@ -9,7 +9,7 @@ and the per-frame and scalar metadata.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
@@ -19,6 +19,7 @@ import numpy as np
 if TYPE_CHECKING:  # avoid an import cycle at runtime
     import pandas as pd
 
+    from bexa.core.status import ScanStatus
     from bexa.core.structure import Structure
     from bexa.io.formats import FormatSpec
 
@@ -73,6 +74,11 @@ class Source(Protocol):
     ) -> np.ndarray: ...
 
     def structure(self) -> Structure: ...
+
+    @property
+    def status(self) -> ScanStatus: ...
+
+    def with_motors(self, motors: Sequence[str]) -> Source: ...
 
     def scalars(self) -> dict[str, float]: ...
 
@@ -133,6 +139,26 @@ class BaseSource(ABC):
         """Dims, coordinates and frame mapping."""
 
     # ---- optional --------------------------------------------------------
+    @property
+    def status(self) -> ScanStatus:
+        """The state of the scan: complete when every grid point has a frame, else aborted.
+
+        Engines that read when a scan started and ended (the BLISS master
+        reader) tell a running scan from an aborted one; this default only
+        knows the frames.
+        """
+        from bexa.core.status import ScanNotReadyError, ScanStatus
+
+        try:
+            complete = self.structure().is_complete
+        except ScanNotReadyError as exc:
+            return exc.status
+        return ScanStatus.COMPLETE if complete else ScanStatus.ABORTED
+
+    def with_motors(self, motors: Sequence[str]) -> BaseSource:
+        """The same scan with ``motors`` (per-frame channels) as its dims, layout permitting."""
+        raise NotImplementedError(f"{type(self).__name__} cannot choose its motors; got {motors}")
+
     def scalars(self) -> dict[str, float]:
         return dict(self.structure().scalars)
 
