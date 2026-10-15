@@ -228,6 +228,17 @@ def _h5_scan_numbers(path: Path, limit: int = 3) -> list[int]:
     return sorted(numbers)[:limit]
 
 
+def _text_has_tags(path: Path, tags: Iterable[str], limit: int = 65536) -> bool:
+    """True when the first ``limit`` bytes of a text file hold a line starting with each tag."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            head = f.read(limit)
+    except OSError:
+        return False
+    lines = head.split("\n")
+    return all(any(line.startswith(tag) for line in lines) for tag in tags)
+
+
 def _dir_and_parents(path: Path, levels: int = 3) -> list[Path]:
     folder = path if path.is_dir() else path.parent
     out = [folder]
@@ -287,6 +298,18 @@ def _fingerprint_checks(spec: FormatSpec, path: Path) -> list[bool]:
     if "file_globs" in fp:
         folder = path if is_dir else path.parent
         results.append(all(any(folder.glob(g)) for g in fp["file_globs"]))
+
+    texts: list[Path] = []  # a text file (a SPEC session) given itself or inside the folder
+    if "text_glob" in fp:
+        if is_dir:
+            texts = sorted(p for p in path.glob(fp["text_glob"]) if p.is_file())
+        elif fnmatch.fnmatch(path.name, fp["text_glob"]):
+            texts = [path]
+        elif path.is_file():  # a frame next to the text file
+            texts = sorted(p for p in path.parent.glob(fp["text_glob"]) if p.is_file())
+        results.append(bool(texts))
+    if "text_tags" in fp:
+        results.append(any(_text_has_tags(t, fp["text_tags"]) for t in texts[:3]))
 
     if "h5_paths" in fp:
         target = path if not is_dir else None

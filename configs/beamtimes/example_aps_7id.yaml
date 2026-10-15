@@ -1,0 +1,29 @@
+# Example beamtime profile: APS 7-ID-C transmission nano-diffraction (TrNano), SPEC + TIFF
+# layout of summer 2025. It points at the sample data set on the lab share:
+#   bexa.open(profile="example_aps_7id", sample="wse2_1", scan=4)        Python
+#   bexa scan info -p example_aps_7id -s wse2_1 --scan 4                  command line
+# A session is one SPEC file (every scan of the session) and one TIFF per scan point next
+# to it; the dataset of a sample is the folder that holds them.
+
+name: example_aps_7id
+format: aps_7id_spec_2025
+
+root: "X:/Dresselhaus Lab/Data/Beamline Examples/APS/7-ID"   # the session folders
+processed_root: null             # results and the cache: a folder of your own, e.g. X:/Beamtimes/aps_7id/processed
+
+samples:
+  wse2_1:
+    dataset: Sample_data_set     # holds wse2_1_1.spec and the frames wse2_1_1_S<scan>_<point>.tif
+    notes: WSe2; rocking scans on phi, nano-stage scans on nsx/nsy/nsz, delay scans on sdelay
+
+detector: areadetector           # the EPICS areaDetector camera, 512 x 1028 uint32
+geometry:
+  energy_keV: 11.5               # the #U_mono header of every scan says it too
+  pixel_size_um: null            # fill in for the camera in use
+  distance_mm: null              # sample to detector, for pixel-to-angle conversions
+
+defaults:
+  downsample: [1, 2, 2]          # preview factors per dim (motor, y, x)
+  device: auto                   # cpu, cuda or auto
+
+rois: {}                         # named pixel windows, full resolution, [start, stop]

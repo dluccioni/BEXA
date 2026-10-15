@@ -22,6 +22,7 @@ from dataclasses import dataclass
 
 __all__ = [
     "CONTINUOUS_COMMANDS",
+    "LOCKSTEP_COMMANDS",
     "STATIC_COMMANDS",
     "STEP_COMMANDS",
     "ScanCommand",
@@ -53,6 +54,10 @@ CONTINUOUS_COMMANDS = frozenset(
 )
 # commands that move no motor: a sequence of frames
 STATIC_COMMANDS = frozenset({"loopscan", "timescan", "ct", "sct"})
+# SPEC scans whose motors all step together: one count for every motor, one dim
+LOCKSTEP_COMMANDS = frozenset(
+    {"a2scan", "d2scan", "a3scan", "d3scan", "a4scan", "d4scan", "lookupscan"}
+)
 
 
 @dataclass
@@ -78,10 +83,13 @@ class ScanCommand:
     motors: list[ScanMotor]
     text: str
     exact: bool = True
+    lockstep: bool = False  # every motor steps at every point: the grid has one dim
 
     @property
     def shape(self) -> tuple[int, ...]:
-        """Points per motor, in the order of the command."""
+        """The planned grid: points per motor in command order, one dim for a lockstep scan."""
+        if self.lockstep and self.motors:
+            return (self.motors[0].npoints,)
         return tuple(m.npoints for m in self.motors)
 
     @property
@@ -94,8 +102,8 @@ class ScanCommand:
         if not self.motors or not self.exact:
             return None
         total = 1
-        for m in self.motors:
-            total *= m.npoints
+        for n in self.shape:
+            total *= n
         return total
 
 
@@ -163,4 +171,10 @@ def parse_scan_command(
         motors.append(ScanMotor(name, numbers[0], numbers[1], max(points, 0)))
     if command in STATIC_COMMANDS:
         motors = []
-    return ScanCommand(command, motors, str(text), exact=exact and bool(motors))
+    return ScanCommand(
+        command,
+        motors,
+        str(text),
+        exact=exact and bool(motors),
+        lockstep=command in LOCKSTEP_COMMANDS,
+    )

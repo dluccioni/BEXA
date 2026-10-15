@@ -11,7 +11,7 @@ the way the legacy scripts computed them, for parity tests.
 from __future__ import annotations
 
 import shutil
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -22,10 +22,9 @@ from scipy import ndimage
 from scipy.special import erf
 
 from bexa.core.units import energy_to_mono_angle
-from bexa.io.scan_commands import CONTINUOUS_COMMANDS
+from bexa.io.scan_commands import CONTINUOUS_COMMANDS, LOCKSTEP_COMMANDS
 
 # step scans that move their motors together (one point of every motor per frame)
-LOCKSTEP_COMMANDS = frozenset({"a2scan", "d2scan", "a3scan", "d3scan", "lookupscan"})
 SCAN_STARTED = "2026-10-01T14:04:09.683031+02:00"
 SCAN_ENDED = "2026-10-01T14:19:46.816806+02:00"
 
@@ -1156,3 +1155,180 @@ def make_esrf_zstack(
             "grains": grains,
         },
     )
+
+
+# ------------------------------------------------------------------------- APS 7-ID
+# the 7-ID-C motors (``#O`` label, ``#o`` mnemonic, rest position) and counters the file lists
+APS_MOTORS: tuple[tuple[str, str, float], ...] = (
+    ("TwothetaN", "tth", 5.85),
+    ("ThetaN", "th", -0.498),
+    ("Chi", "chi", 4.15),
+    ("Phi", "phi", 0.0),
+    ("swp", "swp", -11.2),
+    ("Delay", "delay", 3.0),
+    ("Nano SX", "nsx", -1.669),
+    ("Nano SY", "nsy", -7.14),
+    ("Nano SZ", "nsz", 0.71),
+    ("OBJ H", "objh", -8.3),
+    ("OBJ V", "objv", 2.6),
+    ("Yaw", "yaw", 0.0),
+    ("Pitch", "pitch", 0.0),
+    ("Sdelay", "sdelay", -2.3),
+)
+APS_COUNTERS: tuple[tuple[str, str], ...] = (
+    ("Seconds", "sec"),
+    ("IC_1", "ic1"),
+    ("IC_2", "ic2"),
+    ("Btot", "btot"),
+    ("r1", "r1"),
+)
+# the scans of the default session: number, SPEC command, options (partial, frames, missing)
+DEFAULT_APS_SCANS: tuple[tuple[int, str, dict[str, Any]], ...] = (
+    (1, "loopscan 5 1 0.1", {}),
+    (2, "ascan phi 8.8 9.8 8 1", {}),
+    (3, "ascan nsy -8.44 -8.04 4 1", {"partial": 2}),
+    (4, "a2scan phi 12.0 13.0 yaw 23.7 25.7 5 1", {}),
+    (5, "ascan phi 3.6 4.6 4 1", {"frames": False}),
+)
+
+
+@dataclass
+class SyntheticApsSession:
+    """What :func:`make_aps_session` wrote: the SPEC file, the frames and the planted truth."""
+
+    root: Path
+    name: str
+    path: Path  # the SPEC file
+    frame_shape: tuple[int, int]
+    energy_keV: float
+    scans: dict[int, str] = field(default_factory=dict)  # number -> command
+    frames: dict[int, list[Path]] = field(default_factory=dict)  # number -> TIFFs written
+    coords: dict[int, dict[str, np.ndarray]] = field(default_factory=dict)  # motor values
+    rows: dict[int, int] = field(default_factory=dict)  # number -> data rows recorded
+    truth: dict[int, np.ndarray] = field(default_factory=dict)  # (n, 2) spot centre (y, x)
+    totals: dict[int, np.ndarray] = field(default_factory=dict)  # the r1 counter: frame sums
+
+
+def _write_tiff(path: Path, frame: np.ndarray) -> None:
+    try:
+        import tifffile
+
+        tifffile.imwrite(str(path), frame)
+    except ImportError:
+        from PIL import Image
+
+        Image.fromarray(frame.astype(np.int32), mode="I").save(path)
+
+
+def make_aps_session(
+    root: str | Path,
+    name: str = "wse2_1_1",
+    scans: Sequence[tuple[int, str, Mapping[str, Any]]] = DEFAULT_APS_SCANS,
+    frame_shape: tuple[int, int] = (24, 32),
+    energy_keV: float = 11.5,
+    seed: int = 0,
+) -> SyntheticApsSession:
+    """Write an APS 7-ID session: one SPEC file and one areaDetector TIFF per scan point.
+
+    ``scans`` holds ``(number, command, options)``: SPEC step scans (``ascan``,
+    ``a2scan``, whose motors step together) and ``loopscan`` (frames only).
+    The options are ``partial`` (points not taken: the scan ends with SPEC's
+    "aborted" comment), ``frames=False`` (rows without frames, as a copy of
+    the session without its TIFFs) and ``missing`` (point numbers whose frame
+    is left out). Every frame holds a Gaussian spot whose centre moves with
+    the first motor and whose intensity peaks mid-scan; the ``r1`` counter
+    column is the frame's total.
+    """
+    from bexa.io.scan_commands import parse_scan_command
+
+    rng = np.random.default_rng(seed)
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    path = root / f"{name}.spec"
+    H, W = frame_shape
+    labels = [m[0] for m in APS_MOTORS]
+    names = [m[1] for m in APS_MOTORS]
+    rest = {m[1]: m[2] for m in APS_MOTORS}
+    date = "Wed Jul 30 18:43:28 2025"
+    epoch = 1753918251
+    lines = [
+        f"#F {path.as_posix()}",
+        f"#E {epoch}",
+        f"#D {date}",
+        f"#C {name}  User = 7idc",
+        "#U0_ring Current(mA) Lifetime(min) ",
+        "#U0_mono Energy Lambda Y1 Z2 Theta2 Chi2 Piezo ",
+        "#U0_Lakeshore340 Setpoint ControlTemp SampleTemp Power Range ",
+        "",
+    ]
+    for k in range(0, len(names), 8):
+        lines.append(f"#O{k // 8} " + "  ".join(labels[k : k + 8]))
+    for k in range(0, len(names), 8):
+        lines.append(f"#o{k // 8} " + " ".join(names[k : k + 8]))
+    lines.append("#J0 " + "  ".join(c[0] for c in APS_COUNTERS))
+    lines.append("#j0 " + " ".join(c[1] for c in APS_COUNTERS))
+    lines.append("")
+    out = SyntheticApsSession(root, name, path, (H, W), float(energy_keV))
+    yy, xx = np.mgrid[0:H, 0:W]
+    for number, command, options in scans:
+        cmd = parse_scan_command(command, motor_names=set(names))
+        n = cmd.n_points if cmd.motors else int(command.split()[1])
+        assert n is not None
+        values = {m.name: np.linspace(m.start, m.stop, n) for m in cmd.motors}
+        recorded = n - int(options.get("partial", 0))
+        missing = {int(i) for i in options.get("missing", ())}
+        if cmd.motors:
+            lead = values[cmd.motors[0].name][:recorded]
+            span = max(float(lead.max() - lead.min()), 1e-9)
+            rel = (lead - lead.mean()) / span  # -0.5 .. 0.5 over the scan
+        else:
+            rel = np.zeros(recorded)
+        amplitude = 4000.0 * np.exp(-0.5 * (rel / 0.2) ** 2)
+        cy, cx = H / 2 + 4.0 * rel, W / 2 + 8.0 * rel
+        written: list[Path] = []
+        totals = np.zeros(recorded)
+        for i in range(recorded):
+            spot = np.exp(-0.5 * (((yy - cy[i]) / 2.0) ** 2 + ((xx - cx[i]) / 3.0) ** 2))
+            frame = rng.poisson(10.0 + amplitude[i] * spot).astype(np.uint32)
+            totals[i] = float(frame.sum())
+            if options.get("frames", True) and i not in missing:
+                frame_path = root / f"{name}_S{number:03d}_{i:05d}.tif"
+                _write_tiff(frame_path, frame)
+                written.append(frame_path)
+        positions = dict(rest)
+        for m in cmd.motors:
+            positions[m.name] = float(m.start)
+        lines += [f"#S {number}  {command}", f"#D {date}", "#T 1  (Seconds)"]
+        pvals = [positions[k] for k in names]
+        for k in range(0, len(pvals), 8):
+            lines.append(f"#P{k // 8} " + " ".join(f"{v:g}" for v in pvals[k : k + 8]))
+        wavelength = 12.398 / energy_keV
+        lines += [
+            "#U_ring 139.8 137.6",
+            f"#U_mono {energy_keV:g} {wavelength:.5f} -17.76 101.77 -2.29 1.08 2.50",
+            "#U_Lakeshore340 300 300.1 299.9 0 0",
+        ]
+        if cmd.motors:
+            cols = [labels[names.index(m.name)] for m in cmd.motors]
+            cols += ["H", "K", "L", "Epoch", "Seconds", "IC_1", "IC_2", "Btot", "r1"]
+        else:
+            cols = ["Time", "Epoch", "Seconds", "IC_1", "IC_2", "Btot", "r1"]
+        lines += [f"#N {len(cols)}", "#L " + "  ".join(cols)]
+        for i in range(recorded):
+            if cmd.motors:
+                row = [values[m.name][i] for m in cmd.motors] + [0.0, 0.0, 0.0]
+            else:
+                row = [0.1 * i]
+            row += [epoch + 2 * i, 1, 56000 + int(rng.integers(-100, 100)), 0, 360000, totals[i]]
+            lines.append(" ".join(f"{v:g}" for v in row))
+        if recorded < n:
+            lines.append(f"#C {date}.  Scan aborted after {recorded} points.")
+        lines.append("")
+        out.scans[number] = command
+        out.frames[number] = written
+        out.coords[number] = {m: v[:recorded] for m, v in values.items()}
+        out.rows[number] = recorded
+        out.truth[number] = np.stack([cy, cx], axis=1)
+        out.totals[number] = totals
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out

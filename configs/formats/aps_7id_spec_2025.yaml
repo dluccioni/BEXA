@@ -1,0 +1,48 @@
+# APS 7-ID-C (summer 2025, transmission nano-diffraction): a SPEC ASCII file holding
+# every scan of a session (#S commands, #L columns, #P positioners, #U_ beamline state)
+# with one EPICS areaDetector TIFF per scan point written next to it as
+# <specfile>_S<scan:03d>_<point:05d>.tif (uint32, 512 x 1028).
+name: aps_7id_spec_2025
+engine: spec_tiff
+description: APS 7-ID SPEC file with one areaDetector TIFF frame per scan point, 2025.
+
+fingerprint:
+  text_glob: "*.spec"                # the SPEC file itself, or the folder holding it
+  text_tags: ["#F", "#O0", "#S"]     # the tags every SPEC file opens with
+
+layout:
+  spec_glob: "*.spec"                           # the SPEC file of a dataset folder
+  frame_file: "{prefix}_S{scan:03d}_{point:05d}.tif"   # prefix: the SPEC file's stem
+  frame_glob: "{prefix}_S{scan:03d}_*.tif"
+  frames_dir: "."                               # where the TIFFs are, relative to the SPEC file
+
+motors:
+  # #o mnemonics of the 7-ID-C diffractometer: the file lists them all, this order breaks ties
+  known: [phi, th, tth, chi, nsx, nsy, nsz, objh, objv, sdelay, delay, swp, yaw, pitch, radius]
+  min_step:   # a change smaller than this between scans is drift, not a step (mm)
+    nsx: 0.0002
+    nsy: 0.0002
+    nsz: 0.0002
+  units:
+    phi: deg
+    th: deg
+    tth: deg
+    chi: deg
+    yaw: deg
+    pitch: deg
+    nsx: mm
+    nsy: mm
+    nsz: mm
+    objh: mm
+    objv: mm
+
+energy:
+  header: mono        # the #U_mono block of every scan ...
+  field: Energy       # ... whose Energy field is the photon energy in keV
+
+detectors:
+  areadetector:
+    shape: [512, 1028]      # the frame shape when a scan has no TIFF yet
+    pixel_size_um: null     # fill in for the camera in use
+
+axis_priority: [sdelay, delay, phi, th, tth, chi, nsx, nsy, nsz]

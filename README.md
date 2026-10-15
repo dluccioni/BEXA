@@ -34,7 +34,7 @@ lists the everyday jobs with the function that does each.
 - [Find a function by task](#find-a-function-by-task)
 - [Function reference](#function-reference)
   - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.status](#bexacorestatus-the-state-of-a-scan) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.scan_table](#bexacorescan_table-the-rows-of-a-datasets-table) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
-  - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
+  - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.spec_tiff](#bexaioenginesspec_tiff-aps-7-id-spec-sessions-with-a-tiff-per-point) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
   - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis)
   - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.sliders](#bexavizsliders-what-the-slider-browsers-share) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers) · [bexa.notebook.picker](#bexanotebookpicker-choosing-scans-in-a-notebook) · [bexa.notebook.picker_widgets](#bexanotebookpicker_widgets-the-widget-views-of-the-picker)
   - Pipelines: [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set) · [bexa.pipelines.xfel_cube](#bexapipelinesxfel_cube-pal-xfel-point-files-to-a-laser-onoff-cube) · [bexa.pipelines.cube_report](#bexapipelinescube_report-figures-and-gifs-of-one-cube) · [bexa.pipelines.auto_process](#bexapipelinesauto_process-the-beamtime-watcher) · [bexa.pipelines.benchmark](#bexapipelinesbenchmark-timings-and-baselines)
@@ -605,6 +605,7 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | a measurement that continued in a second dataset folder | `bexa.open_dataset([folder1, folder2])`: one table, ids running over both folders; `Dataset.table`, `Dataset.series` and `bexa.stack` work across them | §5, §11 |
 | the datasets under a RAW_DATA folder | `bexa.notebook.list_datasets` |  |
 | choose the scans, the motors to extract and the stack axis with widgets | `bexa.notebook.ScanPicker`, `bexa.notebook.pick_scans`, `Dataset.motor_candidates` | §3, §11 |
+| open an APS 7-ID session (a SPEC file with a TIFF per point) | `bexa.open(folder, scan=4)`, `bexa.open_dataset(folder)`; the profile `example_aps_7id` |  |
 | open one scan | `bexa.open(path, scan=7)` |  |
 | open through a beamtime profile | `bexa.open(profile=..., sample=..., scan=...)`, `bexa profile new`, `bexa.config.load_profile` |  |
 | pick scans by type, scanned motor or positioner (`samz`, energy) | `Dataset.select`, `Dataset.select_numbers`, `Dataset.groups` | §7 |
@@ -2963,7 +2964,7 @@ parse_scan_command("loopscan 100 0.1").motors       # []: a sequence of frames
 ```
 
 #### `ScanCommand`
-`bexa.io.scan_commands.ScanCommand(command, motors, text, exact=True)`
+`bexa.io.scan_commands.ScanCommand(command, motors, text, exact=True, lockstep=False)`
 
 A dataclass: the command word, the list of `ScanMotor` (outer first), the original `text`, and
 `exact`, whether the point counts are to be trusted (true for the step and continuous families,
@@ -3529,6 +3530,154 @@ cmd = parse_scan_command("12 a2scan th 0 1 3 delay -1 2 4 0.1")
 cmd.command, cmd.shape                           # ('a2scan', (3, 4))
 [m.name for m in cmd.motors], cmd.motors[1]      # (['th', 'delay'], ScanMotor(name='delay', start=-1.0, stop=2.0, npoints=4))
 ```
+
+### bexa.io.engines.spec_tiff: APS 7-ID SPEC sessions with a TIFF per point
+
+The engine `spec_tiff` reads the APS 7-ID-C layout of 2025 (spec `aps_7id_spec_2025`): one SPEC
+text file per session, holding every scan (`#S 4 ascan phi 8.8 9.8 40 1`, the `#P` positions,
+the `#U_` beamline state, the `#L` columns and one data row per point), and one EPICS
+areaDetector TIFF per point next to it, `<session>_S004_00012.tif`. The rows are the per-frame
+motor and counter values, the TIFFs the frames; a point whose frame was not saved (or not copied
+along) is a missing frame, a scan SPEC aborted (`#C ... Scan aborted after N points.`) reports
+the points it planned, and the file is parsed once per process. `bexa.open(folder, scan=4)`,
+`bexa.open(frame.tif)` and `bexa.open_dataset(folder)` all work; a session has many scans of
+many kinds, so `bexa.open(folder)` without `scan=` says which to choose.
+
+```python
+import tempfile
+from pathlib import Path
+import bexa
+from bexa.io.engines.spec_tiff import SpecTiffSource, frame_point, frames_by_scan, read_spec_file, spec_file_of
+from bexa.io.formats import load_spec
+from bexa.testing import make_aps_session
+
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
+session = make_aps_session(work)                 # a loopscan, ascans (one aborted), an a2scan, a scan without frames
+spec = load_spec("aps_7id_spec_2025")           # the APS 7-ID spec
+scan = bexa.open(session.path, scan=2, cache=False)   # ascan phi 8.8 9.8 8 1: 9 frames of 24 x 32
+```
+
+#### `SpecTiffSource`
+`bexa.io.engines.spec_tiff.SpecTiffSource(spec, path, scan, detector=None, energy_keV=None, motors=None)`
+
+One scan of a session as a frame stack: `path` is the SPEC file, the folder holding it or one of
+its frames; `scan` the `#S` number. The dims come from the command (`ascan phi` gives `phi`;
+the motors of an `a2scan` step together and give one dim named after the first, the other
+staying a per-frame channel; `loopscan` gives frames only), the coordinates from the data rows
+(motors by their `#o` mnemonic, `"Nano SY"` as `nsy`, counters as labelled: `r1`, `IC_1`), the
+positioners of `scalars` from `#P`, the energy from the `#U_` block the spec names
+(`energy: {header: mono, field: Energy}`) and `detector` names the spec's camera (its `shape`
+is the frame shape of a scan without a frame yet). `motors` chooses other columns as dims
+(`Scan.with_dims`). `KeyError` for a scan the file does not hold. It implements the `Source`
+members `files`, `frame_shape`, `n_frames`, `dtype`, `energy_keV`, `read_frames`, `structure`,
+`status`, `with_motors`, `scalars`, `aux_tables` (`header`: one row of the `#U_` state,
+`<block>_<field>` columns), `cache_records` (the scan's rows of the growing file plus the
+frames), `refresh` and `close` (see `BaseSource`). Also:
+
+- `from_path(spec, path, scan=None, **kwargs)`: classmethod, from the file, its folder or a frame
+  (whose name gives the scan); `LookupError` when the session holds several scans and none is named.
+- `list_scans(spec, root, dataset, detector=None, require_files=True)`: classmethod, the scan
+  numbers of `root/dataset` (a folder, or the file's stem), those with a frame by default.
+- attributes: `spec_file`, `session` (the `SpecFile`), `record` (the `SpecScan`), `command` (a
+  `ScanCommand`), `points` (the point numbers that have a frame), `frames` (their files), `scan`,
+  `detector`.
+
+```python
+# scan: scan 2 of the synthetic session; its grid, status and the counters per frame
+scan.dims, scan.shape, scan.structure.scan_type  # (('phi', 'y', 'x'), (9, 24, 32), 'ascan')
+scan.status, scan.energy_keV, scan.structure.scalars["tth"]   # (<ScanStatus.COMPLETE: 'complete'>, 11.5, 5.85)
+scan.structure.per_frame["r1"][:3]               # the r1 counter: the total of each frame
+aborted = SpecTiffSource(spec, session.root, 3)  # ascan nsy ... 4 1, aborted after 3 points
+aborted.status, aborted.structure().n_missing, aborted.structure().planned_frames   # (<ScanStatus.ABORTED: 'aborted'>, 2, 5)
+pair = bexa.open(session.path, scan=4, cache=False)   # a2scan phi ... yaw ...: one dim, yaw per frame
+pair.dims, pair.structure.per_frame["yaw"][:2]   # (('phi', 'y', 'x'), array([23.7, 24.1]))
+pair.with_dims(["yaw"]).dims                      # ('yaw', 'y', 'x')
+bexa.open(session.frames[2][0], cache=False).source.scan   # 2: a frame names its scan
+scan.source.aux_tables()["header"][["mono_Energy", "ring_Current(mA)"]]   # DataFrame: 1 rows x 2 columns
+```
+
+#### `read_spec_file`
+`bexa.io.engines.spec_tiff.read_spec_file(path)`
+
+Parse a SPEC session file into a `SpecFile`, once per process: the parse is kept and reused
+until the file's size or modification time changes (a session grows while it runs).
+
+```python
+# session.path: the synthetic SPEC file; its motors, counters and scans
+parsed = read_spec_file(session.path)
+parsed.motor_names[:4], parsed.label_to_name["Nano SY"]   # (['tth', 'th', 'chi', 'phi'], 'nsy')
+sorted(parsed.scans), parsed.scans[3].aborted    # ([1, 2, 3, 4, 5], True)
+read_spec_file(session.path) is parsed           # True: cached
+```
+
+#### `SpecFile`
+`bexa.io.engines.spec_tiff.SpecFile(path, title="", motor_labels=<factory>, motor_names=<factory>, counter_labels=<factory>, counter_names=<factory>, header_fields=<factory>, scans=<factory>)`
+
+A parsed session: `title` (`#F`), the motors' `#O` labels and `#o` mnemonics, the counters'
+`#J`/`#j`, `header_fields` (the field names of every `#U0_<block>` line) and `scans`
+(`{number: SpecScan}`). `label_to_name` maps a label to its mnemonic and `channel_names(scan)`
+gives the per-frame channel of every data column of a scan.
+
+```python
+# parsed: the synthetic session; the column names of scan 2 as channels
+parsed.channel_names(parsed.scans[2])[:5]        # ['phi', 'H', 'K', 'L', 'Epoch']
+parsed.counter_labels, parsed.header_fields["mono"][:2]   # (['Seconds', 'IC_1', 'IC_2', 'Btot', 'r1'], ['Energy', 'Lambda'])
+```
+
+#### `SpecScan`
+`bexa.io.engines.spec_tiff.SpecScan(number, command, date="", labels=<factory>, rows=<factory>, positions=<factory>, header=<factory>, comments=<factory>, aborted=False, lines=(0, 0))`
+
+One scan of the file: its `number` and `command` (the `#S` line, whitespace normalised), `date`,
+the `#L` `labels` and the data `rows` (`(n_rows, n_columns)`), the `positions` (`#P`, by
+mnemonic), the `header` (`{block: {field: value}}` from the `#U_` lines), the `#C` `comments`,
+`aborted` (SPEC's "aborted" comment) and the `lines` of the file it spans. `n_rows` is the number
+of points recorded and `column(label)` one data column.
+
+```python
+# parsed.scans[2]: ascan phi 8.8 9.8 8 1 of the synthetic session
+record = parsed.scans[2]
+record.n_rows, record.column("Phi")[:3]          # (9, array([8.8, 8.925, 9.05]))
+record.positions["phi"], record.header["mono"]["Energy"]   # (8.8, 11.5)
+```
+
+#### `spec_file_of`
+`bexa.io.engines.spec_tiff.spec_file_of(path, glob="*.spec")`
+
+The SPEC file behind a path: the file itself, the one found in a folder, or the session of a
+frame (the one whose name starts the frame's). `FileNotFoundError` without one, `ValueError` when
+a folder holds several.
+
+```python
+# session.root: the folder of the synthetic session, and one of its frames
+spec_file_of(session.root).name, spec_file_of(session.frames[2][0]).name   # ('wse2_1_1.spec', 'wse2_1_1.spec')
+```
+
+#### `frames_by_scan`
+`bexa.io.engines.spec_tiff.frames_by_scan(folder, prefix)`
+
+`{scan: {point: path}}` of every `<prefix>_S<scan>_<point>.tif` in a folder, from one listing of
+it; `frame_point(path)` gives the point number of one frame (-1 for another name).
+
+```python
+# session.root, session.name: the frames folder and the session prefix
+found = frames_by_scan(session.root, session.name)
+sorted(found), sorted(found[2])[:3]              # ([1, 2, 3, 4], [0, 1, 2])
+```
+
+#### `frame_point`
+`bexa.io.engines.spec_tiff.frame_point(path)`
+
+The point number in a frame's name: `<prefix>_S004_00012.tif` gives 12, another name -1.
+
+```python
+# session.frames[2][3]: the fourth frame of scan 2
+frame_point(session.frames[2][3]), frame_point("notes.tif")   # (3, -1)
+```
+
+Constants:
+
+- `FRAME_NAME`: the compiled pattern of a frame name, with the groups `prefix`, `scan`, `point`.
+- `SPEC_SUFFIX`: `".spec"`.
 
 ### bexa.io.engines.array_cube: reduced cubes as sources
 
@@ -7826,7 +7975,7 @@ from pathlib import Path
 import numpy as np
 import bexa
 from bexa.testing import (dfxm_sample, make_esrf_beamtime, make_esrf_energy_series, make_esrf_scan,
-                          make_esrf_zstack, make_lcls_cube, make_legacy_cube, make_pal_run,
+                          make_esrf_zstack, make_lcls_cube, make_legacy_cube, make_pal_run, make_aps_session,
                           make_pal_spec_scan, polycrystal)
 
 work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
@@ -8146,6 +8295,38 @@ Dataclass: the file `path`, `motors` (name to planned positions), `n_recorded` p
 ```python
 # spec: the synthetic SPEC-style scan; its file, the points recorded, its images
 spec.path.name, spec.n_recorded, spec.images.shape      # ('p0001.h5', 8, (8, 20, 24))
+```
+
+#### `make_aps_session`
+`bexa.testing.synthetic.make_aps_session(root, name="wse2_1_1", scans=DEFAULT_APS_SCANS, frame_shape=(24, 32), energy_keV=11.5, seed=0)`
+
+Write an APS 7-ID session: `<root>/<name>.spec` with the 7-ID-C motor and counter lists, and
+one areaDetector TIFF per scan point, `<name>_S<scan:03d>_<point:05d>.tif`. `scans` holds
+`(number, command, options)`: SPEC step scans (`ascan`, `a2scan`) and `loopscan`; the options are
+`partial` (points not taken, with SPEC's "aborted" comment), `frames=False` (rows without frames,
+as a session copied without its TIFFs) and `missing` (point numbers whose frame is left out).
+Every frame holds a Gaussian spot whose centre moves with the first motor and whose intensity
+peaks mid-scan; the `r1` counter column is the frame's total. The default session has a
+loopscan, two ascans (one aborted), an a2scan and a scan without frames.
+
+```python
+# work: a scratch folder; the default session, then one of your own with a missing frame
+session = make_aps_session(work / "aps")
+session.path.name, sorted(session.scans), session.rows   # ('wse2_1_1.spec', [1, 2, 3, 4, 5], {1: 5, 2: 9, 3: 3, 4: 6, 5: 5})
+mine = make_aps_session(work / "aps2", scans=[(7, "ascan phi 0 1 4 1", {"missing": [2]})])
+len(mine.frames[7]), bexa.open(mine.path, cache=False).structure.n_missing   # (4, 1)
+```
+
+#### `SyntheticApsSession`
+`bexa.testing.synthetic.SyntheticApsSession(root, name, path, frame_shape, energy_keV, scans=<factory>, frames=<factory>, coords=<factory>, rows=<factory>, truth=<factory>, totals=<factory>)`
+
+What `make_aps_session` wrote: `path` (the SPEC file), per scan number the `scans` command,
+the `frames` written, the `coords` (motor values per point recorded), the `rows` recorded,
+the `truth` (`(n, 2)` spot centre `(y, x)` per point) and the `totals` (the `r1` counter).
+
+```python
+# session: the default synthetic session; the planted truth of scan 2
+session.coords[2]["phi"][:3], session.truth[2][4]   # (array([8.8, 8.925, 9.05]), array([12., 16.]))
 ```
 
 #### `make_lcls_cube`

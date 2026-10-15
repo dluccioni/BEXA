@@ -12,6 +12,6 @@ import contextlib
 from bexa.io import generic  # noqa: F401  (registers the plain-array engine)
 from bexa.io.engines import hdf5_stack  # noqa: F401  (registers hdf5_stack)
 
-for _optional in ("hdf5_points", "spec_h5", "array_cube", "smalldata", "extra_data"):
+for _optional in ("hdf5_points", "spec_h5", "spec_tiff", "array_cube", "smalldata", "extra_data"):
     with contextlib.suppress(ImportError):
         __import__(f"bexa.io.engines.{_optional}")
