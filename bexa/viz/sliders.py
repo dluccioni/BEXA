@@ -27,14 +27,10 @@ def log_block(block: np.ndarray) -> np.ndarray:
 
 
 def in_notebook() -> bool:
-    """True inside a Jupyter kernel (where ipywidgets can show)."""
-    try:
-        from IPython import get_ipython
+    """True inside a Jupyter kernel (where ipywidgets can show): :func:`bexa._log.in_kernel`."""
+    from bexa._log import in_kernel
 
-        ip = get_ipython()
-        return ip is not None and "IPKernelApp" in ip.config
-    except ImportError:
-        return False
+    return in_kernel()
 
 
 def static_backend() -> bool:

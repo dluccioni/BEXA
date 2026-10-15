@@ -11,6 +11,7 @@ from typing import Any
 
 from bexa._log import configure, get_logger
 from bexa._log import in_ipython as _in_ipython
+from bexa._log import in_kernel as _in_kernel
 
 log = get_logger(__name__)
 
@@ -86,4 +87,29 @@ def show_plotly(
     return _show_plotly(fig, how=how, height=height, include_plotlyjs=include_plotlyjs)
 
 
-__all__ = ["in_ipython", "setup", "show_plotly"]
+def in_kernel() -> bool:
+    """True inside a Jupyter kernel (JupyterLab, VS Code interactive window), where widgets show."""
+    return _in_kernel()
+
+
+_PICKER_NAMES = ("ScanPicker", "list_datasets", "pick_scans")
+
+
+def __getattr__(name: str) -> Any:
+    """``ScanPicker``, ``list_datasets`` and ``pick_scans`` load the picker module on demand."""
+    if name in _PICKER_NAMES:
+        from bexa.notebook import picker
+
+        return getattr(picker, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = [
+    "ScanPicker",
+    "in_ipython",
+    "in_kernel",
+    "list_datasets",
+    "pick_scans",
+    "setup",
+    "show_plotly",
+]

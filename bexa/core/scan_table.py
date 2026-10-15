@@ -8,21 +8,25 @@ row carrying its status, so one such scan never hides the others.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Iterable
+from typing import Any, NamedTuple
 
 import numpy as np
 import pandas as pd
 
 from bexa.core.scan import Scan
 from bexa.core.status import ScanStatus
+from bexa.core.structure import ENERGY_DIM
 
 __all__ = [
     "FIXED_COLUMNS",
     "LEAD_COLUMNS",
+    "MotorCandidate",
     "arrange",
     "compact_columns",
     "followers",
     "min_steps",
+    "motor_candidates",
     "placeholder_row",
     "scan_row",
 ]
@@ -151,3 +155,64 @@ def compact_columns(table: pd.DataFrame, spec: Any) -> list[str]:
     if "status" in table.columns and (table["status"] == ScanStatus.COMPLETE.value).all():
         dropped.append("status")
     return sorted(set(dropped))
+
+
+class MotorCandidate(NamedTuple):
+    """A motor a reader may take as a dim: its values, where it moves, pressed by default or not."""
+
+    n_values: int
+    where: str  # "scan": it moves within the scan; "stack": it differs between the scans
+    default: bool  # what bexa would take without being told
+
+
+def motor_candidates(
+    scan: Scan, table: pd.DataFrame, defaults: Iterable[str]
+) -> dict[str, MotorCandidate]:
+    """Every motor that moves within ``scan`` or differs between the rows of ``table``.
+
+    The scanned motors of ``scan`` come first, pressed by default; then every
+    other per-frame channel that is a motor and moves within the scan by more
+    than the spec's ``min_step`` (``ccmth`` beside ``energy``, ``mu_enc`` beside
+    ``mu``, a follower recorded per frame), released by default; then every
+    positioner column of ``table`` that differs between its rows (the energy
+    column as ``energy``), pressed when ``defaults`` names it (what
+    :func:`bexa.core.dataset.varying` found) and released for the followers,
+    aliases and drift it left out.
+    """
+    s = scan.structure
+    spec = scan.spec
+    known = set(spec.known_motors()) if spec is not None else set()
+    names = set(s.motor_names) | known | set(s.scalars)
+    steps = min_steps(spec)
+    out: dict[str, MotorCandidate] = {}
+    for name, n in zip(s.motor_dims, s.motor_shape, strict=True):
+        out[name] = MotorCandidate(int(n), "scan", True)
+    for name, values in s.per_frame.items():
+        if name in out or name not in names:
+            continue
+        finite = np.asarray(values, dtype=float)
+        finite = finite[np.isfinite(finite)]
+        if finite.size and float(np.ptp(finite)) >= max(steps.get(name, 0.0), 1e-9):
+            out[name] = MotorCandidate(int(np.unique(np.round(finite, 9)).size), "scan", False)
+    defaults = list(defaults)
+    wanted = set(defaults)
+    aliases = (spec.motors.get("aliases", {}) or {}) if spec is not None else {}
+    twins = set()  # a motor kept under a legacy name too (z1 beside samz) counts once
+    for logical, physical in aliases.items():
+        physicals = [physical] if isinstance(physical, str) else list(physical)
+        if logical in table.columns and any(
+            p in table.columns and table[logical].equals(table[p]) for p in physicals
+        ):
+            twins.add(logical)
+    between: dict[str, MotorCandidate] = {}
+    for column in table.columns:
+        name = ENERGY_DIM if column == "energy_keV" else str(column)
+        if column in LEAD_COLUMNS or column in FIXED_COLUMNS or name in out or name in twins:
+            continue
+        values = pd.to_numeric(table[column], errors="coerce").dropna()
+        n = int(values.nunique())
+        if n > 1 and float(values.max() - values.min()) >= steps.get(name, 0.0):
+            between[name] = MotorCandidate(n, "stack", name in wanted)
+    for name in [*[d for d in defaults if d in between], *between]:  # the axes first, in order
+        out.setdefault(name, between[name])
+    return out

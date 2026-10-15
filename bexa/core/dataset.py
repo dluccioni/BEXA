@@ -35,10 +35,12 @@ from bexa.core.scan import open as open_scan
 from bexa.core.scan_table import (
     FIXED_COLUMNS,
     LEAD_COLUMNS,
+    MotorCandidate,
     arrange,
     compact_columns,
     followers,
     min_steps,
+    motor_candidates,
     placeholder_row,
     scan_row,
 )
@@ -568,6 +570,24 @@ class Dataset:
     ) -> dict[str, np.ndarray]:
         """What differs between the chosen scans, or the ``axes`` named: see :func:`varying`."""
         return varying(self.select(scans, **criteria), axes=axes, ignore=ignore)
+
+    def motor_candidates(self, scans: Any = None, **criteria: Any) -> dict[str, MotorCandidate]:
+        """Every motor the chosen scans could be read along: ``{name: MotorCandidate}``.
+
+        The motors that move within the first chosen scan (its scanned motors,
+        pressed by default, and the other recorded motors that move, released)
+        and the positioners that differ between the chosen scans (pressed when
+        :meth:`varying` would take them); see
+        :func:`bexa.core.scan_table.motor_candidates`. The scan picker's motor
+        buttons are built from it.
+        """
+        ids = self.select_numbers(scans, **criteria)
+        if not ids:
+            return {}
+        table = self.table()
+        table = table[table["id"].isin(ids)]
+        defaults = list(self.varying(ids)) if len(ids) > 1 else []
+        return motor_candidates(self.scan(ids[0]), table, defaults)
 
 
 def open_dataset(path: str | Path | Sequence[str | Path] | None = None, **kwargs: Any) -> Dataset:

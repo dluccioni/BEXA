@@ -36,7 +36,7 @@ lists the everyday jobs with the function that does each.
   - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.status](#bexacorestatus-the-state-of-a-scan) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.scan_table](#bexacorescan_table-the-rows-of-a-datasets-table) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
   - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
   - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis)
-  - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.sliders](#bexavizsliders-what-the-slider-browsers-share) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers)
+  - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.sliders](#bexavizsliders-what-the-slider-browsers-share) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers) · [bexa.notebook.picker](#bexanotebookpicker-choosing-scans-in-a-notebook) · [bexa.notebook.picker_widgets](#bexanotebookpicker_widgets-the-widget-views-of-the-picker)
   - Pipelines: [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set) · [bexa.pipelines.xfel_cube](#bexapipelinesxfel_cube-pal-xfel-point-files-to-a-laser-onoff-cube) · [bexa.pipelines.cube_report](#bexapipelinescube_report-figures-and-gifs-of-one-cube) · [bexa.pipelines.auto_process](#bexapipelinesauto_process-the-beamtime-watcher) · [bexa.pipelines.benchmark](#bexapipelinesbenchmark-timings-and-baselines)
   - Synthetic data: [bexa.testing.demo](#bexatestingdemo-bexademo-synthetic-data-in-one-call) · [bexa.testing.synthetic](#bexatestingsynthetic-small-valid-files-for-every-layout-with-the-planted-truth)
   - Geometry and crystallography: [bexa.geometry.conventions](#bexageometryconventions-named-lab-frames-and-motor-stacks) · [bexa.geometry.detector](#bexageometrydetector-detector-and-beam-geometry) · [bexa.geometry.transforms](#bexageometrytransforms-pixels-to-angles-to-q-to-hkl) · [bexa.crystal.lattice](#bexacrystallattice-cells-d-spacings-and-reflections) · [bexa.crystal.cif](#bexacrystalcif-cell-and-space-group-from-cif-files) · [bexa.crystal.diffractometer](#bexacrystaldiffractometer-four-circle-motor-solutions) · [bexa.crystal.zone_axis](#bexacrystalzone_axis-the-zone-axis-from-one-reflection) · [bexa.crystal.omega_search](#bexacrystalomega_search-omega-where-two-peaks-share-a-mu-window) · [bexa.crystal.sample_frame](#bexacrystalsample_frame-sample-to-grain-matrix)
@@ -572,6 +572,8 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | see what a folder or file holds | `bexa info PATH`; `bexa.io.inspect.describe`, `bexa.io.inspect.h5_tree` |
 | list the scans of a dataset with their motors and positioners | `bexa.open_dataset(path).table()`, `Dataset.table(compact=True)`, `bexa.list_scans` |
 | a measurement that continued in a second dataset folder | `bexa.open_dataset([folder1, folder2])`: one table, ids running over both folders; `Dataset.table`, `Dataset.series` and `bexa.stack` work across them |
+| the datasets under a RAW_DATA folder | `bexa.notebook.list_datasets` |
+| choose the scans, the motors to extract and the stack axis with widgets | `bexa.notebook.ScanPicker`, `bexa.notebook.pick_scans`, `Dataset.motor_candidates` |
 | open one scan | `bexa.open(path, scan=7)` |
 | open through a beamtime profile | `bexa.open(profile=..., sample=..., scan=...)`, `bexa profile new`, `bexa.config.load_profile` |
 | pick scans by type, scanned motor or positioner (`samz`, energy) | `Dataset.select`, `Dataset.select_numbers`, `Dataset.groups` |
@@ -1103,7 +1105,9 @@ scan.status, str(scan.status)   # (<ScanStatus.COMPLETE: 'complete'>, 'complete'
 The same scan read with `motors` (names of per-frame channels) as the dims of its grid:
 `["ccmth", "chi", "mu"]` reads an energy mosa with the monochromator angle in degrees instead
 of the energy, `["chi", "mu_enc"]` a scan with a motor's encoder instead of the motor; channels
-that step together (a motor and its encoder) collapse to the first named. The choice goes into
+that step together (a motor and its encoder) collapse to the first named; `"energy"` names the
+energy of an energy mosa (in keV; `["ccmth", "energy", ...]` names the angle first and reads
+degrees). The choice goes into
 the recipe, so the scan reopens the same way in a worker, and into the cache keys, so results
 on the two grids never mix. The grid is built at once: a name that is not a channel of the
 scan raises `ValueError` listing the motors the scan recorded. Layouts with a master file only
@@ -1458,6 +1462,25 @@ empty when every scan could be read. Rebuilt with the table.
 live.problems                    # {6: 'scan 6 of beamtime is running: no frame to read yet'}
 ```
 
+#### `Dataset.motor_candidates`
+`bexa.core.dataset.Dataset.motor_candidates(scans=None, **criteria)`
+
+Every motor the chosen scans (selection as in `select_numbers`) could be read along:
+`{name: MotorCandidate(n_values, where, default)}`. The motors that move within the first
+chosen scan come first (`where="scan"`: its scanned motors, pressed by default, then every
+other recorded motor that moves by more than the spec's `min_step`, released: `ccmth` next to
+`energy`), then the positioners that differ between the chosen scans (`where="stack"`, pressed
+when `varying` would take them as axes, released for followers, aliases and drift: `samz` next
+to `uz`). The scan picker's motor buttons are built from it; see
+`bexa.core.scan_table.motor_candidates`.
+
+```python
+{n: tuple(c) for n, c in ds.motor_candidates(type="fscan1d").items()}
+# {'mu': (8, 'scan', True), 'samz': (5, 'stack', True), 'energy': (5, 'stack', True), 'ccmth': (5, 'stack', False)}
+ds.motor_candidates(type="fscan2d")["samz"]      # MotorCandidate(n_values=5, where='stack', default=True)
+ds.motor_candidates([])                          # {}
+```
+
 #### `varying`
 `bexa.core.dataset.varying(scans, tolerance=None, axes=None, ignore=None)`
 
@@ -1611,8 +1634,8 @@ when building a table of scans from your own list of `Scan` objects.
 ```python
 import tempfile
 import bexa
-from bexa.core.scan_table import (FIXED_COLUMNS, LEAD_COLUMNS, arrange, compact_columns, followers,
-                                  min_steps, placeholder_row, scan_row)
+from bexa.core.scan_table import (FIXED_COLUMNS, LEAD_COLUMNS, MotorCandidate, arrange, compact_columns,
+                                  followers, min_steps, motor_candidates, placeholder_row, scan_row)
 from bexa.core.status import ScanStatus
 from bexa.testing import make_esrf_beamtime
 
@@ -1653,6 +1676,31 @@ The rows as a DataFrame in the table's column order: `LEAD_COLUMNS` (`id`, `data
 ```python
 table = arrange([scan_row(ds[n], n, n) for n in (1, 2, 3)])
 list(table.columns[:5])                          # ['id', 'scan', 'status', 'type', 'title']
+```
+
+#### `motor_candidates`
+`bexa.core.scan_table.motor_candidates(scan, table, defaults)`
+
+Every motor that moves within `scan` or differs between the rows of `table` (the full table
+rows of the scans in question), as `{name: MotorCandidate}`: the scanned motors of `scan`
+(pressed by default), the other per-frame channels that are motors and move by more than the
+spec's `min_step` (released), then the positioner columns that differ between the rows (the
+energy column as `energy`; aliases such as `z1` beside `samz` counted once), pressed when
+`defaults` names them (what `bexa.core.dataset.varying` found, in its order) and released
+otherwise. `Dataset.motor_candidates` calls it.
+
+```python
+motor_candidates(scan, ds.table(), [])           # {'chi': MotorCandidate(n_values=3, where='scan', default=True), 'mu': MotorCandidate(n_values=8, where='scan', default=True)}
+```
+
+#### `MotorCandidate`
+`bexa.core.scan_table.MotorCandidate(n_values, where, default)`
+
+A named tuple: the distinct values a motor takes, `where` it moves (`"scan"`: within the scan;
+`"stack"`: between the scans) and whether a reader takes it by default.
+
+```python
+MotorCandidate(5, "stack", True).default        # True
 ```
 
 #### `compact_columns`
@@ -5373,6 +5421,18 @@ fig, ax, im = images.show(image, scalebar=False)
 bar = images.add_scalebar(ax, 235, location="lower left", color="white", box_alpha=0)
 ```
 
+#### `scalebar_nm`
+`bexa.viz.images.scalebar_nm(scalebar, source)`
+
+Nanometres per pixel for a `scalebar` argument: a number as given, `True` from
+`source.attrs["effective_pixel_nm"]` (`bexa.viz.style.pixel_size_nm`), `None` for `False` or
+when the attribute is missing. `show` and the `maps` functions resolve their `scalebar`
+through it after the style defaults.
+
+```python
+images.scalebar_nm(235, image), images.scalebar_nm(True, image), images.scalebar_nm(False, image)   # (235.0, 235.0, None)
+```
+
 ### bexa.viz.curves: rocking curves, pump-probe panels and moments
 
 1-D figures: intensity against a motor, laser on/off comparisons along the scan axis of a
@@ -6290,6 +6350,310 @@ Python script.
 
 ```python
 bexa.notebook.in_ipython()                       # False in a script
+```
+
+#### `in_kernel`
+`bexa.notebook.in_kernel()`
+
+`True` inside a Jupyter kernel (JupyterLab, VS Code interactive window), where ipywidgets can
+show; `False` in terminal IPython and in scripts. `ScanPicker(interactive=None)` and the
+browsers' `widgets=None` ask it.
+
+```python
+bexa.notebook.in_kernel()                        # False in a script
+```
+
+### bexa.notebook.picker: choosing scans in a notebook
+
+What the data cell of a notebook used to spell out by hand (the folders, `SCANS`, `FILTERS`, the
+stack axes) in one object: the datasets under a `RAW_DATA` root, the scans listed and selected,
+the motors to extract from them and which motor the stack is built on. In a Jupyter kernel with
+ipywidgets a `ScanPicker` shows as a widget (`bexa.notebook.picker_widgets`): a list of the
+scans (shift and ctrl for ranges; `view="table"` for a checkbox per row with sortable columns,
+`"gallery"` for thumbnails), one toggle button per motor that moves within a scan or between
+the selected scans (the defaults pressed: the scanned motors, and what `Dataset.varying` finds
+between scans; `ccmth` next to `energy`, `samz` next to `uz` released), and a dropdown for the
+stack axis. Anywhere else it shows as a table, and the same methods drive it from code. The
+notebook `examples/13_esrf_dfxm_general.ipynb` uses it in section 3.
+
+```python
+import tempfile
+import bexa
+from bexa.notebook.picker import ScanPicker, list_datasets
+
+folder = bexa.demo("zstack").path                # a z-stack dataset: a chi x mu scan and an energy series at 5 heights
+picker = ScanPicker(root=folder.parent, folders=[folder], filters={"type": "fscan2d"},
+                    interactive=False, cache=tempfile.mkdtemp())   # the chi x mu scans, no widgets
+```
+
+#### `list_datasets`
+`bexa.notebook.picker.list_datasets(root, depth=2, format=None)`
+
+The dataset folders under `root`: every folder holding a master `.h5` file beside `scanNNNN`
+folders, walked `depth` levels down (`RAW_DATA` -> sample -> dataset at the ESRF) with
+`os.scandir` and no HDF5 file opened. `format="auto"` keeps only the folders a format spec
+recognises (`bexa.io.formats.best_spec`), a spec name those matching that spec. Hidden folders,
+`bexa_cache` and `__pycache__` are skipped; a dataset folder given as `root` comes back alone;
+a missing root raises `FileNotFoundError`.
+
+```python
+list_datasets(folder)                            # [the dataset folder itself]
+[p.name for p in list_datasets(folder.parent)]   # ['demo_zstack', ...]: every demo dataset made so far
+list_datasets(folder.parent, format="auto")      # the same, each checked against the format specs
+```
+
+#### `ScanPicker`
+`bexa.notebook.picker.ScanPicker(root=None, folders=None, scans=None, filters=None, *, view="list", cache=True, cache_reductions=None, interactive=None, state_file=None, status="finished", page_size=50, motors=None, stack_axis=None, **open_kwargs)`
+
+The scans of a beamtime to analyse. `root` is a `RAW_DATA` folder whose datasets are listed
+(`None` lists the given `folders` only); `folders` the dataset folder(s) opened at first as one
+`bexa.core.dataset.Dataset` with running ids (`None`: the first dataset under `root`); `scans`
+and `filters` the code-level starting point, as `Dataset.select_numbers` takes them: `filters`
+(`type`, `motors`, `where`, positioner ranges) decide what is listed at all, `scans` what is
+selected at first (`None`: every listed scan that can be selected). `status` says which scans
+may be selected: `"finished"` (complete and aborted, the default), `"complete"` or `"any"`;
+scans still running, empty or unreadable are listed greyed and never selected. `view` is
+`"list"`, `"table"` or `"gallery"`; `interactive=None` builds the widgets inside a Jupyter
+kernel with ipywidgets, `False` never, `True` without a kernel (tests); `state_file` keeps the
+selection, the pressed motors, the stack axis and the filters across kernel restarts as long
+as the code defaults are unchanged (edited code wins); `motors` and `stack_axis` are the
+code-level override of the buttons; `cache`, `cache_reductions` and `open_kwargs` go to
+`bexa.open_dataset`. Members:
+
+- `dataset`, `folders`, `root`, `datasets` (the folders listed under `root`), `rows` (the full
+  table), `candidates` (the ids listed), `selectable` (those that may be selected), `ids` (the
+  selected ids), `scans` (the selected `Scan`s, read with the pressed motors as the dims of
+  their grids), `table` (the compact rows of the selection), `rows_of(ids)`.
+- `motor_candidates()`, `motors` (the pressed motors), `dims` (the pressed motors that move
+  within a scan, in loop order), `stack_axis`, `series_axes` (the pressed motors that differ
+  between the scans and are not the stack axis), `scan_axes` (`dims + series_axes`), `axes`
+  (`[stack_axis, *series_axes]`, what `bexa.stack` is given as `dim`), `varying()`,
+  `roles_text()`, `status_text()`.
+- `select(ids)`, `select_all()`, `clear()`, `set_filters(...)`, `set_folders(folders)`,
+  `refresh()`, `reset()`, `set_motors(names)`, `toggle_motor(name)`, `reset_motors()`,
+  `set_stack_axis(name)`, `observe(callback)`, `thumbnails(size)`, `summary_line(row)`,
+  `save_state()`, `show()`, `close()`; `widgets` (the `PickerWidgets`, or `None`), `ui` (the
+  bars' filters), `view`, `page_size`, `state_file`.
+
+```python
+picker.ids                                       # [1, 7, 13, 19, 25]: the chi x mu scan at every height
+picker.candidates == picker.selectable           # True: every listed scan is finished
+picker.motors, picker.dims                       # (['chi', 'mu', 'samz'], ['chi', 'mu'])
+picker.stack_axis, picker.axes                   # ('samz', ['samz'])
+picker.roles_text()                              # 'scan axes: chi (6) x mu (15); stack axis: samz (5)'
+[s.source.scan for s in picker.scans]            # [1, 7, 13, 19, 25]
+picker.table[["id", "samz"]].values.tolist()     # [[1, -0.002], [7, -0.001], [13, 0.0], [19, 0.001], [25, 0.002]]
+picker                                           # the table with a 'selected' column (the widgets in a kernel)
+```
+
+#### `ScanPicker.select`
+`bexa.notebook.picker.ScanPicker.select(ids)`
+
+Select exactly these ids. Ids that are not listed or not selectable (a scan still running) are
+reported in a warning and left out; `select_all()` takes every selectable scan, `clear()` none.
+Every change calls the `observe` callbacks and writes the state file.
+
+```python
+picker.select([1, 7])
+picker.status_text()                             # '2 of 5 scans selected'
+picker.varying()                                 # {'samz': array([-0.002, -0.001])}
+picker.select_all()
+len(picker.ids)                                  # 5
+```
+
+#### `ScanPicker.set_filters`
+`bexa.notebook.picker.ScanPicker.set_filters(**ui)`
+
+Narrow the listing the way the bars do: `type="fscan3d"`, `motors="chi x mu"` (the exact
+text of the motors column), `status="finished"` (`"any"`, the default listing, `"finished"`
+or `"complete"`). A filter narrows the selection, never widens it. Unknown names raise
+`ValueError`. The code-level `filters` of the constructor stay underneath.
+
+```python
+picker.set_filters(status="complete")            # the aborted scans leave the list
+picker.candidates                                # [1, 7, 13, 19, 25]
+picker.set_filters(status="any")
+picker.ui                                        # {'type': 'any', 'motors': '', 'status': 'any'}
+```
+
+#### `ScanPicker.set_motors`
+`bexa.notebook.picker.ScanPicker.set_motors(names, notify=True)`
+
+Press exactly these motors (`toggle_motor(name)` flips one, `reset_motors()` goes back to the
+defaults and the default stack axis). The candidates are those of `motor_candidates()`: the
+scanned motors of the first selected scan and every other recorded motor that moves within it
+(an energy mosa lists `energy`, `chi`, `mu` and `ccmth`), then every positioner that differs
+between the selected scans (a z-stack at several energies lists `uz`, `energy`, `ccmth` and
+the stage readback `samz`). A name that is not a candidate raises `ValueError`. The pressed
+motors that move within a scan become the dims of every selected scan (`Scan.with_dims` when
+they differ from bexa's choice: `ccmth` instead of `energy` reads the mono angle in degrees).
+
+```python
+series = ScanPicker(folders=[folder], filters={"type": "fscan1d"}, interactive=False, cache=False)   # the energy series
+{n: (c.n_values, c.where, c.default) for n, c in series.motor_candidates().items()}
+# {'mu': (8, 'scan', True), 'samz': (5, 'stack', True), 'energy': (5, 'stack', True), 'ccmth': (5, 'stack', False)}
+series.axes                                      # ['samz', 'energy']
+series.toggle_motor("ccmth")
+series.toggle_motor("energy")                    # the mono angle instead of the energy
+series.axes, series.varying()["ccmth"].round(4)  # (['samz', 'ccmth'], array([6.6705, 6.6744, 6.6784, 6.6823, 6.6863]))
+series.reset_motors()
+series.motors                                    # ['mu', 'samz', 'energy']
+```
+
+#### `ScanPicker.set_stack_axis`
+`bexa.notebook.picker.ScanPicker.set_stack_axis(name, notify=True)`
+
+Make `name` the stack axis: one of the pressed motors that differ between the scans (the
+default is the leading one in `Dataset.varying`'s order: `uz` for a z-stack, `nanodac1_temp`
+for a temperature series); `None` or `"none"` for no stack axis (every pressed motor is then a
+scan axis), `"default"` for bexa's choice. Another name raises `ValueError`.
+
+```python
+series.set_stack_axis("energy")
+series.axes, series.series_axes                  # (['energy', 'samz'], ['samz'])
+series.set_stack_axis(None)
+series.stack_axis, series.scan_axes              # (None, ['mu', 'samz', 'energy'])
+series.set_stack_axis("default")
+series.stack_axis                                # 'samz'
+```
+
+#### `ScanPicker.varying`
+`bexa.notebook.picker.ScanPicker.varying()`
+
+The values of every axis of `axes` over the selected scans, `{dim: sorted values}`, as
+`bexa.core.dataset.varying(scans, axes=picker.axes)` gives them; `{}` when nothing is stacked.
+The notebook's `position_of` and the stacks read it.
+
+```python
+picker.varying()                                 # {'samz': array([-0.002, -0.001, 0., 0.001, 0.002])}
+```
+
+#### `ScanPicker.set_folders`
+`bexa.notebook.picker.ScanPicker.set_folders(folders)`
+
+Open other dataset folder(s) (several give one dataset with running ids) and apply the code
+defaults to them; `refresh()` looks at the current folders again (scans that finished or
+started since) and keeps the selection; `reset()` goes back to the code defaults: the folders,
+the selection, the motors and the filters.
+
+```python
+picker.set_folders([folder])                     # the same folder again: the code defaults apply
+picker.refresh()
+picker.reset()
+picker.ids                                       # [1, 7, 13, 19, 25]
+```
+
+#### `ScanPicker.observe`
+`bexa.notebook.picker.ScanPicker.observe(callback)`
+
+Call `callback(picker)` after every change of the selection, the motors, the stack axis, the
+filters or the folders; the widgets register themselves this way.
+
+```python
+seen = []
+picker.observe(lambda p: seen.append(p.status_text()))
+picker.select([13])
+seen                                             # ['1 of 5 scans selected']
+```
+
+#### `ScanPicker.summary_line`
+`bexa.notebook.picker.ScanPicker.summary_line(row)`
+
+One line of the list view for a row of `rows`: the id, the dataset (several folders), the
+status, type, motors and shape, the positioners that vary over the listing (the energy as
+`17 keV`) and the frames.
+
+```python
+picker.summary_line(picker.rows_of([1]).iloc[0])   # '  1  complete   fscan2d   chi x mu   6 x 15   17 keV  ccmth 6.678  samz -0.002  90 frames'
+```
+
+#### `ScanPicker.thumbnails`
+`bexa.notebook.picker.ScanPicker.thumbnails(size=128, images=None)`
+
+PNG thumbnails (`{id: bytes}`) of the summed image of every listed scan, for the gallery view:
+one pass per scan with a motor stride of 4 and the pixels binned to about `size` across, kept
+once computed (and cached by the dataset's cache); `images` maps ids to summed images already
+at hand.
+
+```python
+pngs = picker.thumbnails(size=48)
+sorted(pngs), pngs[1][:4]                        # ([1, 7, 13, 19, 25], b'\x89PNG')
+```
+
+#### `ScanPicker.save_state`
+`bexa.notebook.picker.ScanPicker.save_state()`
+
+Write the state file (when the picker has one) and return its path: the hash of the code
+defaults, the folders, the selected scans as `[dataset folder name, scan number]` pairs (ids
+change when folders are added), the bars' filters, the pressed motors and the stack axis.
+Called after every change. The file is read back by the next picker built with the same code
+defaults; a folder that is gone or changed defaults are reported and ignored.
+
+```python
+remembered = ScanPicker(folders=[folder], filters={"type": "fscan2d"}, interactive=False,
+                        cache=False, state_file=tempfile.mkdtemp() + "/picker.json")
+remembered.select([7, 13])
+remembered.save_state().name                     # 'picker.json'
+ScanPicker(folders=[folder], filters={"type": "fscan2d"}, interactive=False, cache=False,
+           state_file=remembered.state_file).ids   # [7, 13]: the selection survives a restart
+```
+
+#### `pick_scans`
+`bexa.notebook.picker.pick_scans(root=None, folders=None, **kwargs)`
+
+Build a `ScanPicker` (keywords as above), show it (`show()`: the widgets in a kernel, the table
+elsewhere) and return it.
+
+```python
+from bexa.notebook.picker import pick_scans
+shown = pick_scans(folders=[folder], filters={"type": "fscan2d"}, interactive=False, cache=False)
+shown.ids                                        # [1, 7, 13, 19, 25]
+```
+
+Constants:
+
+- `VIEWS`: `("list", "table", "gallery")`.
+- `STATUS_SHOWN`: what the bars' `status` filter lists: `{"any": None, "finished": ("complete",
+  "aborted"), "complete": ("complete",)}`.
+
+### bexa.notebook.picker_widgets: the widget views of the picker
+
+The ipywidgets side of `ScanPicker`: the bars (the root and the datasets under it, the type,
+motors and status filters, the view, the selection buttons and the status line), the scan list
+in one of three views, the motor buttons and the roles row. Built by `ScanPicker` when it is
+interactive; every click goes through the picker's methods and the picker calls `refresh()`
+back. Needs ipywidgets.
+
+```python
+import tempfile
+import bexa
+from bexa.notebook.picker import ScanPicker
+from bexa.notebook.picker_widgets import PickerWidgets
+
+folder = bexa.demo("zstack").path                # a z-stack dataset: a chi x mu scan and an energy series at 5 heights
+live = ScanPicker(folders=[folder], filters={"type": "fscan2d"}, interactive=True, cache=False)   # the widgets without a kernel
+```
+
+#### `PickerWidgets`
+`bexa.notebook.picker_widgets.PickerWidgets(picker)`
+
+The widget box of a picker: `box` is what a cell displays (`picker.show()` does), `refresh()`
+rebuilds what the picker's state decides (the bars, the status line, the scan list, the motor
+buttons and the roles row). The parts are attributes for scripts and tests: `root_text`,
+`folder_select`, `type_dd`, `motors_text`, `status_dd`, `view_dd`, `all_button`,
+`none_button`, `invert_button`, `reset_button`, `refresh_button`, `status`, `body` (the view:
+a `SelectMultiple` of summary lines, or the table rows with `checkboxes` per id, or the gallery
+tiles), `motor_row` (one `ToggleButton` per motor), `roles_row` (the stack-axis dropdown, the
+"Default motors" button, `roles_text`).
+
+```python
+widgets = live.widgets
+type(widgets).__name__, len(widgets.box.children)   # ('PickerWidgets', 7)
+widgets.body.children[0].value = (1, 7)          # as a click in the list would
+live.ids                                         # [1, 7]
+[b.description for b in widgets.motor_row.children]   # ['chi (6)', 'mu (15)', 'samz (2)']
+widgets.none_button.click()
+live.ids, widgets.status.value                   # ([], '<b>&nbsp;&nbsp;0 of 5 scans selected</b>')
 ```
 
 ### bexa.pipelines.dfxm_report: the standard DFXM figure set
@@ -10059,7 +10423,7 @@ which writes `HH:MM:SS LEVEL name: message` to stderr at `BEXA_LOG_LEVEL`, INFO 
 import io
 import os
 import bexa
-from bexa._log import configure, get_logger, in_ipython, interactive_session, progress, set_level
+from bexa._log import configure, get_logger, in_ipython, interactive_session, progress, set_level, in_kernel
 ```
 
 #### `set_level`
@@ -10117,6 +10481,15 @@ True inside IPython, Jupyter or a VS Code interactive window (as `bexa.notebook.
 
 ```python
 in_ipython()                                 # False in a plain script
+```
+
+#### `in_kernel`
+`bexa._log.in_kernel()`
+
+True inside a Jupyter kernel (where ipywidgets can show), as `bexa.notebook.in_kernel`.
+
+```python
+in_kernel()                                  # False in a plain script
 ```
 
 #### `interactive_session`

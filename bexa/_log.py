@@ -98,6 +98,16 @@ def in_ipython() -> bool:
     return get_ipython() is not None
 
 
+def in_kernel() -> bool:
+    """True inside a Jupyter kernel (JupyterLab, VS Code interactive window), where widgets show."""
+    try:
+        from IPython import get_ipython
+    except ImportError:
+        return False
+    ip = get_ipython()
+    return ip is not None and "IPKernelApp" in getattr(ip, "config", {})
+
+
 def interactive_session() -> bool:
     """True when someone is watching: an IPython kernel, or a terminal on stderr."""
     return in_ipython() or bool(getattr(sys.stderr, "isatty", lambda: False)())

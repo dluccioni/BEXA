@@ -540,8 +540,19 @@ class Hdf5StackSource(BaseSource):
             per_frame, declared, command, motor_names, known, self.spec.min_steps(), logical_name
         )
         order, scan_type, planned_shape = choice.order, choice.scan_type, choice.planned_shape
+        source = self.spec.energy.get("from")
+        # the monochromator angle stepped inside a scan (an energy mosa) reads as the energy in
+        # keV unless the reader asks for the angle itself (and names it before the energy)
+        as_energy = motors is None or (
+            ENERGY_DIM in motors
+            and (
+                source not in motors or list(motors).index(ENERGY_DIM) < list(motors).index(source)
+            )
+        )
         if motors is not None:  # the reader's choice of dims
-            order = [logical_name.get(m, m) for m in motors]
+            order = [
+                source if m == ENERGY_DIM and source else logical_name.get(m, m) for m in motors
+            ]
             unknown = [m for m in order if m not in per_frame]
             if unknown:
                 raise ValueError(
@@ -555,10 +566,8 @@ class Hdf5StackSource(BaseSource):
         energy = self._energy(per_frame, scalars)
         if order:
             arrays = {m: per_frame[m] for m in order}
-            source = self.spec.energy.get("from")
-            if source in arrays and motors is None:  # the angle itself was asked for
-                # the monochromator angle was stepped inside the scan (an energy mosa): the dim
-                # is the energy, in keV, and the angle stays a per-frame channel
+            if source in arrays and as_energy:
+                # the dim is the energy, in keV, and the angle stays a per-frame channel
                 arrays = {(ENERGY_DIM if m == source else m): v for m, v in arrays.items()}
                 arrays[ENERGY_DIM] = self._energies(per_frame[source])
                 units[ENERGY_DIM] = "keV"
