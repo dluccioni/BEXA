@@ -33,8 +33,8 @@ lists the everyday jobs with the function that does each.
 - [Walkthrough: ID03 data on the ESRF Jupyter-SLURM service](#walkthrough-id03-data-on-the-esrf-jupyter-slurm-service)
 - [Find a function by task](#find-a-function-by-task)
 - [Function reference](#function-reference)
-  - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
-  - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
+  - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.status](#bexacorestatus-the-state-of-a-scan) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.scan_table](#bexacorescan_table-the-rows-of-a-datasets-table) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
+  - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
   - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis)
   - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers)
   - Pipelines: [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set) · [bexa.pipelines.xfel_cube](#bexapipelinesxfel_cube-pal-xfel-point-files-to-a-laser-onoff-cube) · [bexa.pipelines.cube_report](#bexapipelinescube_report-figures-and-gifs-of-one-cube) · [bexa.pipelines.auto_process](#bexapipelinesauto_process-the-beamtime-watcher) · [bexa.pipelines.benchmark](#bexapipelinesbenchmark-timings-and-baselines)
@@ -544,8 +544,15 @@ the h5web viewer inside JupyterLab plots them directly.
 
 ### 9. During the beamtime
 
+- A dataset folder holds scans in every state: `ds.table()` lists them all with a `status`
+  column (`complete`, `running`, `aborted`, `empty`, `unreadable`), and a scan that cannot be
+  read yet never hides the others (`ds.problems` says why). `ds.select(...)` keeps the finished
+  scans (complete and aborted) unless `status="any"` asks for more; a running scan opens with
+  `ds[id]` and reads as far as its files go. `ds.refresh()` (or `ds.table(refresh=True)`) is the
+  poll: new scans appear, running ones are read again, finished ones keep their handles.
+  `python -m bexa scan list FOLDER` prints the same table from the shell.
 - A scan that is still being written can be opened; `scan.refresh()` (or re-opening) picks up
-  the new frames and `scan.info()` says how many grid points are still missing.
+  the new frames and `scan.info()` says its status and how many planned frames are missing.
 - `python -m bexa scan preview ... --plot` right after each scan is the quickest check that the
   reflection sits inside the rocking range.
 - Keep paths in the profile, not in notebooks: with `path_aliases` the same notebook runs on
@@ -716,6 +723,7 @@ functions that need them. Each name is documented in full under the module that 
 | `bexa.acc` | the accumulators: `bexa.acc.Sum()`, `bexa.acc.MotorCOM(...)`, ... (the module `bexa.core.reductions`) | `bexa.core.reductions` |
 | `bexa.ROI` | region of interest over pixels, motors and energy | `bexa.core.roi.ROI` |
 | `bexa.Scan`, `bexa.Dataset` | the classes behind `open` and `open_dataset` | `bexa.core.scan.Scan`, `bexa.core.dataset.Dataset` |
+| `bexa.ScanStatus`, `bexa.ScanNotReadyError` | the state of a scan (`complete`, `running`, `aborted`, `empty`, `unreadable`) and the error for a scan with nothing to read yet | `bexa.core.status.ScanStatus`, `bexa.core.status.ScanNotReadyError` |
 | `bexa.save`, `bexa.load` | write and read results (HDF5 or zarr with provenance), read legacy and LCLS cubes | `bexa.io.cube.save`, `bexa.io.cube.load` |
 | `bexa.plot` | the figure that fits an array or a result | `bexa.viz.auto.plot` |
 | `bexa.demo` | write a synthetic dataset and open it | `bexa.testing.demo.demo` |
@@ -753,7 +761,7 @@ folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"
 ```
 
 #### `open`
-`bexa.core.scan.open(path=None, *, profile=None, sample=None, dataset=None, format=None, scan=None, detector=None, overrides=None, energy_keV=None, geometry=None, crystal=None, cache=True, cache_reductions=None, **kwargs)`
+`bexa.core.scan.open(path=None, *, profile=None, sample=None, dataset=None, format=None, scan=None, detector=None, overrides=None, energy_keV=None, geometry=None, crystal=None, cache=True, cache_reductions=None, motors=None, **kwargs)`
 
 Open a measurement and return a `Scan` (top-level name `bexa.open`). `path` is a dataset
 folder, its master file, a `scanNNNN` folder, a PAL-XFEL run folder, a cube file, or
@@ -775,10 +783,16 @@ the spec. Instead of a path, `profile` (a name, a YAML path or a `BeamtimeProfil
 - `cache`: `True` (a cache in the folder of `bexa.config.paths.cache_root`, or the profile's),
   a folder path (a cache there), a `Cache`, or `False`. Previews are cached by default;
   `cache_reductions=True` caches the results of `reduce` and of the verbs as well.
+- `motors`: per-frame channels to use as the dims instead of the ones the scan declares
+  (`["ccmth", "chi", "mu"]` for the monochromator angle in degrees instead of the energy; see
+  `Scan.with_dims`); layouts with a master file only.
 - Other keywords go to the engine, for example `coords=` for a generic stack.
 - The scan remembers how it was opened in `Scan.recipe` (`path`, `scan`, the name of the
-  matched spec, `detector`, `overrides` and the extra keywords), so `bexa.open(**scan.recipe)`
-  opens it again without sniffing, in another process too.
+  matched spec, `detector`, `overrides`, `motors` and the extra keywords), so
+  `bexa.open(**scan.recipe)` opens it again without sniffing, in another process too.
+- A scan with nothing to read yet (still running without a frame, empty, unreadable) raises
+  `bexa.ScanNotReadyError`, which names its status; one that is running with frames opens and
+  reads as far as its files go (`scan.status`).
 
 ```python
 scan7 = bexa.open(folder, scan=7)                              # one scan of a BLISS dataset
@@ -787,6 +801,7 @@ layers = bexa.open(folder, scan=[1, 7, 13], stack_dim="samz")  # dims ('samz', '
 scan7 = bexa.open(profile="hc6293", sample="WS2G_100", scan=7)
 frames = bexa.open("stack.h5::/entry/data")                    # a plain (n, y, x) dataset
 cached = bexa.open(folder, scan=7, cache="bexa_cache", cache_reductions=True)   # previews and results kept in ./bexa_cache
+angles = bexa.open(scan.recipe["path"], scan=1, format=scan.spec.name, motors=["chi", "mu"], cache=False)   # the dims chosen by hand
 ```
 
 #### `open_profile`
@@ -810,14 +825,17 @@ own = bexa.open_profile("hc6293", sample="WS2G_100", scan=7, cache="bexa_cache")
 ```
 
 #### `list_scans`
-`bexa.core.scan.list_scans(path, *, format=None, detector=None)`
+`bexa.core.scan.list_scans(path, *, format=None, detector=None, require_files=True)`
 
-Scan numbers of a dataset that hold detector files, sorted (top-level name `bexa.list_scans`).
-`path` is a dataset folder, its master file or one of its `scanNNNN` folders; layouts without
-numbered scans give `[]`.
+Scan numbers of a dataset, sorted (top-level name `bexa.list_scans`): the `scanNNNN` folders
+that hold detector files, or every `scanNNNN` folder with `require_files=False` (a scan that has
+just started has none yet); a folder named otherwise (`scan0007_old`) is not a scan. `path` is a
+dataset folder, its master file or one of its `scanNNNN` folders; layouts without numbered scans
+give `[]`.
 
 ```python
-bexa.list_scans(folder)          # [1, 2, 3, ...]
+bexa.list_scans(folder)                        # [1, 2, 3, ...]: the scans with detector files
+bexa.list_scans(folder, require_files=False)   # ... plus a scan whose folder is still empty
 ```
 
 #### `open_source`
@@ -890,12 +908,13 @@ scan.structure.scalars["samz"]   # a positioner that stayed fixed during the sca
 `bexa.core.scan.Scan.info()`
 
 A text summary: engine and format spec, scan type and title, dims and shape, the range and
-units of every motor, the energy, the fixed positioners, frame size and stored dtype, the
-memory the stack takes as float32, the files, the ROI and the geometry. `bexa info PATH` and
-`bexa scan info` print the same.
+units of every motor, the energy, the fixed positioners, the status (and the planned frames
+still missing for a running or aborted scan), frame size and stored dtype, the memory the
+stack takes as float32, the files, the ROI and the geometry. `bexa info PATH` and `bexa scan
+info` print the same.
 
 ```python
-print(scan.info())
+print(scan.info())               # ... "  status: complete" ...
 ```
 
 #### `Scan.sum`
@@ -1063,6 +1082,37 @@ the scan. `scan.info()` then says how many grid points are still missing.
 scan.refresh().structure.n_missing
 ```
 
+#### `Scan.status`
+`bexa.core.scan.Scan.status`
+
+Property: the state of the scan as a `bexa.core.status.ScanStatus`, read by the engine from the
+files. For a BLISS dataset it comes from the master entry (`complete`, `running` while the
+scan has started and not ended, `aborted` when it ended with fewer frames than planned); an
+engine that only knows the frames reports `complete` or `aborted`. A running scan reads as far
+as its files go.
+
+```python
+scan.status, str(scan.status)   # (<ScanStatus.COMPLETE: 'complete'>, 'complete')
+```
+
+#### `Scan.with_dims`
+`bexa.core.scan.Scan.with_dims(motors)`
+
+The same scan read with `motors` (names of per-frame channels) as the dims of its grid:
+`["ccmth", "chi", "mu"]` reads an energy mosa with the monochromator angle in degrees instead
+of the energy, `["chi", "mu_enc"]` a scan with a motor's encoder instead of the motor; channels
+that step together (a motor and its encoder) collapse to the first named. The choice goes into
+the recipe, so the scan reopens the same way in a worker, and into the cache keys, so results
+on the two grids never mix. The grid is built at once: a name that is not a channel of the
+scan raises `ValueError` listing the motors the scan recorded. Layouts with a master file only
+(`bexa.open(..., motors=...)` does the same at opening).
+
+```python
+angles = scan.with_dims(["chi", "mu"])          # the same dims, chosen by hand
+angles.dims, angles.recipe["motors"]            # (('chi', 'mu', 'y', 'x'), ['chi', 'mu'])
+sorted(scan.structure.per_frame)                # the channels to choose from: motors and counters
+```
+
 #### `Scan.close`
 `bexa.core.scan.Scan.close()`
 
@@ -1095,6 +1145,85 @@ again = bexa.open(**scan7.recipe, cache=False)   # the same scan, no sniffing
 bexa.Scan(scan7.source, scan7.spec).recipe       # None: built by hand
 ```
 
+### bexa.core.status: the state of a scan
+
+During a beamtime a dataset folder holds scans in every state at once: the control system
+appends a scan to the master file when it starts and writes its end only when it finishes,
+while the detector files fill up in between. Every engine reports one `ScanStatus` per scan
+(`scan.status`), the dataset table lists it, `Dataset.select_numbers` filters on it, and a scan
+with nothing to read yet raises `ScanNotReadyError`. The examples use the synthetic beamtime
+of `bexa.testing.make_esrf_beamtime`: three complete scans, one aborted, one running with
+frames, one that has just started.
+
+```python
+import tempfile
+import bexa
+from bexa.core.status import FINISHED, ScanNotReadyError, ScanStatus, status_filter, worst
+from bexa.testing import make_esrf_beamtime
+
+beamtime = make_esrf_beamtime(tempfile.mkdtemp())
+ds = bexa.open_dataset(beamtime.dataset_dir, cache=False)
+```
+
+#### `ScanStatus`
+`bexa.core.status.ScanStatus(value, names=None, *, module=None, qualname=None, type=None, start=1, boundary=None)`
+
+A `str` enum (top-level name `bexa.ScanStatus`): `COMPLETE` (every planned frame is there),
+`RUNNING` (started and not ended: the files are still growing), `ABORTED` (ended early, with
+fewer frames than planned, readable as far as it goes), `EMPTY` (ended, or never started, with
+no frame) and `UNREADABLE` (the files could not be read: locked, truncated, missing). `str()`
+gives the lower-case word, which the table shows. How an engine decides is under
+`bexa.io.engines.hdf5_master.decide`.
+
+```python
+ds[4].status, str(ds[4].status)              # (<ScanStatus.ABORTED: 'aborted'>, 'aborted')
+ScanStatus("running") is ScanStatus.RUNNING  # True
+[str(s) for s in ScanStatus]                 # ['complete', 'running', 'aborted', 'empty', 'unreadable']
+```
+
+#### `status_filter`
+`bexa.core.status.status_filter(value)`
+
+The statuses a selection keeps, as a frozenset, or `None` for every status: `"finished"` gives
+the complete and the aborted scans (`FINISHED`; their files do not change any more),
+`"complete"` the complete ones, `"any"` or `None` all of them; a status name or a tuple of
+names gives exactly those. An unknown word raises `ValueError`. This is what the `status`
+keyword of `Dataset.select_numbers` and the `--status` option of `bexa scan list` go through.
+
+```python
+status_filter("finished") == FINISHED        # True: {COMPLETE, ABORTED}
+status_filter(("running", "empty")), status_filter("any")   # (frozenset({RUNNING, EMPTY}), None)
+```
+
+#### `worst`
+`bexa.core.status.worst(statuses)`
+
+The status of a series of scans: the one that lets the least be read (`unreadable` over
+`empty` over `running` over `aborted` over `complete`); `EMPTY` for no scans. A
+`MultiScanSource` reports it for its parts.
+
+```python
+worst([ScanStatus.COMPLETE, ScanStatus.RUNNING])   # <ScanStatus.RUNNING: 'running'>
+```
+
+#### `ScanNotReadyError`
+`bexa.core.status.ScanNotReadyError(message, status, scan=None)`
+
+A `ValueError` (top-level name `bexa.ScanNotReadyError`) raised by `bexa.open`, `Dataset.scan`
+and `ds[id]` for a scan with nothing to read yet: `status` is its `ScanStatus`, `scan` its id
+when known. `Dataset.table` catches it and keeps a placeholder row.
+
+```python
+try:
+    ds[6]                                    # just started: no frame on disk
+except ScanNotReadyError as error:
+    str(error), error.status, error.scan     # ('scan 6 of beamtime is running: no frame to read yet', RUNNING, 6)
+```
+
+Constants:
+
+- `FINISHED`: `frozenset({ScanStatus.COMPLETE, ScanStatus.ABORTED})`, the statuses whose files do not change any more.
+
 ### bexa.core.dataset: the scans of one folder or several
 
 A BLISS dataset folder holds many numbered scans: alignment scans, a mosaicity scan per sample
@@ -1105,14 +1234,18 @@ contain. The id is the first column of the table: for one folder it is the scan 
 a `dataset` column naming the folder of each scan. `ds[id]`, `select`, `series` and `groups`
 all take ids. `varying` says which positioners (and whether the energy) differ between chosen
 scans, and `stack` reduces them with the same accumulators onto that grid, in memory or in one
-HDF5 file. A `Dataset` is not an `xarray.Dataset`.
+HDF5 file. During a beamtime the folder also holds the scan being written: every scan has a
+`status` in the table, a scan that cannot be read yet never hides the others, and the
+selection keeps the finished scans unless asked otherwise. A `Dataset` is not an
+`xarray.Dataset`.
 
 ```python
 import bexa
-from bexa.testing import make_esrf_zstack
+from bexa.testing import make_esrf_beamtime, make_esrf_zstack
 
 ds = bexa.demo("zstack")   # 30 scans: at each of five samz heights, a chi x mu scan and five mu scans at 16.98 to 17.02 keV
 part2 = make_esrf_zstack(ds.path.parent, dataset="demo_zstack_2", z_values=(0.003, 0.004), energies=(17.0,))   # two more heights, in a second folder
+live = bexa.open_dataset(make_esrf_beamtime(ds.path.parent).dataset_dir, cache=False)   # scans 1-3 complete, 4 aborted, 5 running, 6 just started
 folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"
 ```
 
@@ -1150,6 +1283,7 @@ scans are then opened by that spec's name. Scans are opened once and their handl
 - `folders`: property, the dataset folders in the order their scans are numbered; `paths` is
   the same list, `path` the first folder and `name` the folder names joined with `" + "`.
 - `cache`: the shared `bexa.core.cache.Cache`, or `None`; `clear_cache()` empties it.
+- `problems`: property, `{id: reason}` for the scans the table could not read (see `table`).
 
 ```python
 len(ds), ds.scans[:3]            # 30, [1, 2, 3]
@@ -1162,17 +1296,24 @@ both[30].source.scan, both[30].name   # (1, 'demo_zstack_2'): id 30 is scan 1 of
 `bexa.core.dataset.Dataset.table(refresh=False, compact=False)`
 
 A pandas DataFrame with one row per scan: `id` (`dataset` next, for several folders), `scan`,
-`type` (`fscan1d`, `fscan2d`, ...), `title`, `motors` (`"chi x mu"`), `shape`, `ranges`,
-`frames`, `missing` (grid points without a frame), `energy_keV`, then one column per
-positioner recorded in the master file (`samz`, `ccmth`, `phi`, ...). Built once and kept;
-`refresh=True` rebuilds it. `compact=True` drops the positioner columns that never change or
-change by less than the spec's `motors.min_step` (drift), a motor also listed under an alias,
-the followers of a motor that steps (`samz` when `uz` does; the spec's `motors.coupled`) and the
-`missing` column when no scan has missing frames: what a notebook shows.
+`status` (`complete`, `running`, `aborted`, `empty` or `unreadable`: `bexa.core.status`),
+`type` (`fscan2d`, `amesh`, `ascan`, ...), `title`, `motors` (`"chi x mu"`), `shape`, `ranges`,
+`frames`, `missing` (grid points without a frame, or planned frames not taken), `energy_keV`,
+then one column per positioner recorded in the master file (`samz`, `ccmth`, `phi`, ...). A
+scan that cannot be read yet (running without a frame, empty, unreadable) keeps a row with its
+status and nothing else, its reason goes to `problems` and one warning is logged: one such
+scan never hides the others. Built once and kept; `refresh=True` looks at the folders again
+first (`refresh`). `compact=True` drops the positioner columns that never change or change by
+less than the spec's `motors.min_step` (drift), a motor also listed under an alias, the
+followers of a motor that steps (`samz` when `uz` does; the spec's `motors.coupled`), the
+`missing` column when no scan has missing frames and the `status` column when every scan is
+complete: what a notebook shows.
 
 ```python
 ds.table()[["id", "type", "motors", "energy_keV", "samz"]]
 both.table(compact=True)         # id, dataset, scan, type, ..., energy_keV, ccmth, chi, samz, z1
+live.table()[["id", "status", "frames", "missing"]]   # 1-3 complete, 4 aborted (19 of 24), 5 running (15), 6 running (0)
+live.problems                    # {6: 'scan 6 of beamtime is running: no frame to read yet'}
 ```
 
 #### `Dataset.info`
@@ -1185,19 +1326,23 @@ print(ds.info())
 ```
 
 #### `Dataset.select_numbers`
-`bexa.core.dataset.Dataset.select_numbers(scans=None, *, type=None, motors=None, where=None, **positioners)`
+`bexa.core.dataset.Dataset.select_numbers(scans=None, *, type=None, motors=None, where=None, status="finished", **positioners)`
 
 Scan ids chosen by hand and/or by content. `scans` is an id, an inclusive `(start, end)` tuple
 or a list (ids that are not on disk raise); `type` the scan type; `motors` the scanned motors
 exactly (`"mu"` or `("chi", "mu")`); `where` a function of a table row that returns True to
-keep the scan; any other keyword names a table column with a value (matched within 1e-9) or an
-inclusive `(low, high)` range, `energy_keV` included, and `dataset` (a folder name) for several
-folders.
+keep the scan; `status` the scan statuses to keep: `"finished"` (complete and aborted, whose
+files do not change any more; the default), `"complete"`, `"any"`, a status name or a tuple of
+names, a scan named in `scans` but left out for its status being reported once; any other
+keyword names a table column with a value (matched within 1e-9) or an inclusive `(low, high)`
+range, `energy_keV` included, and `dataset` (a folder name) for several folders.
 
 ```python
 ds.select_numbers(type="fscan2d")                   # [1, 7, 13, 19, 25]
 ds.select_numbers(type="fscan1d", samz=(-0.0015, 0.0015), where=lambda row: row["energy_keV"] > 17.005)
 both.select_numbers(dataset="demo_zstack_2")        # [30, 31, 32, 33]: the scans of the second folder
+live.select_numbers()                               # [1, 2, 3, 4]: the finished scans; 5 and 6 are still running
+live.select_numbers(status="complete"), live.select_numbers(status="any")   # ([1, 2, 3], [1, 2, 3, 4, 5, 6])
 ```
 
 #### `Dataset.select`
@@ -1253,20 +1398,31 @@ ds.varying(type="fscan1d", axes=["energy"])      # {'energy': ...}: the energy a
 #### `Dataset.scan`
 `bexa.core.dataset.Dataset.scan(number)`
 
-Open one scan by id (the same as `ds[number]`); the handle is kept for the next call.
+Open one scan by id (the same as `ds[number]`); the handle is kept for the next call. A scan
+that is still running opens and reads as far as its files go; one with nothing to read yet
+(running without a frame, empty, unreadable) raises `bexa.core.status.ScanNotReadyError`,
+which names its status.
 
 ```python
 scan = ds.scan(13)
+live[5].status, live[5].n_frames             # (<ScanStatus.RUNNING: 'running'>, 15): readable so far
+try:
+    live[6]
+except bexa.ScanNotReadyError as error:
+    error.status, error.scan                 # (<ScanStatus.RUNNING: 'running'>, 6)
 ```
 
 #### `Dataset.refresh`
-`bexa.core.dataset.Dataset.refresh()`
+`bexa.core.dataset.Dataset.refresh(everything=False)`
 
-Forget the scan list, the table and the open handles, for a dataset that is still being
-written, and return the dataset.
+Look at the folders again, for a dataset that is still being written, and return the dataset:
+new scans appear, the scans that were running, empty or unreadable are read anew by the next
+`table`, and the complete and aborted ones keep their handles and rows (their files do not
+change any more). `everything=True` closes and forgets every scan.
 
 ```python
 ds.refresh().scans
+live.refresh().table()["status"].tolist()    # the running scans read again; the others as before
 ```
 
 #### `Dataset.clear_cache`
@@ -1287,6 +1443,17 @@ Close every scan the dataset opened. `with bexa.open_dataset(...) as ds:` calls 
 
 ```python
 ds.close()
+```
+
+#### `Dataset.problems`
+`bexa.core.dataset.Dataset.problems`
+
+Property: `{id: reason}` for the scans whose table row is a placeholder because they could not
+be read (still running without a frame, empty, unreadable), the reason being the error met;
+empty when every scan could be read. Rebuilt with the table.
+
+```python
+live.problems                    # {6: 'scan 6 of beamtime is running: no frame to read yet'}
 ```
 
 #### `varying`
@@ -1432,6 +1599,96 @@ Constants:
   `store=`. `GPU_WORKERS`: `3`, the processes `workers="auto"` starts when the device is the
   GPU. `STATS_SAMPLE`: `262144`, the most pixels per frame the percentiles of the per-frame
   statistics look at.
+
+### bexa.core.scan_table: the rows of a dataset's table
+
+`Dataset.table` is assembled from these: one row per opened scan, a placeholder row for a scan
+that could not be read, the column order, and the columns a compact table leaves out. Useful
+when building a table of scans from your own list of `Scan` objects.
+
+```python
+import tempfile
+import bexa
+from bexa.core.scan_table import (FIXED_COLUMNS, LEAD_COLUMNS, arrange, compact_columns, followers,
+                                  min_steps, placeholder_row, scan_row)
+from bexa.core.status import ScanStatus
+from bexa.testing import make_esrf_beamtime
+
+beamtime = make_esrf_beamtime(tempfile.mkdtemp())
+ds = bexa.open_dataset(beamtime.dataset_dir, cache=False)
+scan = ds[1]
+```
+
+#### `scan_row`
+`bexa.core.scan_table.scan_row(scan, scan_id, number, dataset=None)`
+
+The table row of an opened `Scan` as a dict: `id`, `dataset` (when given, for several
+folders), `scan` (its number), `status`, `type`, `title`, `motors`, `shape`, `ranges`, `frames`,
+`missing`, `energy_keV`, then every scalar positioner of its structure.
+
+```python
+row = scan_row(scan, 1, 1)
+row["status"], row["motors"], row["frames"]      # ('complete', 'chi x mu', 24)
+```
+
+#### `placeholder_row`
+`bexa.core.scan_table.placeholder_row(scan_id, number, status, dataset=None)`
+
+The row of a scan that cannot be read yet: its `status`, empty text columns, 0 frames and no
+energy, so that it sits in the table next to the others.
+
+```python
+placeholder_row(6, 6, ScanStatus.RUNNING)["status"]   # 'running'
+```
+
+#### `arrange`
+`bexa.core.scan_table.arrange(rows)`
+
+The rows as a DataFrame in the table's column order: `LEAD_COLUMNS` (`id`, `dataset`), then
+`FIXED_COLUMNS` (`scan`, `status`, `type`, `title`, `motors`, `shape`, `ranges`, `frames`,
+`missing`), `energy_keV`, then the positioners sorted by name.
+
+```python
+table = arrange([scan_row(ds[n], n, n) for n in (1, 2, 3)])
+list(table.columns[:5])                          # ['id', 'scan', 'status', 'type', 'title']
+```
+
+#### `compact_columns`
+`bexa.core.scan_table.compact_columns(table, spec)`
+
+The columns a compact table drops, judged with the format `spec`: positioners that never
+change, a motor kept under a legacy name too (`z1` next to `samz`), the readbacks a stepping
+leader drives (`motors.coupled`), a drift below `motors.min_step`, `missing` when no scan has
+missing frames and `status` when every scan is complete.
+
+```python
+dropped = compact_columns(ds.table(), scan.spec)
+"ccmth" in dropped, "status" in dropped          # (True, False): one scan is running
+```
+
+#### `min_steps`
+`bexa.core.scan_table.min_steps(spec)`
+
+`{motor: step}` from the spec's `motors.min_step` (empty for `None`): a change smaller than the
+step between two scans is the motor's drift, not a move.
+
+```python
+min_steps(scan.spec)["uz"]                       # 0.0005: half a micron for the ID03 stage
+```
+
+#### `followers`
+`bexa.core.scan_table.followers(spec)`
+
+`{leader: [followers]}` from the spec's `motors.coupled` (empty for `None`): the readbacks a
+motor drives (`uz` moves `samz`), counted once by `varying` and the compact table.
+
+```python
+followers(scan.spec)["uz"][:3]                   # ['samx', 'samy', 'samz']
+```
+
+Constants:
+
+- `LEAD_COLUMNS`: `("id", "dataset")`. `FIXED_COLUMNS`: `("scan", "status", "type", "title", "motors", "shape", "ranges", "frames", "missing")`.
 
 ### bexa.core.stacks: statistics, brightest condition and colour limits of stacked volumes
 
@@ -2290,6 +2547,7 @@ Unknown entries are kept. Methods:
 - `path(item, **fields)`: the `layout` template `item` filled with `fields` (see `safe_format`); `KeyError` if absent.
 - `motor_path(kind, **fields)`: the same for the motor templates `per_frame`, `scalar` and `structure`.
 - `known_motors()`: the `motors.known` list.
+- `min_steps()`: `{motor: step}` from `motors.min_step`: a smaller change is drift, not a move.
 - `motor_aliases(name)`: the names to try in the file for the logical motor `name`, `[name, *aliases]`.
 - `detector_info(detector)`: a copy of the `detectors` entry of `detector` (`{}` if unknown).
 
@@ -2393,6 +2651,8 @@ the helpers:
 - `scalars()`: dict of the values fixed during the scan (positioners); default `structure().scalars`.
 - `aux_tables()`: dict of extra pandas tables (the shot tables of `Hdf5PointsSource`); default `{}`.
 - `energy_keV`: property, photon energy in keV or `None`; default `structure().energy_keV`.
+- `status`: property, the `bexa.core.status.ScanStatus` of the scan; the default knows the frames alone (`complete` when every grid point has one, else `aborted`), the BLISS engine reads the master entry.
+- `with_motors(motors)`: the same scan with these per-frame channels as its dims, where the layout allows (`NotImplementedError` by default; `Hdf5StackSource` implements it).
 - `chunk_frames`: property, frames per HDF5 chunk; reduction batches are multiples of it; default 1.
 - `refresh()`: re-reads the metadata of a scan still being written, returns the source (`scan.refresh()` calls it).
 - `close()`: closes the open file handles.
@@ -2430,9 +2690,9 @@ src.read_frames([fid])[0].shape                  # (64, 80)
 `bexa.io.base.Source(*args, **kwargs)`
 
 The `typing.Protocol` of a reader: `name`, `files`, `frame_shape`, `n_frames`, `dtype`,
-`read_frames`, `structure`, `scalars`, `aux_tables`, `energy_keV`, `chunk_frames`, `refresh` and
-`close`, as listed under `BaseSource`. Never instantiated: use it in type hints and, being
-runtime-checkable, in `isinstance` tests.
+`read_frames`, `structure`, `status`, `with_motors`, `scalars`, `aux_tables`, `energy_keV`,
+`chunk_frames`, `refresh` and `close`, as listed under `BaseSource`. Never instantiated: use it
+in type hints and, being runtime-checkable, in `isinstance` tests.
 
 ```python
 isinstance(src, Source), isinstance(np.zeros(3), Source)      # (True, False)
@@ -2449,6 +2709,115 @@ slices; `len(batch)` is `n`. `scan.batches(roi=..., downsample=...)` yields them
 batch = next(iter(scan.batches(batch_frames=16)))
 len(batch), batch.frames.shape, batch.frame_ids[:3]     # (16, (16, 64, 80), array([0, 1, 2]))
 ```
+
+### bexa.io.scan_commands: scan command lines
+
+A BLISS or SPEC scan writes its command line as the title of the scan: `ascan chi 6.7 6.9 10
+0.1`, `amesh mu 9.56 10.56 20 phi -1.08 -0.48 12 0.4`, `fscan2d chi 4.14 0.023 31 mu 11.92
+0.04 200 2 2.08`. The parser reads the command word and the motor blocks, so a scan of any
+kind is read with its motors even when the file declares none (the BLISS engine uses it after
+`fscan_parameters` and before the readbacks). Two grammars: the step scans of SPEC and BLISS,
+`<command> (<motor> <start> <stop> <intervals>)... <count time>`, whose point count is the
+intervals plus one (`STEP_COMMANDS`), and the continuous scans of ID03, `<command> (<motor>
+<start> <step> <npoints>)...` (`CONTINUOUS_COMMANDS`). A command outside both families (a
+beamline macro such as `dfmesh`) is read with the same block structure but its counts are not
+trusted; one in `STATIC_COMMANDS` (`loopscan`, `timescan`, `ct`) moves no motor.
+
+```python
+from bexa.io.scan_commands import ScanCommand, ScanMotor, parse_scan_command
+```
+
+#### `parse_scan_command`
+`bexa.io.scan_commands.parse_scan_command(text, motor_names=None, intervals=None)`
+
+A `ScanCommand` from the command line `text`, which starts with the command word. `motor_names`
+limits the motor blocks to those names (the positioners the file knows): another word ends the
+blocks. `intervals` says whether the third number of a block counts intervals (points are
+intervals plus one) or points; by default the command word decides, and an unknown command is
+read as a step scan with `exact=False`. An `a2scan`-style command with one count after the
+last block shares it between the motors; a command without motor blocks gives an empty motor
+list; an empty `text` raises `ValueError`.
+
+```python
+mesh = parse_scan_command("amesh mu 9.5558 10.5558 20 phi -1.0827 -0.4827 12 0.4")   # a step mesh of ID03
+mesh.command, mesh.names, mesh.shape, mesh.n_points   # ('amesh', ['mu', 'phi'], (21, 13), 273)
+parse_scan_command("fscan2d chi 4.14 0.0233 31 mu 11.92 0.04 200 2 2.08").shape      # (31, 200): points, as fscans count
+macro = parse_scan_command("dfmesh difftz 0 1 10 samy -1 1 4 0.2")                    # a beamline macro: motors known, counts not trusted
+macro.names, macro.exact, macro.n_points           # (['difftz', 'samy'], False, None)
+parse_scan_command("loopscan 100 0.1").motors       # []: a sequence of frames
+```
+
+#### `ScanCommand`
+`bexa.io.scan_commands.ScanCommand(command, motors, text, exact=True)`
+
+A dataclass: the command word, the list of `ScanMotor` (outer first), the original `text`, and
+`exact`, whether the point counts are to be trusted (true for the step and continuous families,
+false for an unknown command). Properties: `shape` (points per motor), `names` (the motor
+names) and `n_points` (the frames the command plans, `None` when unknown).
+
+```python
+mesh.motors[0].name, mesh.shape, mesh.exact      # ('mu', (21, 13), True)
+```
+
+#### `ScanMotor`
+`bexa.io.scan_commands.ScanMotor(name, start, stop, npoints)`
+
+A dataclass for one motor of a command: its name, the range (`start`, `stop`; the step for a
+continuous scan) and the number of points.
+
+```python
+mesh.motors[1]                                   # ScanMotor(name='phi', start=-1.0827, stop=-0.4827, npoints=13)
+```
+
+Constants:
+
+- `STEP_COMMANDS`: `ascan`, `dscan`, `a2scan`, `d2scan`, `a3scan`, `d3scan`, `a4scan`, `d4scan`, `amesh`, `dmesh`, `pointscan`, `anscan`, `dnscan` (intervals in the blocks). `CONTINUOUS_COMMANDS`: `fscan`, `fscan2d`, `fscan3d`, `finterlaced`, `fscan2d_cyclic`, `fsweep` (points). `STATIC_COMMANDS`: `loopscan`, `timescan`, `ct`, `sct` (no motor).
+
+### bexa.io.h5files: opening HDF5 files another program is writing
+
+At a beamline the master file of a dataset stays open in the control system for the whole
+beamtime, and the detector writes its files while a scan runs. HDF5 refuses to open a file
+another process holds open unless file locking is off, and a file caught in the middle of a
+flush fails once and opens a moment later. `open_h5` is `h5py.File` with both taken care of;
+every master and detector file bexa reads goes through it (bexa's own result files do not).
+
+```python
+import tempfile
+import h5py
+from bexa.io.h5files import RETRY_DELAY, locking_kwargs, open_h5
+from bexa.testing import make_esrf_scan
+
+made = make_esrf_scan(tempfile.mkdtemp(), "scan", n_files=1)
+```
+
+#### `open_h5`
+`bexa.io.h5files.open_h5(path, mode="r", retry=True, **kwargs)`
+
+`h5py.File(path, mode)` for a file another program may be writing: the file lock is not taken
+(`locking_kwargs`), and when a read-only open fails with `OSError` and `retry` is on, it is
+tried once more after `RETRY_DELAY` seconds, then in SWMR mode (single writer, multiple
+readers, which a file written that way allows); the first error is raised when all three fail.
+Other keywords go to `h5py.File` (the chunk cache settings of the frame reader).
+
+```python
+with open_h5(made.master) as f:                  # the master, even while BLISS holds it open
+    list(f)                                      # ['1.1']
+```
+
+#### `locking_kwargs`
+`bexa.io.h5files.locking_kwargs()`
+
+`{"locking": False}` when this h5py and HDF5 take the keyword (HDF5 1.12.1 and later), else
+`{}`; computed once. The `HDF5_USE_FILE_LOCKING` variable, when the user sets it, is read by
+the library itself and wins.
+
+```python
+locking_kwargs()                                 # {'locking': False} with h5py 3.12 on HDF5 1.14
+```
+
+Constants:
+
+- `RETRY_DELAY`: `0.5`, the seconds before the one retry of an open that failed.
 
 ### bexa.io.engines.hdf5_stack: ESRF BLISS master and detector files
 
@@ -2474,18 +2843,24 @@ src = bexa.open(made.dataset_dir, scan=1).source    # an Hdf5StackSource
 ```
 
 #### `Hdf5StackSource`
-`bexa.io.engines.hdf5_stack.Hdf5StackSource(spec, root, dataset, scan, detector=None, energy_keV=None, master=None)`
+`bexa.io.engines.hdf5_stack.Hdf5StackSource(spec, root, dataset, scan, detector=None, energy_keV=None, master=None, motors=None)`
 
 Scan `scan` of the dataset folder `root/dataset`: frames from the files of `detector` (default: the
 spec's first, `pco_ff`) in `scanNNNN/`, metadata from the master (`root/dataset/dataset.h5` unless
-`master` is given); `FileNotFoundError` without detector files. It implements the `Source` members
-`files`, `frame_shape`, `n_frames`, `dtype`, `chunk_frames`, `energy_keV`, `read_frames`,
-`structure`, `refresh` and `close` (see `BaseSource`). The dims are the motors declared in
-`fscan_parameters` (`motor`, `slow_motor`/`fast_motor`, `slow1_motor`/`slow2_motor`/`fast_motor`
-as BLISS writes them for an fscan, fscan2d and fscan3d, or `outer`/`middle`/`inner`; `MOTOR_KEYS`)
-or, in the 2024 layout, up to three varying motors of `motors.known`; the readbacks decide which
-loop is the outer one, and frames are placed on the grid by their values, so snake and partial
-scans land in place. When the monochromator angle (`energy.from`, `ccmth`) is one of the scanned
+`master` is given). It implements the `Source` members `files`, `frame_shape`, `n_frames`,
+`dtype`, `chunk_frames`, `energy_keV`, `read_frames`, `structure`, `status`, `with_motors`,
+`refresh` and `close` (see `BaseSource`). Which channels are the dims is settled in this order
+(`bexa.io.engines.hdf5_master.discover_motors`): the motors declared in `fscan_parameters`
+(`motor`, `slow_motor`/`fast_motor`, `slow1_motor`/`slow2_motor`/`fast_motor` as BLISS writes
+them for an fscan, fscan2d and fscan3d, or `outer`/`middle`/`inner`; `MOTOR_KEYS`), else the
+motors the command line in the title names (`amesh mu ... phi ...`, `ascan chi ...`, a beamline
+macro: `bexa.io.scan_commands`), else every recorded channel that is a motor of the file and
+moved (a `loopscan` or `ct` moves none); channels that step together (a motor and its encoder,
+an `a2scan`) collapse to the first named, `motors` passed by hand replace the choice
+(`with_motors`, `Scan.with_dims`), the readbacks decide which loop is the outer one, and frames
+are placed on the grid by their values, so snake and partial scans land in place. The scan type
+is the declared one (`fscan2d`), else the command word (`amesh`, `dmesh`, `dfmesh`), else `list`.
+When the monochromator angle (`energy.from`, `ccmth`) is one of the scanned
 motors, an energy mosa, that dim is named `energy` and holds keV (`ENERGY_DIM`; the angle stays a
 per-frame channel), so `MotorCOM(axes=("energy",))` gives `com_energy` straight from the scan.
 `measurement` channels are per-frame channels, positioners scalars (plus the mean of every
@@ -2497,12 +2872,21 @@ files comes from the master when it says (`layout.frames_total`, `acq_nb_frames`
 `layout.frames_per_file`, `saving_frame_per_file`, as LIMA records them; the frame shape and
 dtype from the virtual dataset `layout.master_frames` in the autumn 2026 layout), so opening a
 scan opens one detector file, the last, whose count is the one a partial scan changes, instead
-of all sixty-four; when the files do not add up (a scan still being written) every file is
-opened. `read_frames` without `dtype` returns the frames as stored, read straight into the
-output array. Files are opened once per thread with a chunk cache; `refresh()` re-lists the
-files of a scan still being written. Also:
+of all sixty-four; a scan still being written has fewer files than the master announces and a
+last file that cannot be read yet, both read as far as they go, and when the files do not add
+up every file is opened. A scan without a readable frame builds (0 frames, the spec's frame
+shape) and raises `bexa.core.status.ScanNotReadyError` from `structure()`; the master entry
+says whether it is `running`, `empty` or, when the files cannot be read, `unreadable`
+(`status`). `read_frames` without `dtype` returns the frames as stored, read straight into the
+output array. Files are opened through `bexa.io.h5files.open_h5` (no file lock, one retry),
+once per thread with a chunk cache; `refresh()` re-lists the files of a scan still being
+written and reads its status again. Also:
 
-- `list_scans(spec, root, dataset, detector=None)`: classmethod, the sorted numbers of the `scanNNNN` folders holding files of `detector`; `bexa.list_scans(dataset_folder)` does the same from a path.
+- `list_scans(spec, root, dataset, detector=None, require_files=True)`: classmethod, the sorted numbers of the `scanNNNN` folders (a folder named otherwise, `scan0007_old`, is not a scan), those holding files of `detector` unless `require_files=False`; `bexa.list_scans(dataset_folder)` does the same from a path.
+- `structure(motors=None)`: the scan's `Structure`, built once; with `motors` (per-frame channel names) a structure on those dims instead, not kept.
+- `status`: property, the `ScanStatus` from the master entry (`hdf5_master.decide`), settled when the structure is built; `problem` is the error text when it is `unreadable`.
+- `scan_status(spec, root, dataset, scan, detector=None)`: classmethod, the status of one scan, opening and closing its files, for a scan whose source cannot be built.
+- `with_motors(motors)`: a new source on the same files with `motors` as its dims (`Scan.with_dims`).
 - `cache_records()`: the detector files by path, size and modification time, but the master by its path, the entry this scan reads and the frame count: BLISS appends every new scan to the master, so keying on the file would discard every cached result of the dataset at each new scan.
 - attributes: `root`, `dataset`, `scan`, `detector`, `master`, `scan_folder`, `frames_path`.
 
@@ -2510,8 +2894,14 @@ files of a scan still being written. Also:
 [f.name for f in src.files()]                    # ['synth_dfxm.h5', 'pco_ff_0000.h5', 'pco_ff_0001.h5']
 src.cache_records()[0]                           # {'path': '.../synth_dfxm.h5', 'entry': '1.1', 'n_frames': 48}
 src.structure().dims, src.energy_keV, src.structure().scalars["ffz"]
+src.status, src.structure().planned_frames       # (<ScanStatus.COMPLETE: 'complete'>, 48)
 Hdf5StackSource(spec, work, "synth_dfxm", 1, energy_keV=17.1).energy_keV      # 17.1
 Hdf5StackSource.list_scans(spec, work, "synth_dfxm"), bexa.list_scans(made.dataset_dir)   # ([1], [1])
+running = make_esrf_scan(work, dataset="going", partial=20, state="running")   # 28 of 48 frames so far
+going = Hdf5StackSource.from_path(spec, running.dataset_dir)
+going.status, going.n_frames, going.structure().n_missing   # (<ScanStatus.RUNNING: 'running'>, 28, 20)
+Hdf5StackSource.scan_status(spec, work, "going", 1)         # <ScanStatus.RUNNING: 'running'>
+src.with_motors(["mu", "chi"]).structure().motor_dims       # ('chi', 'mu'): the readbacks still order the loops
 ```
 
 #### `Hdf5StackSource.from_path`
@@ -2529,8 +2919,188 @@ Hdf5StackSource.from_path(spec, made.scan_folder).scan              # 1
 
 Constants:
 
-- `FALLBACK_MOTORS`: the motors tried after `motors.known` when a scan declares none (`mu`, `chi`, `phi`, `theta`, ...).
+- `MOTOR_KEYS`, `FALLBACK_MOTORS`: re-exported from `bexa.io.engines.hdf5_master`.
 - `MIN_CACHE_BYTES`, `MAX_CACHE_BYTES`: bounds of the per-file chunk cache (four chunks), 8 MiB and 512 MiB.
+- `SCAN_FOLDER`: the pattern of a scan folder's name, `scan(\d+)`.
+
+### bexa.io.engines.hdf5_master: what the BLISS master says about a scan
+
+The master holds, per scan entry `N.1`, the readback of every channel in `measurement` (one
+value per frame), the fixed positioners, the description of a continuous scan in
+`fscan_parameters`, the command line as the title, and when and why the scan started and
+ended. These functions read those and turn them into the motors a scan was made of, the grid
+it was meant to cover and the state it is in; `Hdf5StackSource` calls them with the master
+open and reads the frames itself. They are useful on their own to look at a master file.
+
+```python
+import tempfile
+import h5py
+import bexa
+from bexa.io.engines.hdf5_master import (EntryState, MotorChoice, MotorTable, collapse_lockstep, decide,
+                                         declared_motors, decode, discover_motors, entry_state,
+                                         moving_motors, read_motor_table, read_title)
+from bexa.io.formats import load_spec
+from bexa.io.scan_commands import parse_scan_command
+from bexa.testing import make_esrf_scan
+
+made = make_esrf_scan(tempfile.mkdtemp(), "mesh", motors=(("samy", 3), ("samz", 5)), n_files=1, command="dmesh")   # a step mesh: no fscan_parameters
+spec = load_spec("esrf_id03_bliss_2026")
+f = h5py.File(made.master, "r")
+```
+
+#### `read_motor_table`
+`bexa.io.engines.hdf5_master.read_motor_table(f, spec, scan, detector)`
+
+The `MotorTable` of scan `scan` in the open master `f`: every 1-D numeric channel of
+`measurement` at full length (`channels`), the 0-d positioners and the means of the channels
+`motors.scalars_from` names (`scalars`), and every name the file calls a motor
+(`motor_names`: the keys of `positioners`, `positioners_start` and `positioners_end`, or the
+`NXpositioner` groups of an older layout).
+
+```python
+table = read_motor_table(f, spec, 1, "pco_ff")
+sorted(table.channels), table.scalars["ccmth"], "samy" in table.motor_names   # (['elapsed_time', 'samy', 'samz'], 6.678..., True)
+```
+
+#### `MotorTable`
+`bexa.io.engines.hdf5_master.MotorTable(channels={}, scalars={}, motor_names=frozenset())`
+
+A dataclass: `channels` (`{name: array}` per frame, at the length the master has, which lags or
+leads the detector files while a scan runs), `scalars` (`{name: value}`) and `motor_names`
+(a frozenset), as `read_motor_table` fills them.
+
+```python
+len(table.channels["samy"]), table.channels["samy"][:4]   # (15, array([0., 0., 0., 0., ...]))
+```
+
+#### `declared_motors`
+`bexa.io.engines.hdf5_master.declared_motors(f, spec, scan)`
+
+`(scan_type, motor names slow first, points per motor)` from the `fscan_parameters` group the
+spec's `motors.structure` template names (`MOTOR_KEYS`: `motor`, `slow_motor`/`fast_motor`,
+`slow1_motor`/`slow2_motor`/`fast_motor`, or `outer`/`middle`/`inner`), or `None` when the scan
+has none (a step scan, the 2024 layout).
+
+```python
+declared_motors(f, spec, 1)                      # None: a dmesh declares nothing
+fscan = make_esrf_scan(made.root, "fscan", n_files=1)
+with h5py.File(fscan.master, "r") as g:
+    declared_motors(g, spec, 1)                  # ('fscan2d', ['chi', 'mu'], [4, 12])
+```
+
+#### `read_title`
+`bexa.io.engines.hdf5_master.read_title(f, entry)`
+
+The command line of the scan entry (`"1.1"`), or an empty string.
+
+```python
+read_title(f, "1.1")                             # 'dmesh samy 0 1 2 samz 0 1 4 0.1'
+```
+
+#### `entry_state`
+`bexa.io.engines.hdf5_master.entry_state(f, entry, spec, scan, detector)`
+
+The `EntryState` of a scan entry: whether it is in the master at all, whether it started
+(`start_time` or a `writer` group) and ended (`end_time`), the `end_reason` and the writer
+status words when written, and the planned frame count from `layout.frames_total`
+(`acq_nb_frames`).
+
+```python
+state = entry_state(f, "1.1", spec, 1, "pco_ff")
+state.started, state.ended, state.end_reason, state.planned_frames   # (True, True, 'SUCCESS', 15)
+entry_state(f, "9.1", spec, 9, "pco_ff").present                      # False: not in the master yet
+```
+
+#### `EntryState`
+`bexa.io.engines.hdf5_master.EntryState(present=True, started=False, ended=False, end_reason=None, writer_status=None, planned_frames=None)`
+
+A dataclass with the fields `entry_state` reads.
+
+```python
+EntryState(started=True)                         # a scan that started and has not ended
+```
+
+#### `decide`
+`bexa.io.engines.hdf5_master.decide(state, n_frames, planned=None)`
+
+The `ScanStatus` of a scan from its entry state and the frames found, first match wins: an
+entry the master does not hold yet, or one that started and has not ended, is `running`; no
+frame at all is `empty`; an end reason other than success, or fewer frames than planned
+(`state.planned_frames`, else `planned`), is `aborted`; otherwise the scan is `complete`.
+Masters without the time fields (older files) are judged by the frames alone.
+
+```python
+decide(state, 15), decide(state, 10)             # (<ScanStatus.COMPLETE: 'complete'>, <ScanStatus.ABORTED: 'aborted'>)
+decide(EntryState(started=True), 0)              # <ScanStatus.RUNNING: 'running'>
+```
+
+#### `discover_motors`
+`bexa.io.engines.hdf5_master.discover_motors(channels, declared, command, motor_names, known, min_steps, logical_name=None)`
+
+Which channels are the scanned motors, as a `MotorChoice`, in this order of trust: the
+declared motors of a continuous scan when the file has them and they are recorded, else the
+motors the command line names, else every recorded channel that is a motor and moved
+(`moving_motors`; a command that moves no motor gives none). Channels that step together
+collapse to the first named (`collapse_lockstep`). The scan type is the declared one, else the
+command word, else `fscan<n>d`. `known` is the spec's `motors.known` list (it orders the
+candidates), `min_steps` its `motors.min_step`, `logical_name` the `{physical: logical}`
+renames of `motors.aliases`.
+
+```python
+command = parse_scan_command(read_title(f, "1.1"), motor_names=table.motor_names)
+choice = discover_motors(table.channels, None, command, table.motor_names, spec.known_motors(), spec.min_steps())
+choice.scan_type, choice.order, choice.planned_shape, choice.candidates   # ('dmesh', ['samy', 'samz'], (3, 5), ['samy', 'samz'])
+```
+
+#### `MotorChoice`
+`bexa.io.engines.hdf5_master.MotorChoice(scan_type, order, planned_shape, lockstep, candidates)`
+
+A dataclass: the scan type, the dims slowest first as the file or the command names them
+(the readbacks settle the loop order later), the planned points per dim (or `None`), the
+channels that step with a dim (`{dim: [channels]}`, kept as coordinates) and every channel
+that is a motor and moved, the choices a reader has.
+
+```python
+choice.lockstep                                  # {}: nothing steps with another motor here
+```
+
+#### `moving_motors`
+`bexa.io.engines.hdf5_master.moving_motors(channels, motor_names, known, min_steps)`
+
+The per-frame channels that are motors and moved, in the spec's known order first: a channel is
+a motor when the file lists it as a positioner or the spec knows it (`motor_names`, `known`,
+`FALLBACK_MOTORS`), never a time stamp or counter (`NOT_MOTORS`); it moved when its range
+exceeds the spec's `min_step` for it (else `MOVE_THRESHOLD`).
+
+```python
+moving_motors(table.channels, table.motor_names, spec.known_motors(), spec.min_steps())   # ['samz', 'samy']
+```
+
+#### `collapse_lockstep`
+`bexa.io.engines.hdf5_master.collapse_lockstep(order, channels)`
+
+Keep one of several channels that step together (`a2scan`, a motor and its encoder): the dims
+that remain, in order, and `{kept: [dropped]}`.
+
+```python
+twins = {"mu": table.channels["samz"], "mu_enc": table.channels["samz"] + 1e-7, "chi": table.channels["samy"]}
+collapse_lockstep(["mu", "mu_enc", "chi"], twins)   # (['mu', 'chi'], {'mu': ['mu_enc']})
+```
+
+#### `decode`
+`bexa.io.engines.hdf5_master.decode(value)`
+
+Bytes and 0-d string arrays as `str`; anything else as it is (the way HDF5 string scalars come
+back).
+
+```python
+decode(f["1.1/title"][()])                       # 'dmesh samy 0 1 2 samz 0 1 4 0.1'
+f.close()
+```
+
+Constants:
+
+- `MOTOR_KEYS`: the datasets of `fscan_parameters` that name the scanned motors, slowest loop first. `FALLBACK_MOTORS`: `mu`, `chi`, `phi`, `theta`, `omega`, `delta`, `gamma`, `ux`, `uy`, `uz`, the motors tried when nothing names any. `NOT_MOTORS`: `elapsed_time`, `epoch`, `epoch_trig`, `frame`, `timestamp`, channels that are never motors. `MOVE_THRESHOLD`: `1e-6`, below which a readback did not move.
 
 ### bexa.io.engines.hdf5_points: PAL-XFEL point files (September 2025)
 
@@ -2705,31 +3275,16 @@ SpecH5Source.list_scans(spec, one.path)          # [1]
 
 A `ScanCommand` from a spec-like command: the first word of `one_motor` or `two_motor` counts
 (earlier tokens such as a scan number are skipped), followed by one or two `name start stop
-npoints` blocks. `ValueError` without a known word or for an incomplete block. The spec's
-`options.one_motor_commands` and `two_motor_commands` set the word lists of the engine.
+npoints` blocks, the third number counting points as the PAL files write it. `ValueError`
+without a known word or for an incomplete block. The spec's `options.one_motor_commands` and
+`two_motor_commands` set the word lists of the engine. The general parser, for any BLISS or
+SPEC command line, is `bexa.io.scan_commands.parse_scan_command`, which also defines
+`ScanCommand` and `ScanMotor` (re-exported here).
 
 ```python
 cmd = parse_scan_command("12 a2scan th 0 1 3 delay -1 2 4 0.1")
 cmd.command, cmd.shape                           # ('a2scan', (3, 4))
-```
-
-#### `ScanCommand`
-`bexa.io.engines.spec_h5.ScanCommand(command, motors, text)`
-
-A dataclass: the command word, the list of `ScanMotor` (outer first), the original `text`, and the
-property `shape` (points per motor).
-
-```python
-[m.name for m in cmd.motors], cmd.text           # (['th', 'delay'], '12 a2scan th 0 1 3 delay -1 2 4 0.1')
-```
-
-#### `ScanMotor`
-`bexa.io.engines.spec_h5.ScanMotor(name, start, stop, npoints)`
-
-A dataclass for one `name start stop npoints` block (float positions, int number of points).
-
-```python
-cmd.motors[1]                                    # ScanMotor(name='delay', start=-1.0, stop=2.0, npoints=4)
+[m.name for m in cmd.motors], cmd.motors[1]      # (['th', 'delay'], ScanMotor(name='delay', start=-1.0, stop=2.0, npoints=4))
 ```
 
 ### bexa.io.engines.array_cube: reduced cubes as sources
@@ -3040,15 +3595,17 @@ follow those of part `i - 1`. Grids and frame shapes must match (`structure()` r
 otherwise); per-frame channels present in every part are concatenated, and the scalars, units,
 energy and title are those of the first part. It implements the `Source` members
 `files`, `frame_shape`, `n_frames`, `dtype`, `chunk_frames`, `read_frames`, `structure`,
-`scalars`, `cache_records`, `refresh` and `close` (see `BaseSource`): `read_frames` reads the
-parts in turn, `refresh()` and `close()` go to every part, `files()` lists each file once,
-`cache_records()` gives every part's records once plus one for the dim and its coordinates, and
-`frame_shape`, `dtype`, `chunk_frames` and `scalars()` are the first part's. Attributes:
-`parts`, `dim`, `coords`.
+`status`, `scalars`, `cache_records`, `refresh` and `close` (see `BaseSource`): `read_frames`
+reads the parts in turn, `refresh()` and `close()` go to every part, `files()` lists each file
+once, `cache_records()` gives every part's records once plus one for the dim and its
+coordinates, `status` is the worst of the parts' (`bexa.core.status.worst`), and `frame_shape`,
+`dtype`, `chunk_frames` and `scalars()` are the first part's. Attributes: `parts`, `dim`,
+`coords`.
 
 ```python
 src = series.source
 src.dim, src.coords, series.dims                 # ('energy', array([17.  , 17.05, 17.1 ]), ('energy', 'chi', 'mu', 'y', 'x'))
+src.status                                       # <ScanStatus.COMPLETE: 'complete'>: every part is
 src.n_frames, [p.scan for p in src.parts], len(src.files())      # (72, [1, 2, 3], 4)
 len(src.cache_records()), src.cache_records()[-1]   # (7, {'path': '', 'dim': 'energy', 'coords': [17.0, 17.05, 17.1]})
 by_scan = MultiScanSource([bexa.open(made[0].dataset_dir, scan=s).source for s in (1, 2)], "scan", [1, 2])
@@ -6078,23 +6635,24 @@ import tempfile
 from pathlib import Path
 import numpy as np
 import bexa
-from bexa.testing import (dfxm_sample, make_esrf_energy_series, make_esrf_scan, make_esrf_zstack,
-                          make_lcls_cube, make_legacy_cube, make_pal_run, make_pal_spec_scan,
-                          polycrystal)
+from bexa.testing import (dfxm_sample, make_esrf_beamtime, make_esrf_energy_series, make_esrf_scan,
+                          make_esrf_zstack, make_lcls_cube, make_legacy_cube, make_pal_run,
+                          make_pal_spec_scan, polycrystal)
 
 work = Path(tempfile.mkdtemp())
 ```
 
 #### `make_esrf_scan`
-`bexa.testing.synthetic.make_esrf_scan(root, dataset="synth_dfxm", scan=1, detector="pco_ff", motors=(("chi", 4), ("mu", 12)), ranges=None, frame_shape=(48, 64), n_files=2, energy_keV=17.0, layout="2026", order="slow_major", partial=0, amplitude=4000.0, background=10.0, noise=0.0, seed=0, dtype=np.uint16, positioners=None, curve="gaussian", centers=None, widths=None, monitors=None)`
+`bexa.testing.synthetic.make_esrf_scan(root, dataset="synth_dfxm", scan=1, detector="pco_ff", motors=(("chi", 4), ("mu", 12)), ranges=None, frame_shape=(48, 64), n_files=2, energy_keV=17.0, layout="2026", order="slow_major", partial=0, amplitude=4000.0, background=10.0, noise=0.0, seed=0, dtype=np.uint16, positioners=None, curve="gaussian", centers=None, widths=None, monitors=None, state="finished", motor_lag=0, empty_last_file=False, command=None)`
 
 Writes one BLISS scan: the master `<root>/<dataset>/<dataset>.h5` (entry `<scan>.1` with
 `fscan_parameters`, per-frame motor values, positioners with `ccmth` for `energy_keV` on Si 111,
-and LIMA's `acq_nb_frames` and `saving_frame_per_file`; later scans of the dataset are added to
-it) and up to `n_files` detector files `<dataset>/scan<NNNN>/<detector>_<i>.h5` (frames at
-`ESRF_FRAMES_PATH`, one per chunk, bitshuffle-lz4 when hdf5plugin is installed; every file but
-the last holds the same number of frames, as LIMA writes them, and a partial scan fills fewer
-files). Read by `esrf_id03_bliss_2026` (`esrf_id03_bliss_2024` for `layout="2024"`); returns a
+LIMA's `acq_nb_frames` and `saving_frame_per_file`, and the start and end fields BLISS writes;
+later scans of the dataset are added to it) and up to `n_files` detector files
+`<dataset>/scan<NNNN>/<detector>_<i>.h5` (frames at `ESRF_FRAMES_PATH`, one per chunk,
+bitshuffle-lz4 when hdf5plugin is installed; every file but the last holds the same number of
+frames, as LIMA writes them, and a partial scan fills fewer files). Read by
+`esrf_id03_bliss_2026` (`esrf_id03_bliss_2024` for `layout="2024"`); returns a
 `SyntheticEsrfScan`.
 
 - Signal: along each motor every pixel has a Gaussian (with `curve="edge"` an error-function step,
@@ -6115,7 +6673,20 @@ files). Read by `esrf_id03_bliss_2026` (`esrf_id03_bliss_2024` for `layout="2024
   `fscan_parameters`, both read as 2026), `"2024"` (without, plus `obpitch`) or `"F2026"` (the
   2026 layout plus the frames linked into the master as a virtual dataset
   `N.1/instrument/<detector>/image`, read by `esrf_id03_bliss_F2026`); `order="snake"` reverses
-  the fast motor on every other slow step; `partial` frames are missing at the end.
+  the fast motor on every other slow step; `partial` frames are missing at the end (every frame
+  may be: a scan that has just started, whose only detector file is empty).
+- The state of the scan, as a beamtime leaves it: `state="finished"` (the default) writes
+  `start_time`, `end_time`, `end_reason` (`SUCCESS`, or `USER_ABORT` when frames are missing)
+  and the writer status `SUCCEEDED`; `"running"` writes `start_time` and the status `RUNNING`
+  only, as for a scan still going; `"legacy"` writes none of them (older files). `motor_lag`
+  frames at the end have no readbacks in the master yet; `empty_last_file` adds a detector
+  file of zero bytes, as the one the detector has opened but not flushed. The time stamps are
+  `SCAN_STARTED` and `SCAN_ENDED`.
+- `command`: the scan command to write as the title instead of the fscan family: `"dmesh"` or
+  `"amesh"` (a step mesh, whose title counts intervals and whose master has no
+  `fscan_parameters`), `"ascan"`, a lockstep command of `LOCKSTEP_COMMANDS` (`"a2scan"`: every
+  motor steps at every frame, so all motors need the same number of points), `"loopscan"`, or
+  any other word (a beamline macro, read from its readbacks).
 
 ```python
 made = make_esrf_scan(work, dataset="grain", motors=(("chi", 5), ("mu", 20)), noise=3.0)
@@ -6124,6 +6695,39 @@ res = scan.com(axes=("chi", "mu"), sigma=0)
 float(np.median(np.abs(res["com_mu"].values - made.truth["mu_center"])))   # 0.0158...: the planted centres come back
 autumn = make_esrf_scan(work, dataset="autumn", layout="F2026")
 bexa.open(autumn.dataset_dir).spec.name          # 'esrf_id03_bliss_F2026'
+going = make_esrf_scan(work, dataset="going", motors=(("chi", 3), ("mu", 8)), n_files=1, partial=9, state="running")   # 15 of 24 frames so far
+bexa.open(going.dataset_dir).status              # <ScanStatus.RUNNING: 'running'>
+mesh = make_esrf_scan(work, dataset="mesh", motors=(("samy", 3), ("samz", 5)), n_files=1, command="dmesh")   # a step mesh of the stage
+bexa.open(mesh.dataset_dir).dims, bexa.open(mesh.dataset_dir).structure.scan_type   # (('samy', 'samz', 'y', 'x'), 'dmesh')
+```
+
+#### `make_esrf_beamtime`
+`bexa.testing.synthetic.make_esrf_beamtime(root, dataset="beamtime", frame_shape=(24, 32), **kwargs)`
+
+A dataset as a beamtime leaves it, for reading unfinished scans: scans 1 to 3 are complete
+chi x mu scans (3 x 8 frames), scan 4 was aborted (its last five frames are missing), scan 5 is
+running with 15 frames taken, scan 6 has just started and holds no frame, and a folder named
+`scan0004_old` that is not a scan sits next to them. `kwargs` go to every `make_esrf_scan` call
+(`layout`, `n_files`...). Returns a `SyntheticBeamtime`.
+
+```python
+live = make_esrf_beamtime(work)
+ds = bexa.open_dataset(live.dataset_dir, cache=False)
+ds.table()["status"].tolist()                    # ['complete', 'complete', 'complete', 'aborted', 'running', 'running']
+ds.select_numbers(), ds.problems                 # ([1, 2, 3, 4], {6: 'scan 6 of beamtime is running: no frame to read yet'})
+```
+
+#### `SyntheticBeamtime`
+`bexa.testing.synthetic.SyntheticBeamtime(root, dataset, master, scans, complete, aborted, running, empty, stray)`
+
+Dataclass of what `make_esrf_beamtime` wrote: the `master`, `scans` (`{number:
+SyntheticEsrfScan}`), the ids of the `complete` scans, the `aborted`, `running` and `empty`
+(just started) ones, and the `stray` folder that is not a scan; `dataset_dir` is the folder
+`bexa.open_dataset` takes.
+
+```python
+live.complete, live.aborted, live.running, live.empty, live.stray.name   # ([1, 2, 3], 4, 5, 6, 'scan0004_old')
+live.scans[5].n_frames                           # 15
 ```
 
 #### `SyntheticEsrfScan`
@@ -7872,7 +8476,7 @@ st = scan.structure
 ```
 
 #### `Structure`
-`bexa.core.structure.Structure(motor_dims, motor_shape, coords, frame_index, frame_shape, n_frames, per_frame={}, scalars={}, scan_type="grid", units={}, energy_keV=None, title="", _grid_of_frame=None)`
+`bexa.core.structure.Structure(motor_dims, motor_shape, coords, frame_index, frame_shape, n_frames, per_frame={}, scalars={}, scan_type="grid", units={}, energy_keV=None, title="", planned_shape=None, planned_frames=None, motor_names=frozenset(), _grid_of_frame=None)`
 
 A dataclass. `motor_dims` names the scanned dims, slow first (`("chi", "mu")`, or `("frame",)`
 for a plain sequence); `motor_shape` gives their lengths and `coords` their 1-D coordinate
@@ -7881,14 +8485,19 @@ grid point, `MISSING` (-1) where a partial scan has no frame yet. `frame_shape` 
 `(height, width)`, `n_frames` the frames the source can deliver, `per_frame` the per-frame
 channels (motor readbacks, `elapsed_time`), `scalars` the fixed positioners (`samz`, `ccmth`),
 `units` the unit per motor (`"deg"`, `"mm"`), `energy_keV` the photon energy in keV when known,
-`title` the recorded scan command, and `scan_type`
-one of `"fscan1d"`, `"fscan2d"`, `"fscan3d"`, `"list"`, `"points"`, `"cube"`, `"multi"` (stacked
-scans) or `"grid"` (default). `_grid_of_frame` is an internal cache. Members:
+`title` the recorded scan command, `planned_shape` and `planned_frames` what the scan was
+meant to be (points per declared motor, frames in all) when the files say, `motor_names` every
+name the file lists as a motor (the per-frame channels among them are the dims a reader may
+choose, `Scan.with_dims`), and `scan_type` the declared kind (`"fscan1d"`, `"fscan2d"`,
+`"fscan3d"`), else the command word (`"amesh"`, `"dmesh"`, `"ascan"`, ...), or `"list"`,
+`"points"`, `"cube"`, `"multi"` (stacked scans) or `"grid"` (default). `_grid_of_frame` is an
+internal cache. Members:
 
 - `dims`, `shape`, `ndim`: properties, `motor_dims + ("y", "x")`, `motor_shape + frame_shape`
   and `len(dims)`.
-- `n_grid`, `is_complete`, `n_missing`: properties, the number of grid points, whether every one
-  has a frame, and how many have none (a scan still being written).
+- `n_grid`, `n_missing`, `is_complete`: properties, the number of grid points, how many have no
+  frame or, when the plan is known, how many planned frames were not taken (whichever is more:
+  a scan still being written, or stopped early), and whether that is zero.
 - `frame_ids(region=None)`: sorted frame ids inside a grid region, one slice or index array per
   motor dim in grid indices (not motor values); missing points are skipped, `None` gives all.
 - `used_frame_ids()`: `frame_ids()` of the whole grid.
@@ -7897,19 +8506,23 @@ scans) or `"grid"` (default). `_grid_of_frame` is an internal cache. Members:
 - `motor_values(name, frame_ids)`: position of motor `name` per frame: the per-frame readback
   when there is one, else the grid coordinate.
 - `sub(region)`: a copy restricted to a grid region, keeping the frame ids of the full scan (how
-  a motor ROI becomes a smaller grid). `with_frame_shape(frame_shape)`: a copy with another
-  frame shape.
-- `describe()`: the summary printed by `bexa info` and `scan.info()` (type, dims, shape, missing
-  points, title, motor ranges with units, energy, fixed positioners).
+  a motor ROI becomes a smaller grid; a part of the grid is not the plan any more, so
+  `planned_shape` and `planned_frames` are dropped). `with_frame_shape(frame_shape)`: a copy
+  with another frame shape.
+- `describe()`: the summary printed by `bexa info` and `scan.info()` (type, dims, shape, frames
+  of the planned ones, missing points, title, motor ranges with units, energy, fixed
+  positioners).
 - `frames_only(n_frames, frame_shape, **kwargs)`: class method, a plain sequence with a `frame`
   dim and `scan_type="list"` (`.npy` and tiff stacks).
 - `stack(parts, dim, coords)`: class method, structures with identical grids and frame shapes
   stacked on a new leading dim (energy series); frame ids are offset, per-frame channels
-  concatenated, `scan_type` is `"multi"`. Other grids raise `ValueError`.
+  concatenated, `scan_type` is `"multi"`, the planned frames add up and the motor names are
+  pooled. Other grids raise `ValueError`.
 
 ```python
 st.dims, st.shape                               # ('chi', 'mu', 'y', 'x'), (6, 16, 64, 80)
 st.frame_index[2, 5], st.n_missing              # 37 (chi index 2, mu index 5), 0
+st.planned_frames, sorted(st.motor_names)[:4]   # 96, ['ccmth', 'chi', 'ffx', 'ffz']
 ids = st.frame_ids((slice(2, 3), slice(None)))  # chi index 2, every mu: frames 32 to 47
 st.grid_positions(np.array([17])), st.motor_values("mu", ids[:2])   # ([1], [1]), [-1.0, -0.867] deg
 part = st.sub((slice(0, 2), slice(4, 12)))      # chi indices 0-1, mu indices 4-11: motor_shape (2, 8)
@@ -7944,6 +8557,20 @@ chi = np.repeat([0.0, 0.1], 4)                       # slow motor
 mu = np.r_[np.arange(4.0), np.arange(4.0)[::-1]]     # fast motor in snake order
 s = Structure.from_per_frame({"mu": mu, "chi": chi}, frame_shape=(64, 80))
 s.motor_dims, s.frame_index.tolist()                 # ('chi', 'mu'), [[0, 1, 2, 3], [7, 6, 5, 4]]
+```
+
+#### `same_partition`
+`bexa.core.structure.same_partition(a, b)`
+
+True when two label arrays split the items into the same groups: two motors whose grid labels
+(from `_group_values`) coincide step in lockstep (a motor and its encoder, the two motors of an
+`a2scan`, two positioners that move together between scans), so one of them is enough as a
+dim. `varying` and the BLISS engine use it.
+
+```python
+from bexa.core.structure import _group_values, same_partition
+same_partition(_group_values(mu, None)[1], _group_values(mu * 2 + 1, None)[1])   # True: the same steps
+same_partition(_group_values(mu, None)[1], _group_values(chi, None)[1])          # False
 ```
 
 Constants:
@@ -9440,9 +10067,10 @@ bexa cache clear
 
 ### bexa scan: frame-stack scans
 
-The four commands open a scan, or a series of scans, through a profile or a path
-(`bexa.cli.scan_cmd.open_from_options`) and work on every layout bexa reads as frames: ESRF
-BLISS datasets, PAL-XFEL point runs (dims `frame, y, x`), plain stacks. Shared options:
+`bexa scan list` lists the scans of a dataset folder; the four other commands open a scan, or a
+series of scans, through a profile or a path (`bexa.cli.scan_cmd.open_from_options`) and work
+on every layout bexa reads as frames: ESRF BLISS datasets, PAL-XFEL point runs (dims `frame,
+y, x`), plain stacks. Shared options:
 
 - `PATH` (argument, optional): dataset folder, master file or `scanNNNN` folder (which opens
   that scan); ignored with `-p`.
@@ -9460,13 +10088,30 @@ BLISS datasets, PAL-XFEL point runs (dims `frame, y, x`), plain stacks. Shared o
 motor values (both ends included, `chi=-0.2:0.2`), and a missing bound runs to the edge
 (`x=800:`).
 
+#### `bexa scan list`
+Python: `bexa.cli.scan_cmd.scan_list`
+
+Prints the table of a dataset folder (`Dataset.table`, compact by default): one row per scan
+with its status (`complete`, `running`, `aborted`, `empty`, `unreadable`), type, motors, shape,
+ranges, frames, energy and the positioners that change, then one line per scan that could not
+be read and why. A scan still being written never hides the others.
+
+- `PATH` (argument): dataset folder or master file.
+- `--status TEXT`: `any` (default), `finished`, `complete`, or one status word: the rows to keep.
+- `--full`: every positioner column, not the compact table.
+
+```bash
+bexa scan list /data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM
+bexa scan list /data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM --status running
+```
+
 #### `bexa scan info`
 Python: `bexa.cli.scan_cmd.scan_info`
 
 Prints `scan.info()` from the metadata alone: source and format spec, scan type and title, dims
 and shape, frames, points and range of each motor, energy, fixed positioners (`samz`, `ccmth`,
-...), frame shape and stored dtype, MB per frame and GB for the stack as float32, files, and the
-detector geometry.
+...), status, frame shape and stored dtype, MB per frame and GB for the stack as float32, files,
+and the detector geometry.
 
 - `PATH`, `-p` / `--profile`, `-s` / `--sample`, `--scan`, `--detector`: the scan, as above.
 
