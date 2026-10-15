@@ -258,6 +258,11 @@ on the command line, replace the path. With `export BEXA_PROFILE=hc6293` the pro
 be left out in Python (`bexa.open(sample="WS2G_100", scan=7)`); the command line still needs
 `-p`. The example profiles in `configs/beamtimes/` show every field.
 
+Reference entries: `bexa.open`, `Scan.info`, `Scan.dims` and `Dataset.table`, `Dataset.select`,
+`Dataset.varying` in [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) and [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several); the profile fields in [bexa.config.models](#bexaconfigmodels-the-fields-of-a-beamtime-profile),
+`load_profile` in [bexa.config.loader](#bexaconfigloader-finding-loading-and-writing-beamtime-profiles), `path_aliases` in [bexa.config.paths](#bexaconfigpaths-repository-cache-folder-and-path-aliases); `draft_spec` in
+[bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting); the commands in [bexa scan](#bexa-scan-frame-stack-scans) and [bexa profile](#bexa-profile-beamtime-profiles-and-format-specs).
+
 ### 4. Case A: a 1D rocking curve
 
 A rocking curve at ID03 is an `fscan` on `mu` with the far-field camera: bexa reports
@@ -330,6 +335,12 @@ python -m bexa scan info   -p hc6293 -s WS2G_100 --scan 7
 python -m bexa scan reduce -p hc6293 -s WS2G_100 --scan 7 --acc sum,stats,com --roi y=900:1300,x=1000:1500 -o scan7.h5
 ```
 
+Reference entries: `Scan.rocking_curve`, `Scan.com`, `Scan.reduce` in [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle); `ROI` in [bexa.core.roi](#bexacoreroi-regions-of-interest); `Sum`,
+`FrameStats`, `RoiIntegral`, `MotorCOM` in [bexa.core.reductions](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine); `.bexa.plot` in [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects);
+`rocking_curves` in [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments); `fit_multi_gaussian`, `fit_report` in [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits);
+`com_map` in [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps); `plot` in [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure); `pick_roi` in [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers);
+`save`, `load` in [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload); `bexa scan reduce` in [bexa scan](#bexa-scan-frame-stack-scans).
+
 ### 5. Case B: DFXM mosaicity scan (rocking and rolling)
 
 A mosaicity scan is an `fscan2d` with `chi` (rolling) as the slow motor and `mu` (rocking) as
@@ -392,6 +403,11 @@ python -m bexa scan preview -p hc6293 -s WS2G_100 --scan 12 --downsample 1,1,4,4
 python -m bexa scan report  -p hc6293 -s WS2G_100 --scan 12 --roi y=700:1500,x=800:1800 -o /data/visitor/hc6293/id03/20260119/PROCESSED_DATA/bexa/scan12
 ```
 
+Reference entries: `Scan.preview` in [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle); `projections_panel` in [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings);
+`browse` in [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers); `Max`, `Projections` in [bexa.core.reductions](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine); `res.bexa.plot` in
+[bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects); `bivariate`, `hsv_mosaicity` in [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps); `show` in [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars);
+`report` in [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set); `bexa scan preview`, `bexa scan report` in [bexa scan](#bexa-scan-frame-stack-scans).
+
 ### 6. Case C: energy scan
 
 An energy scan at ID03 is a series of scans of one dataset, each at a different monochromator
@@ -436,6 +452,10 @@ with `ccmth` as the outer loop), that scan itself has an `energy` dim in keV nex
 `mu`, so `bexa.acc.MotorCOM(axes=("energy",))` gives `com_energy` and `width_energy` straight
 from it (the angle stays in `scan.structure.per_frame["ccmth"]`); a 1-D mono scan likewise
 has an `energy` dim.
+
+Reference entries: `open` with a scan range and `Scan.energy_com` in [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle);
+`Dataset.series`, `stack` in [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several); `EnergyCOM` in [bexa.core.reductions](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine);
+`energy_com_from_stack` in [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics); `com_map` in [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps).
 
 ### 7. Case D: z-scan (layers on samz)
 
@@ -518,6 +538,13 @@ above becomes a loop over `scan.coords["samz"]` with `roi=bexa.ROI(samz=(z, z))`
 layer of the same scan. `ds.series(dim="samz", ...)` goes the other way: it opens separate
 layers as one scan with a leading `samz` dim.
 
+Reference entries: `Dataset.select`, `Dataset.varying`, `stack` in [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several);
+`Preview` in [bexa.core.reductions](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine); `tiles` in [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars); `.bexa.browse`, `.bexa.browse_volume`,
+`.bexa.browse_render` in [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects); `brightest` in [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes); `settings` in
+[bexa.core.settings](#bexacoresettings-what-bexa-uses-right-now-bexasettings); `align_stack`, `stack_layers` in [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics); `view_volume`,
+`slices_to_voxels_app` in [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them); the picker that chooses the layers in a notebook in
+[bexa.notebook.picker](#bexanotebookpicker-choosing-scans-in-a-notebook).
+
 ### 8. Longer jobs: batch on the cluster
 
 Anything the notebook does, the command line does headless, so a long reduction can be an
@@ -560,6 +587,10 @@ the h5web viewer inside JupyterLab plots them directly.
 - `docs/beamtime_checklist.md` has the full list, including how to draft a format spec when the
   beamline changes its file layout.
 
+Reference entries: `Dataset.table`, `Dataset.problems`, `Dataset.refresh` in [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several);
+`ScanStatus` in [bexa.core.status](#bexacorestatus-the-state-of-a-scan); `Scan.refresh`, `Scan.info` in [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle); `bexa scan list`
+in [bexa scan](#bexa-scan-frame-stack-scans).
+
 ## Find a function by task
 
 The everyday jobs and the functions that do them; each name has an entry in the
@@ -567,115 +598,115 @@ The everyday jobs and the functions that do them; each name has an entry in the
 
 **Finding and opening data**
 
-| I want to | Use |
-|---|---|
-| see what a folder or file holds | `bexa info PATH`; `bexa.io.inspect.describe`, `bexa.io.inspect.h5_tree` |
-| list the scans of a dataset with their motors and positioners | `bexa.open_dataset(path).table()`, `Dataset.table(compact=True)`, `bexa.list_scans` |
-| a measurement that continued in a second dataset folder | `bexa.open_dataset([folder1, folder2])`: one table, ids running over both folders; `Dataset.table`, `Dataset.series` and `bexa.stack` work across them |
-| the datasets under a RAW_DATA folder | `bexa.notebook.list_datasets` |
-| choose the scans, the motors to extract and the stack axis with widgets | `bexa.notebook.ScanPicker`, `bexa.notebook.pick_scans`, `Dataset.motor_candidates` |
-| open one scan | `bexa.open(path, scan=7)` |
-| open through a beamtime profile | `bexa.open(profile=..., sample=..., scan=...)`, `bexa profile new`, `bexa.config.load_profile` |
-| pick scans by type, scanned motor or positioner (`samz`, energy) | `Dataset.select`, `Dataset.select_numbers`, `Dataset.groups` |
-| see what differs between scans (heights, energies) | `Dataset.varying`, `bexa.core.dataset.varying` |
-| treat an energy series or a z-stack of scans as one scan | `bexa.open(path, scan=(20, 24))`, `Dataset.series` |
-| read a plain `.npy`, tiff or HDF5 stack | `bexa.open("file.h5::/entry/data")`, `bexa.io.generic.load_array` |
-| read a PAL-XFEL run, an LCLS cube or smalldata, EuXFEL | `bexa.open(path)`, `bexa.io.cube.load_lcls_cube`, `SmalldataSource`, `ExtraDataSource` |
-| support a new file layout | `bexa profile sniff`, `bexa.io.formats.draft_spec`, `bexa.io.formats.write_draft` |
-| try the API without beamtime data | `bexa.demo`, `bexa.testing.synthetic.make_esrf_scan` |
+| I want to | Use | notebook 13 |
+|---|---|---|
+| see what a folder or file holds | `bexa info PATH`; `bexa.io.inspect.describe`, `bexa.io.inspect.h5_tree` |  |
+| list the scans of a dataset with their motors and positioners | `bexa.open_dataset(path).table()`, `Dataset.table(compact=True)`, `bexa.list_scans` |  |
+| a measurement that continued in a second dataset folder | `bexa.open_dataset([folder1, folder2])`: one table, ids running over both folders; `Dataset.table`, `Dataset.series` and `bexa.stack` work across them | §5, §11 |
+| the datasets under a RAW_DATA folder | `bexa.notebook.list_datasets` |  |
+| choose the scans, the motors to extract and the stack axis with widgets | `bexa.notebook.ScanPicker`, `bexa.notebook.pick_scans`, `Dataset.motor_candidates` | §3, §11 |
+| open one scan | `bexa.open(path, scan=7)` |  |
+| open through a beamtime profile | `bexa.open(profile=..., sample=..., scan=...)`, `bexa profile new`, `bexa.config.load_profile` |  |
+| pick scans by type, scanned motor or positioner (`samz`, energy) | `Dataset.select`, `Dataset.select_numbers`, `Dataset.groups` | §7 |
+| see what differs between scans (heights, energies) | `Dataset.varying`, `bexa.core.dataset.varying` | §4 |
+| treat an energy series or a z-stack of scans as one scan | `bexa.open(path, scan=(20, 24))`, `Dataset.series` |  |
+| read a plain `.npy`, tiff or HDF5 stack | `bexa.open("file.h5::/entry/data")`, `bexa.io.generic.load_array` |  |
+| read a PAL-XFEL run, an LCLS cube or smalldata, EuXFEL | `bexa.open(path)`, `bexa.io.cube.load_lcls_cube`, `SmalldataSource`, `ExtraDataSource` |  |
+| support a new file layout | `bexa profile sniff`, `bexa.io.formats.draft_spec`, `bexa.io.formats.write_draft` |  |
+| try the API without beamtime data | `bexa.demo`, `bexa.testing.synthetic.make_esrf_scan` | §3 |
 
 **Reducing scans**
 
-| I want to | Use |
-|---|---|
-| the summed or maximum image | `Scan.sum`, `Scan.max` |
-| the rocking curve of a pixel region | `Scan.rocking_curve`, `RoiIntegral` |
-| centre-of-mass (COM) and width maps, mosaicity | `Scan.com`, `MotorCOM`, `bexa.analysis.rocking.motor_com`, `bexa.analysis.rocking.moments` |
-| the energy centre of mass and strain of an energy scan | `Scan.energy_com`, `EnergyCOM`; from stacked sums `bexa.analysis.rocking.energy_com_from_stack` |
-| a downsampled preview of a whole scan | `Scan.preview` |
-| full-resolution maps and a binned volume from one pass (one pass, two resolutions) | `Preview(downsample=8)` next to `Sum`, `MotorCOM`, ... in `Scan.reduce` or `bexa.stack` |
-| the frames in memory | `Scan.read` (with cache=True the volume is kept for the next session), `Scan.to_dask`, `Scan.batches` |
-| several results from one pass over the files | `Scan.reduce`, `bexa.reduce` |
-| maps of every scan on the positioners that vary (a z-stack, an energy series, both) | `bexa.stack(..., dim="auto")` |
-| parallel scan loading: many scans reduced at once, each in its own process | `bexa.stack(..., workers="auto")` (every scan reopened from `Scan.recipe`), `bexa.core.parallel.process_pool` |
-| a stack too large for memory, built on disk and read block by block | `bexa.stack(..., store=True)`, `bexa.io.cube.open_lazy`, `bexa.io.cube.StoreWriter` |
-| the condition (chi, mu, energy) that lights up a stacked volume, shared colour limits | `bexa.viz.interactive.brightest`, `bexa.viz.interactive.shared_limits` |
-| a region of interest | `bexa.ROI`, `ROI.parse`, `da.bexa.roi(...)`, `bexa.viz.interactive.pick_roi` |
-| keep results and reload them | `bexa.save`, `bexa.load`, `da.bexa.save(...)` |
+| I want to | Use | notebook 13 |
+|---|---|---|
+| the summed or maximum image | `Scan.sum`, `Scan.max` | §4, §5, §6, §7 |
+| the rocking curve of a pixel region | `Scan.rocking_curve`, `RoiIntegral` | §7 |
+| centre-of-mass (COM) and width maps, mosaicity | `Scan.com`, `MotorCOM`, `bexa.analysis.rocking.motor_com`, `bexa.analysis.rocking.moments` | §5, §11 |
+| the energy centre of mass and strain of an energy scan | `Scan.energy_com`, `EnergyCOM`; from stacked sums `bexa.analysis.rocking.energy_com_from_stack` | §9 |
+| a downsampled preview of a whole scan | `Scan.preview` |  |
+| full-resolution maps and a binned volume from one pass (one pass, two resolutions) | `Preview(downsample=8)` next to `Sum`, `MotorCOM`, ... in `Scan.reduce` or `bexa.stack` | §5, §11 |
+| the frames in memory | `Scan.read` (with cache=True the volume is kept for the next session), `Scan.to_dask`, `Scan.batches` | §5 |
+| several results from one pass over the files | `Scan.reduce`, `bexa.reduce` |  |
+| maps of every scan on the positioners that vary (a z-stack, an energy series, both) | `bexa.stack(..., dim="auto")` | §5, §11 |
+| parallel scan loading: many scans reduced at once, each in its own process | `bexa.stack(..., workers="auto")` (every scan reopened from `Scan.recipe`), `bexa.core.parallel.process_pool` | §5, §11 |
+| a stack too large for memory, built on disk and read block by block | `bexa.stack(..., store=True)`, `bexa.io.cube.open_lazy`, `bexa.io.cube.StoreWriter` | §5, §11 |
+| the condition (chi, mu, energy) that lights up a stacked volume, shared colour limits | `bexa.viz.interactive.brightest`, `bexa.viz.interactive.shared_limits` | §10 |
+| a region of interest | `bexa.ROI`, `ROI.parse`, `da.bexa.roi(...)`, `bexa.viz.interactive.pick_roi` | §2, §3 |
+| keep results and reload them | `bexa.save`, `bexa.load`, `da.bexa.save(...)` | §6, §8, §9, §11 |
 
 **Analysis**
 
-| I want to | Use |
-|---|---|
-| subtract darks, remove hot pixels | `bexa.analysis.preprocess.subtract_dark`, `bexa.analysis.preprocess.remove_hot_pixels` |
-| normalise by I0 or by a background box | `bexa.analysis.preprocess.normalize_i0`, `bexa.analysis.preprocess.normalize_box` |
-| bin or crop pixels | `bexa.analysis.preprocess.bin_spatial`, `bexa.analysis.preprocess.crop` |
-| fit a rocking curve (Gaussians, Voigt) | `bexa.analysis.fitting.fit_multi_gaussian`, `bexa.analysis.fitting.fit_voigt`, `bexa.analysis.fitting.fit_report` |
-| fit a knife-edge or sample-height scan | `bexa.analysis.fitting.fit_edge` |
-| per-frame COM, variance, skew and kurtosis on the detector | `bexa.analysis.peaks.frame_moments`, `bexa.analysis.peaks.frame_stats` |
-| fit a 2-D Gaussian to a peak on the detector | `bexa.analysis.peaks.gaussian2d_fit`, `bexa.analysis.peaks.fit_stack` |
-| align drifting frames or layers | `bexa.analysis.registration.align_stack`, `bexa.analysis.registration.phase_correlation_shift` |
-| stitch overlapping scans, build a mosaic | `bexa.analysis.registration.stitch_along_axis`, `bexa.analysis.registration.mosaic_from_grid` |
-| segment grains and domains | `bexa.analysis.segmentation.kmeans_com`, `bexa.analysis.segmentation.dbscan_map`, `bexa.analysis.segmentation.smoothness_mask` |
-| boundaries, vector fields, strain integration | `bexa.analysis.fields.edge_mask`, `bexa.analysis.fields.vector_field`, `bexa.analysis.fields.compatibility` |
-| points in reciprocal space (angles, Q, hkl) | `bexa.analysis.projections.rlp_points`, `bexa.geometry.transforms.build_coordinate_grids` |
-| laser on/off split and differential signal | `bexa.analysis.pump_probe.split_on_off`, `bexa.analysis.pump_probe.differential`, `OnOffSplit` |
-| combine runs, bin LCLS shots | `bexa.analysis.pump_probe.combine_runs`, `bexa.analysis.pump_probe.bin_lcls` |
+| I want to | Use | notebook 13 |
+|---|---|---|
+| subtract darks, remove hot pixels | `bexa.analysis.preprocess.subtract_dark`, `bexa.analysis.preprocess.remove_hot_pixels` |  |
+| normalise by I0 or by a background box | `bexa.analysis.preprocess.normalize_i0`, `bexa.analysis.preprocess.normalize_box` |  |
+| bin or crop pixels | `bexa.analysis.preprocess.bin_spatial`, `bexa.analysis.preprocess.crop` |  |
+| fit a rocking curve (Gaussians, Voigt) | `bexa.analysis.fitting.fit_multi_gaussian`, `bexa.analysis.fitting.fit_voigt`, `bexa.analysis.fitting.fit_report` | §7 |
+| fit a knife-edge or sample-height scan | `bexa.analysis.fitting.fit_edge` | §7 |
+| per-frame COM, variance, skew and kurtosis on the detector | `bexa.analysis.peaks.frame_moments`, `bexa.analysis.peaks.frame_stats` |  |
+| fit a 2-D Gaussian to a peak on the detector | `bexa.analysis.peaks.gaussian2d_fit`, `bexa.analysis.peaks.fit_stack` |  |
+| align drifting frames or layers | `bexa.analysis.registration.align_stack`, `bexa.analysis.registration.phase_correlation_shift` |  |
+| stitch overlapping scans, build a mosaic | `bexa.analysis.registration.stitch_along_axis`, `bexa.analysis.registration.mosaic_from_grid` |  |
+| segment grains and domains | `bexa.analysis.segmentation.kmeans_com`, `bexa.analysis.segmentation.dbscan_map`, `bexa.analysis.segmentation.smoothness_mask` |  |
+| boundaries, vector fields, strain integration | `bexa.analysis.fields.edge_mask`, `bexa.analysis.fields.vector_field`, `bexa.analysis.fields.compatibility` |  |
+| points in reciprocal space (angles, Q, hkl) | `bexa.analysis.projections.rlp_points`, `bexa.geometry.transforms.build_coordinate_grids` |  |
+| laser on/off split and differential signal | `bexa.analysis.pump_probe.split_on_off`, `bexa.analysis.pump_probe.differential`, `OnOffSplit` |  |
+| combine runs, bin LCLS shots | `bexa.analysis.pump_probe.combine_runs`, `bexa.analysis.pump_probe.bin_lcls` |  |
 
 **Plots**
 
-| I want to | Use |
-|---|---|
-| plot whatever bexa returned | `bexa.plot`, `da.bexa.plot()` |
-| an image with ROI boxes and a scalebar | `bexa.viz.images.show`, `bexa.viz.images.tiles` |
-| COM maps, both tilts in one image | `bexa.viz.maps.com_map`, `bexa.viz.maps.bivariate`, `bexa.viz.maps.hsv_mosaicity` |
-| the projections of a scan | `bexa.viz.volume.projections_panel`, `Projections` |
-| rocking curves with their fits | `bexa.viz.curves.rocking_curves` |
-| sliders through a scan | `da.bexa.browse()`, `bexa.viz.interactive.browse`, `bexa.viz.interactive.compare` |
-| a 3-D view of a z-stack | `da.bexa.browse_volume()`, `bexa.viz.volume.render`, `da.bexa.browse_render()`, `bexa.viz.napari_app.view_volume` |
-| a GIF or MP4 | `bexa.viz.animation.animate`, `bexa.viz.animation.save_gif`, `bexa.viz.animation.save_mp4` |
-| pump-probe figures | `bexa.viz.curves.on_off_diff`, `bexa.viz.curves.moments_vs_axis` |
-| figures for a paper | `bexa.viz.style.use("paper")` |
-| the colour limits, colormap, colourbar or size of one plot | the `clim`, `cmap`, `colorbar`, `figsize` keywords of every plot function (`bexa.viz.images.show`) |
-| the same for every plot of a notebook, or a figure already drawn | `bexa.viz.style.set`, `bexa.viz.style.context`, `bexa.viz.style.apply` |
+| I want to | Use | notebook 13 |
+|---|---|---|
+| plot whatever bexa returned | `bexa.plot`, `da.bexa.plot()` | §2, §6, §7, §8 |
+| an image with ROI boxes and a scalebar | `bexa.viz.images.show`, `bexa.viz.images.tiles` | §6, §7, §8, §9 |
+| COM maps, both tilts in one image | `bexa.viz.maps.com_map`, `bexa.viz.maps.bivariate`, `bexa.viz.maps.hsv_mosaicity` | §8 |
+| the projections of a scan | `bexa.viz.volume.projections_panel`, `Projections` | §6 |
+| rocking curves with their fits | `bexa.viz.curves.rocking_curves` |  |
+| sliders through a scan | `da.bexa.browse()`, `bexa.viz.interactive.browse`, `bexa.viz.interactive.compare` | §9, §11 |
+| a 3-D view of a z-stack | `da.bexa.browse_volume()`, `bexa.viz.volume.render`, `da.bexa.browse_render()`, `bexa.viz.napari_app.view_volume` | §10 |
+| a GIF or MP4 | `bexa.viz.animation.animate`, `bexa.viz.animation.save_gif`, `bexa.viz.animation.save_mp4` |  |
+| pump-probe figures | `bexa.viz.curves.on_off_diff`, `bexa.viz.curves.moments_vs_axis` |  |
+| figures for a paper | `bexa.viz.style.use("paper")` |  |
+| the colour limits, colormap, colourbar or size of one plot | the `clim`, `cmap`, `colorbar`, `figsize` keywords of every plot function (`bexa.viz.images.show`) | §6, §7, §8, §9 |
+| the same for every plot of a notebook, or a figure already drawn | `bexa.viz.style.set`, `bexa.viz.style.context`, `bexa.viz.style.apply` | §2 |
 
 **Pipelines and the beamtime**
 
-| I want to | Use |
-|---|---|
-| the standard DFXM figure set of a scan | `bexa.pipelines.dfxm_report.report`, `bexa scan report` |
-| a PAL-XFEL laser on/off cube | `bexa.pipelines.xfel_cube.reduce_run`, `bexa cube build` |
-| the figures and GIFs of a cube | `bexa.pipelines.cube_report.figure_set`, `bexa.pipelines.cube_report.animations`, `bexa cube plot` |
-| process every new run while the beamtime goes on | `bexa.pipelines.auto_process.watch`, `bexa auto --watch` |
-| time this machine | `bexa.pipelines.benchmark.run_suite`, `bexa bench` |
+| I want to | Use | notebook 13 |
+|---|---|---|
+| the standard DFXM figure set of a scan | `bexa.pipelines.dfxm_report.report`, `bexa scan report` |  |
+| a PAL-XFEL laser on/off cube | `bexa.pipelines.xfel_cube.reduce_run`, `bexa cube build` |  |
+| the figures and GIFs of a cube | `bexa.pipelines.cube_report.figure_set`, `bexa.pipelines.cube_report.animations`, `bexa cube plot` |  |
+| process every new run while the beamtime goes on | `bexa.pipelines.auto_process.watch`, `bexa auto --watch` |  |
+| time this machine | `bexa.pipelines.benchmark.run_suite`, `bexa bench` |  |
 
 **Crystallography and optics**
 
-| I want to | Use |
-|---|---|
-| d-spacing and Bragg angle of a reflection | `Crystal.d_spacing`, `Crystal.bragg_angle_deg`, `bexa crystal dspacing` |
-| motor angles that bring a reflection onto the detector | `bexa.crystal.diffractometer.create_diffractometer`, `FourCircleDiffractometer.solve_for_peak_family`, `bexa crystal solve` |
-| the zone axis from one indexed reflection | `bexa.crystal.zone_axis.solve_zone_axis`, `bexa crystal zone-axis` |
-| omega settings where two peaks are close in mu | `bexa.crystal.omega_search.find_omega_offsets`, `bexa crystal omega-search` |
-| a crystal from a CIF file | `bexa.crystal.cif.crystal_from_cif` |
-| energy, wavelength and monochromator angle | `bexa.core.units.energy_to_wavelength`, `bexa.core.units.mono_angle_to_energy`, `bexa.optics.conversions.summary`, `bexa optics convert` |
-| transmission and attenuation length of a filter or sample | `bexa.optics.attenuation.transmission`, `bexa.optics.attenuation.attenuation_length_um`, `bexa optics transmission` |
-| photons per pulse | `bexa.core.units.photons_from_pulse_energy`, `bexa optics photons` |
-| the efficiency of a Bragg magnifier | `bexa.optics.bragg_magnifier.efficiency`, `bexa.optics.bragg_magnifier.optimal_split`, `bexa optics magnifier` |
+| I want to | Use | notebook 13 |
+|---|---|---|
+| d-spacing and Bragg angle of a reflection | `Crystal.d_spacing`, `Crystal.bragg_angle_deg`, `bexa crystal dspacing` |  |
+| motor angles that bring a reflection onto the detector | `bexa.crystal.diffractometer.create_diffractometer`, `FourCircleDiffractometer.solve_for_peak_family`, `bexa crystal solve` |  |
+| the zone axis from one indexed reflection | `bexa.crystal.zone_axis.solve_zone_axis`, `bexa crystal zone-axis` |  |
+| omega settings where two peaks are close in mu | `bexa.crystal.omega_search.find_omega_offsets`, `bexa crystal omega-search` |  |
+| a crystal from a CIF file | `bexa.crystal.cif.crystal_from_cif` |  |
+| energy, wavelength and monochromator angle | `bexa.core.units.energy_to_wavelength`, `bexa.core.units.mono_angle_to_energy`, `bexa.optics.conversions.summary`, `bexa optics convert` |  |
+| transmission and attenuation length of a filter or sample | `bexa.optics.attenuation.transmission`, `bexa.optics.attenuation.attenuation_length_um`, `bexa optics transmission` |  |
+| photons per pulse | `bexa.core.units.photons_from_pulse_energy`, `bexa optics photons` |  |
+| the efficiency of a Bragg magnifier | `bexa.optics.bragg_magnifier.efficiency`, `bexa.optics.bragg_magnifier.optimal_split`, `bexa optics magnifier` |  |
 
 **The machine and the settings**
 
-| I want to | Use |
-|---|---|
-| know the device, memory budget, cache and profile in use | `bexa.settings()`, `bexa settings` |
-| force the CPU or the GPU | `device="cpu"` or `device="cuda"` on any reduction, verb, preview or report; `bexa.core.backend.resolve_device` |
-| use less memory per batch | `BEXA_MEMORY_FRACTION`, `bexa.core.backend.memory_budget`, `bexa.core.backend.choose_batch_frames` (batches are capped at 256 MiB, `MAX_BATCH_BYTES`) |
-| threads for the CPU work of one process (the smoothing of the centre of mass) | `BEXA_THREADS`, `bexa.core.parallel.compute_threads`, `bexa.core.backend.gaussian_frames` |
-| know whether a result fits before computing it | `bexa.core.backend.check_fits` (what `Scan.read`, previews, `bexa.stack` and `bexa.load` refuse with) |
-| see or clear the result cache | `bexa cache ls`, `bexa cache clear`, `bexa.core.cache.Cache`, `Dataset.clear_cache` |
-| find where a result came from | `bexa.core.provenance.parameters_of`, the `attrs` of every result |
-| more or fewer log messages | `BEXA_LOG_LEVEL` (set before `import bexa`), `bexa._log.set_level` |
-| find what is slow | `bexa.profile()`, `bexa --profile`, `bexa bench` |
+| I want to | Use | notebook 13 |
+|---|---|---|
+| know the device, memory budget, cache and profile in use | `bexa.settings()`, `bexa settings` |  |
+| force the CPU or the GPU | `device="cpu"` or `device="cuda"` on any reduction, verb, preview or report; `bexa.core.backend.resolve_device` |  |
+| use less memory per batch | `BEXA_MEMORY_FRACTION`, `bexa.core.backend.memory_budget`, `bexa.core.backend.choose_batch_frames` (batches are capped at 256 MiB, `MAX_BATCH_BYTES`) |  |
+| threads for the CPU work of one process (the smoothing of the centre of mass) | `BEXA_THREADS`, `bexa.core.parallel.compute_threads`, `bexa.core.backend.gaussian_frames` |  |
+| know whether a result fits before computing it | `bexa.core.backend.check_fits` (what `Scan.read`, previews, `bexa.stack` and `bexa.load` refuse with) | §5, §6, §8, §9 |
+| see or clear the result cache | `bexa cache ls`, `bexa cache clear`, `bexa.core.cache.Cache`, `Dataset.clear_cache` | §3 |
+| find where a result came from | `bexa.core.provenance.parameters_of`, the `attrs` of every result |  |
+| more or fewer log messages | `BEXA_LOG_LEVEL` (set before `import bexa`), `bexa._log.set_level` |  |
+| find what is slow | `bexa.profile()`, `bexa --profile`, `bexa bench` |  |
 
 ## Function reference
 
@@ -761,7 +792,7 @@ import numpy as np
 import bexa
 
 scan = bexa.demo("mosa")     # chi x mu scan: dims ('chi', 'mu', 'y', 'x'), shape (6, 16, 64, 80)
-folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"
+folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"  # a dataset folder (the synthetic z-stack stands in for it)
 ```
 
 #### `open`
@@ -799,6 +830,7 @@ the spec. Instead of a path, `profile` (a name, a YAML path or a `BeamtimeProfil
   reads as far as its files go (`scan.status`).
 
 ```python
+# folder: a dataset folder on disk; one scan of it, then a series of scans as one handle
 scan7 = bexa.open(folder, scan=7)                              # one scan of a BLISS dataset
 series = bexa.open(folder, scan=(20, 24))                      # five energies: dims ('energy', 'mu', 'y', 'x')
 layers = bexa.open(folder, scan=[1, 7, 13], stack_dim="samz")  # dims ('samz', 'chi', 'mu', 'y', 'x')
@@ -823,8 +855,9 @@ when it was built in memory), `sample`, `dataset`, `scan`, `detector` and the ex
 so `bexa.open(**scan.recipe)` opens it again.
 
 ```python
+# a beamtime profile names the format, the root folder, the samples and the geometry
 scan7 = bexa.open_profile("hc6293", sample="WS2G_100", scan=7)
-scan7.profile.processed_root, scan7.geometry.effective_pixel_nm
+scan7.profile.processed_root, scan7.geometry.effective_pixel_nm  # (Path('.../processed'), 235.0)
 own = bexa.open_profile("hc6293", sample="WS2G_100", scan=7, cache="bexa_cache")   # this folder instead of the profile's
 ```
 
@@ -838,6 +871,7 @@ dataset folder, its master file or one of its `scanNNNN` folders; layouts withou
 give `[]`.
 
 ```python
+# folder: a dataset folder; the scan numbers it holds, without opening them
 bexa.list_scans(folder)                        # [1, 2, 3, ...]: the scans with detector files
 bexa.list_scans(folder, require_files=False)   # ... plus a scan whose folder is still empty
 ```
@@ -850,6 +884,7 @@ without wrapping it in a `Scan`. Several scans become a `bexa.io.multi.MultiScan
 on `stack_dim` as described under `open`. Useful when writing an engine or a test.
 
 ```python
+# the engine step of bexa.open: a format spec and a folder give a Source
 from bexa.core.scan import open_source
 from bexa.io.formats import load_spec
 
@@ -868,6 +903,7 @@ such as `"samz"` read from every part (`ValueError` when a part lacks it). `Data
 uses it to stack scans that live in different folders.
 
 ```python
+# several sources (one per scan) stacked along a new dim, as a series of scans is
 from bexa.core.scan import combine_sources
 
 parts = [bexa.open(folder, scan=n).source for n in (1, 7, 13)]
@@ -902,6 +938,7 @@ default `ROI`, which every call without `roi=` uses, and `recipe`, how the scan 
 (see `Scan.recipe`).
 
 ```python
+# scan: the demo chi x mu scan (6 x 16 frames of 64 x 80 pixels); its grid and coordinates
 scan.dims, scan.shape            # ('chi', 'mu', 'y', 'x'), (6, 16, 64, 80)
 scan.coords["mu"]                # 16 mu values in deg
 scan.energy_keV                  # 17.0
@@ -918,6 +955,7 @@ stack takes as float32, the files, the ROI and the geometry. `bexa info PATH` an
 info` print the same.
 
 ```python
+# scan: the demo chi x mu scan; a text summary of its files, grid, energy and status
 print(scan.info())               # ... "  status: complete" ...
 ```
 
@@ -930,6 +968,7 @@ pixel indices, with provenance attrs. `roi`, `downsample` and the keywords of `r
 (`device`, `batch_frames`, `show_progress`, ...) apply.
 
 ```python
+# scan: the demo chi x mu scan; the image summed over every frame, from one pass
 total = scan.sum()                                      # DataArray (y, x)
 total = scan.sum(roi=bexa.ROI(mu=(-0.2, 0.2)), device="cpu")
 ```
@@ -941,7 +980,9 @@ The pixel-wise maximum over the frames: a `DataArray` `(y, x)` named `max`. Keyw
 `Scan.sum`.
 
 ```python
+# scan: the demo chi x mu scan; the brightest value of every pixel over the whole scan
 brightest = scan.max()
+scan.max(roi=bexa.ROI(mu=(-0.2, 0.2)), downsample=(1, 1, 2, 2)).shape  # (32, 40)
 ```
 
 #### `Scan.rocking_curve`
@@ -954,6 +995,7 @@ is `"sum"`, `"mean"` or `"max"` over the window. Returns a `DataArray` named `ro
 Replaces `compute_integrated_map(roi)` of the v9 module.
 
 ```python
+# scan: the demo chi x mu scan; the intensity of a pixel window at every grid point
 curve = scan.rocking_curve(bexa.ROI(y=(20, 40), x=(30, 50)))   # dims ('chi', 'mu')
 bexa.demo("rocking").rocking_curve().dims                       # ('mu',)
 ```
@@ -969,8 +1011,9 @@ disables it); `moments=3` adds `skew_<axis>` and `moments=4` adds `kurtosis_<axi
 `xarray.Dataset`; `MotorCOM` has the formulas. Replaces `plotter.compute_center_of_mass`.
 
 ```python
+# scan: the demo chi x mu scan; the centre of mass and width of every pixel along chi and mu
 maps = scan.com(axes=("chi", "mu"), sigma=3.0)   # total, com_chi, width_chi, com_mu, width_mu
-maps["com_mu"].bexa.plot()
+maps["com_mu"].bexa.plot()                      # (Figure, Axes, AxesImage)
 ```
 
 #### `Scan.energy_com`
@@ -981,6 +1024,7 @@ scans at different monochromator energies): `com_energy` in keV per pixel, `widt
 `total`. No smoothing by default.
 
 ```python
+# series: an energy series (one scan per energy); the energy centre of mass of every pixel
 series = bexa.demo("energy")                     # dims ('energy', 'chi', 'mu', 'y', 'x')
 res = series.energy_com()
 strain = float(series.coords["energy"].mean()) / res["com_energy"] - 1
@@ -994,8 +1038,9 @@ centre of mass `frame_com_y`, `frame_com_x` in full-resolution pixels. The quick
 the reflection stays on the detector and inside the rocking range.
 
 ```python
+# scan: the demo chi x mu scan; the total, maximum and centre of every frame, on the grid
 st = scan.stats()                    # every variable has dims ('chi', 'mu')
-st["frame_sum"].sel(chi=0, method="nearest").plot()
+st["frame_sum"].sel(chi=0, method="nearest").plot()  # [Line2D]
 ```
 
 #### `Scan.preview`
@@ -1014,6 +1059,7 @@ the cache. Replaces `dataset.load_preview` of the v9 module (which used `scipy.n
 bexa takes block means).
 
 ```python
+# scan: the demo chi x mu scan; the whole scan binned 4 x 4 in the pixels, in memory
 prev = scan.preview(downsample=(1, 1, 4, 4))     # (6, 16, 16, 20)
 prev.bexa.browse()                               # one slider per motor
 fresh = scan.preview(downsample=(1, 1, 4, 4), cache=False)   # computed again, the cache untouched
@@ -1031,6 +1077,7 @@ ROI, downsampling or `reduce`. The result is a numpy array whatever `device` did
 it back instead of the raw frames.
 
 ```python
+# scan: the demo chi x mu scan; the frames themselves (a pixel window) as one array
 vol = scan.read(roi=bexa.ROI(y=(10, 50)))        # (6, 16, 40, 80) float32
 vol = scan.read(roi=bexa.ROI(y=(10, 50)), cache=True)   # the same, kept in the scan's cache for next time
 ```
@@ -1044,11 +1091,13 @@ Run several accumulators in one streaming pass. The keywords are those of
 (see "Names of the results" under `bexa.core.reductions`).
 
 ```python
+# scan: the demo chi x mu scan; several accumulators computed in one streaming pass
 res = scan.reduce(
     [bexa.acc.Sum(), bexa.acc.Projections(), bexa.acc.MotorCOM(axes=("chi", "mu"), sigma=3.0)],
     roi=bexa.ROI(y=(8, 56), x=(8, 72)),
     show_progress=True,
 )
+sorted(res.data_vars)                           # ['chi_mu', 'chi_x', 'chi_y', ..., 'xy' (13 items)]
 ```
 
 #### `Scan.batches`
@@ -1060,9 +1109,11 @@ of `iter_batches` (`batch_frames`, `dtype`, `device`, `method`, `prefetch`, `liv
 batches are sized from the memory budget and the next one is read in a background thread.
 
 ```python
+# scan: the demo chi x mu scan; its frames in batches, for a loop of your own
 peak = 0.0
 for batch in scan.batches(batch_frames=32):
     peak = max(peak, float(batch.frames.max()))
+round(float(peak), 1)                           # 3786.0
 ```
 
 #### `Scan.to_dask`
@@ -1072,8 +1123,9 @@ A lazy dask-backed `DataArray` `(frame, y, x)` of the full-resolution stack in f
 dask). `chunks` is the number of frames per chunk; `"auto"` makes chunks of about 200 MB.
 
 ```python
+# scan: the demo chi x mu scan as a lazy dask array (needs dask)
 lazy = scan.to_dask()
-lazy.sum("frame").compute()
+lazy.sum("frame").compute()                     # DataArray frames ('y', 'x') (64, 80) float32
 ```
 
 #### `Scan.refresh`
@@ -1083,7 +1135,8 @@ Re-read the metadata of a scan that is still being written (new frames, new file
 the scan. `scan.info()` then says how many grid points are still missing.
 
 ```python
-scan.refresh().structure.n_missing
+# scan: a scan whose files may have grown since it was opened (a scan still running)
+scan.refresh().structure.n_missing              # 0
 ```
 
 #### `Scan.status`
@@ -1096,6 +1149,7 @@ engine that only knows the frames reports `complete` or `aborted`. A running sca
 as its files go.
 
 ```python
+# scan: the demo chi x mu scan, complete; the state of a scan on disk
 scan.status, str(scan.status)   # (<ScanStatus.COMPLETE: 'complete'>, 'complete')
 ```
 
@@ -1114,6 +1168,7 @@ scan raises `ValueError` listing the motors the scan recorded. Layouts with a ma
 (`bexa.open(..., motors=...)` does the same at opening).
 
 ```python
+# scan: the demo chi x mu scan; the same scan read with dims chosen by hand
 angles = scan.with_dims(["chi", "mu"])          # the same dims, chosen by hand
 angles.dims, angles.recipe["motors"]            # (('chi', 'mu', 'y', 'x'), ['chi', 'mu'])
 sorted(scan.structure.per_frame)                # the channels to choose from: motors and counters
@@ -1126,7 +1181,9 @@ Close the files the source holds open. `with bexa.open(...) as scan:` calls it a
 the block.
 
 ```python
+# scan: an opened scan; its files are closed (they reopen when the scan is used again)
 scan.close()
+scan.n_frames                                   # 96
 ```
 
 #### `Scan.recipe`
@@ -1145,6 +1202,7 @@ refuses with a `ValueError`; a series within one folder, from `bexa.open(path, s
 or `Dataset.series`, has one.
 
 ```python
+# scan7: a scan opened from a folder; what reopens it the same way in a worker process
 scan7 = bexa.open(folder, scan=7)
 scan7.recipe                     # {'path': '...WS2G_100_DFXM', 'scan': 7, 'format': 'esrf_id03_bliss_2026', 'detector': None, 'overrides': None}
 again = bexa.open(**scan7.recipe, cache=False)   # the same scan, no sniffing
@@ -1167,8 +1225,8 @@ import bexa
 from bexa.core.status import FINISHED, ScanNotReadyError, ScanStatus, status_filter, worst
 from bexa.testing import make_esrf_beamtime
 
-beamtime = make_esrf_beamtime(tempfile.mkdtemp())
-ds = bexa.open_dataset(beamtime.dataset_dir, cache=False)
+beamtime = make_esrf_beamtime(tempfile.mkdtemp())  # a synthetic beamtime: complete, aborted, running and empty scans
+ds = bexa.open_dataset(beamtime.dataset_dir, cache=False)  # its scans as a Dataset
 ```
 
 #### `ScanStatus`
@@ -1182,6 +1240,7 @@ gives the lower-case word, which the table shows. How an engine decides is under
 `bexa.io.engines.hdf5_master.decide`.
 
 ```python
+# ds: a synthetic beamtime with complete, aborted, running and empty scans; the state of scan 4
 ds[4].status, str(ds[4].status)              # (<ScanStatus.ABORTED: 'aborted'>, 'aborted')
 ScanStatus("running") is ScanStatus.RUNNING  # True
 [str(s) for s in ScanStatus]                 # ['complete', 'running', 'aborted', 'empty', 'unreadable']
@@ -1197,6 +1256,7 @@ names gives exactly those. An unknown word raises `ValueError`. This is what the
 keyword of `Dataset.select_numbers` and the `--status` option of `bexa scan list` go through.
 
 ```python
+# the statuses a selection keeps, from a word, a tuple of names or "any"
 status_filter("finished") == FINISHED        # True: {COMPLETE, ABORTED}
 status_filter(("running", "empty")), status_filter("any")   # (frozenset({RUNNING, EMPTY}), None)
 ```
@@ -1209,6 +1269,7 @@ The status of a series of scans: the one that lets the least be read (`unreadabl
 `MultiScanSource` reports it for its parts.
 
 ```python
+# the status of several scans read as one: the worst of them
 worst([ScanStatus.COMPLETE, ScanStatus.RUNNING])   # <ScanStatus.RUNNING: 'running'>
 ```
 
@@ -1220,6 +1281,7 @@ and `ds[id]` for a scan with nothing to read yet: `status` is its `ScanStatus`, 
 when known. `Dataset.table` catches it and keeps a placeholder row.
 
 ```python
+# ds[6]: a scan that has just started and holds no frame yet
 try:
     ds[6]                                    # just started: no frame on disk
 except ScanNotReadyError as error:
@@ -1252,7 +1314,7 @@ from bexa.testing import make_esrf_beamtime, make_esrf_zstack
 ds = bexa.demo("zstack")   # 30 scans: at each of five samz heights, a chi x mu scan and five mu scans at 16.98 to 17.02 keV
 part2 = make_esrf_zstack(ds.path.parent, dataset="demo_zstack_2", z_values=(0.003, 0.004), energies=(17.0,))   # two more heights, in a second folder
 live = bexa.open_dataset(make_esrf_beamtime(ds.path.parent).dataset_dir, cache=False)   # scans 1-3 complete, 4 aborted, 5 running, 6 just started
-folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"
+folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"  # a dataset folder (the synthetic z-stack stands in for it)
 ```
 
 #### `open_dataset`
@@ -1264,6 +1326,7 @@ dataset (one table, ids running over all of them); `profile=` with `sample=` (or
 instead of a path, as for `bexa.open`. The keywords are those of `Dataset`.
 
 ```python
+# folder: a dataset folder (the synthetic z-stack); every scan of it as one Dataset
 ds = bexa.open_dataset(folder)
 ds = bexa.open_dataset(profile="hc6293", sample="WS2G_100")
 both = bexa.open_dataset([ds.path, part2.dataset_dir], cache="bexa_cache")   # a measurement continued in a second folder; the cache in ./bexa_cache
@@ -1292,6 +1355,7 @@ scans are then opened by that spec's name. Scans are opened once and their handl
 - `problems`: property, `{id: reason}` for the scans the table could not read (see `table`).
 
 ```python
+# ds: the z-stack dataset; how many scans, their ids, one scan or several by id
 len(ds), ds.scans[:3]            # 30, [1, 2, 3]
 first, layers = ds[1], ds[[1, 7, 13]]
 len(both), both.scans[-1]        # 34 scans over two folders: ids 0 to 33
@@ -1316,7 +1380,8 @@ followers of a motor that steps (`samz` when `uz` does; the spec's `motors.coupl
 complete: what a notebook shows.
 
 ```python
-ds.table()[["id", "type", "motors", "energy_keV", "samz"]]
+# ds: the z-stack dataset; one row per scan with its type, motors, energy and positioners
+ds.table()[["id", "type", "motors", "energy_keV", "samz"]]  # DataFrame: 30 rows x 5 columns (id, type, motors, energy_keV, samz)
 both.table(compact=True)         # id, dataset, scan, type, ..., energy_keV, ccmth, chi, samz, z1
 live.table()[["id", "status", "frames", "missing"]]   # 1-3 complete, 4 aborted (19 of 24), 5 running (15), 6 running (0)
 live.problems                    # {6: 'scan 6 of beamtime is running: no frame to read yet'}
@@ -1328,7 +1393,9 @@ live.problems                    # {6: 'scan 6 of beamtime is running: no frame 
 The table as text, with the folder and the number of scans on top.
 
 ```python
+# ds: the z-stack dataset; the table as text with the folder on top
 print(ds.info())
+ds.info().splitlines()[0]                       # 'hc6293/WS2G_100/WS2G_100_DFXM: 30 scans in C:\\Users\\sport...'
 ```
 
 #### `Dataset.select_numbers`
@@ -1344,8 +1411,9 @@ keyword names a table column with a value (matched within 1e-9) or an inclusive 
 range, `energy_keV` included, and `dataset` (a folder name) for several folders.
 
 ```python
+# ds: the z-stack dataset; the ids of the scans that match a type, a positioner, a test
 ds.select_numbers(type="fscan2d")                   # [1, 7, 13, 19, 25]
-ds.select_numbers(type="fscan1d", samz=(-0.0015, 0.0015), where=lambda row: row["energy_keV"] > 17.005)
+ds.select_numbers(type="fscan1d", samz=(-0.0015, 0.0015), where=lambda row: row["energy_keV"] > 17.005)  # [11, 12, 17, 18, 23, 24]
 both.select_numbers(dataset="demo_zstack_2")        # [30, 31, 32, 33]: the scans of the second folder
 live.select_numbers()                               # [1, 2, 3, 4]: the finished scans; 5 and 6 are still running
 live.select_numbers(status="complete"), live.select_numbers(status="any")   # ([1, 2, 3], [1, 2, 3, 4, 5, 6])
@@ -1357,7 +1425,9 @@ live.select_numbers(status="complete"), live.select_numbers(status="any")   # ([
 The scans of `select_numbers`, opened: a list of `Scan`.
 
 ```python
+# ds: the z-stack dataset; the chi x mu scans as opened Scan handles
 layers = ds.select(type="fscan2d")              # one mosaicity scan per height
+[s.source.scan for s in ds.select(type="fscan2d", samz=(-0.0015, 0.0015))]  # [7, 13, 19]
 ```
 
 #### `Dataset.series`
@@ -1369,6 +1439,7 @@ scan has its own energy; sorted by energy), `"scan"` (the ids) or a positioner s
 `select_numbers`, and may span the folders of the dataset (`combine_sources` stacks the parts).
 
 ```python
+# ds: the z-stack dataset; several scans read as one along a new dim (energy, height)
 energy = ds.series(type="fscan1d", samz=0.0)    # dims ('energy', 'mu', 'y', 'x')
 zstack = ds.series(type="fscan2d", dim="samz")  # dims ('samz', 'chi', 'mu', 'y', 'x')
 heights = both.series(type="fscan2d", dim="samz")   # the seven heights of both folders as one scan
@@ -1381,7 +1452,9 @@ heights = both.series(type="fscan2d", dim="samz")   # the seven heights of both 
 z-stack. The selection works as in `select_numbers`.
 
 ```python
+# ds: the z-stack dataset; the chi x mu scans grouped by the height they were taken at
 ds.groups("samz", type="fscan2d")   # {-0.002: [1], -0.001: [7], 0.0: [13], 0.001: [19], 0.002: [25]}
+ds.groups("energy_keV", type="fscan1d", samz=0.0)  # {16.98: [14], 16.99: [15], 17.0: [16], 17.01: [17], 17.02: [18]}
 ```
 
 #### `Dataset.varying`
@@ -1394,6 +1467,7 @@ its grid on. `axes` names the dims by hand instead, `ignore` names positioners t
 axes (see `varying`).
 
 ```python
+# ds: the z-stack dataset; what differs between the chosen scans (the stack axes)
 ds.varying(type="fscan2d")                       # {'samz': array([-0.002, -0.001, 0., 0.001, 0.002])}
 ds.varying(type="fscan1d", samz=0.0)             # {'energy': array([16.98, 16.99, 17., 17.01, 17.02])}
 ds.varying(type="fscan1d")                       # {'samz': ..., 'energy': ...}: a z-stack at every energy
@@ -1410,6 +1484,7 @@ that is still running opens and reads as far as its files go; one with nothing t
 which names its status.
 
 ```python
+# ds: the z-stack dataset; one scan by id; live: a beamtime with a scan still running
 scan = ds.scan(13)
 live[5].status, live[5].n_frames             # (<ScanStatus.RUNNING: 'running'>, 15): readable so far
 try:
@@ -1427,7 +1502,8 @@ new scans appear, the scans that were running, empty or unreadable are read anew
 change any more). `everything=True` closes and forgets every scan.
 
 ```python
-ds.refresh().scans
+# ds, live: datasets whose folders may hold new or finished scans since they were opened
+ds.refresh().scans                              # [1, 2, 3, ..., 30 (30 items)]
 live.refresh().table()["status"].tolist()    # the running scans read again; the others as before
 ```
 
@@ -1439,6 +1515,7 @@ built) and return their number; 0 without a cache. The notebook's "clear the cac
 recompute" switch.
 
 ```python
+# both: a dataset with a cache folder; every cached result of it removed
 both.clear_cache()               # the number of cached files deleted
 ```
 
@@ -1448,7 +1525,9 @@ both.clear_cache()               # the number of cached files deleted
 Close every scan the dataset opened. `with bexa.open_dataset(...) as ds:` calls it at the end.
 
 ```python
+# ds: an opened dataset; the files of every opened scan closed
 ds.close()
+len(ds)                                         # 30
 ```
 
 #### `Dataset.problems`
@@ -1459,6 +1538,7 @@ be read (still running without a frame, empty, unreadable), the reason being the
 empty when every scan could be read. Rebuilt with the table.
 
 ```python
+# live: a beamtime with a scan too young to read; why its row is a placeholder
 live.problems                    # {6: 'scan 6 of beamtime is running: no frame to read yet'}
 ```
 
@@ -1475,7 +1555,8 @@ to `uz`). The scan picker's motor buttons are built from it; see
 `bexa.core.scan_table.motor_candidates`.
 
 ```python
-{n: tuple(c) for n, c in ds.motor_candidates(type="fscan1d").items()}
+# ds: the z-stack dataset; the motors its energy series could be read along
+{n: tuple(c) for n, c in ds.motor_candidates(type="fscan1d").items()}  # {'mu': (8, 'scan', True), 'samz': (5, 'stack', True), 'energy': (5, 'stack', True), 'cc...
 # {'mu': (8, 'scan', True), 'samz': (5, 'stack', True), 'energy': (5, 'stack', True), 'ccmth': (5, 'stack', False)}
 ds.motor_candidates(type="fscan2d")["samz"]      # MotorCandidate(n_values=5, where='stack', default=True)
 ds.motor_candidates([])                          # {}
@@ -1504,6 +1585,7 @@ the scans and the automatic choice is not what was measured. `Dataset.varying` c
 selection.
 
 ```python
+# the function behind Dataset.varying, on a list of opened scans
 from bexa.core.dataset import varying
 
 varying(ds.select(type="fscan2d"))               # {'samz': array([-0.002, -0.001, 0., 0.001, 0.002])}
@@ -1527,6 +1609,7 @@ keeps it. `dims` limits the answer to some motors
 onto this grid, and `stack` does so by itself.
 
 ```python
+# two scans of the same motors on different grids (a coarse and a fine one)
 from bexa.testing import make_esrf_scan
 
 coarse = make_esrf_scan(ds.path.parent, dataset="grids", scan=1, motors=(("chi", 3), ("mu", 6)), ranges={"mu": (-1.0, 1.0)}, n_files=1)
@@ -1546,6 +1629,7 @@ the variable's own range; variables without those dims, the maps, come back as t
 attrs are kept.
 
 ```python
+# curves: the per-frame totals of the coarse scan; grid: the common grid of both scans
 curves = two[0].reduce([bexa.acc.FrameStats()], device="cpu")   # (chi, mu) on the coarse grid
 on_grid = bexa.regrid(curves, grid)                             # (chi, mu) on the common grid
 on_grid["frame_sum"].sizes["mu"], bool(on_grid["frame_sum"].isnull().values[:, -1].all())   # (14, True): nothing beyond mu = 1
@@ -1606,6 +1690,7 @@ never touched. Replaces the layer loop of `betterCOM_stitchingZ`.
   reads everything it shows from such a stack.
 
 ```python
+# ds: the z-stack dataset; the chi x mu scans reduced and stacked on the height axis
 stack = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Sum(), bexa.acc.MotorCOM(axes=("mu",))], dim="auto")
 stack["com_mu"].dims, stack.attrs["stack_dims"]            # ('samz', 'y', 'x'), ['samz']
 grid = bexa.stack(ds.select(type="fscan1d"), [bexa.acc.Sum()], dim="auto")   # 25 mu scans: five heights at five energies
@@ -1639,9 +1724,9 @@ from bexa.core.scan_table import (FIXED_COLUMNS, LEAD_COLUMNS, MotorCandidate, a
 from bexa.core.status import ScanStatus
 from bexa.testing import make_esrf_beamtime
 
-beamtime = make_esrf_beamtime(tempfile.mkdtemp())
-ds = bexa.open_dataset(beamtime.dataset_dir, cache=False)
-scan = ds[1]
+beamtime = make_esrf_beamtime(tempfile.mkdtemp())  # a synthetic beamtime: complete, aborted, running and empty scans
+ds = bexa.open_dataset(beamtime.dataset_dir, cache=False)  # its scans as a Dataset
+scan = ds[1]                                    # a complete chi x mu scan of it
 ```
 
 #### `scan_row`
@@ -1652,6 +1737,7 @@ folders), `scan` (its number), `status`, `type`, `title`, `motors`, `shape`, `ra
 `missing`, `energy_keV`, then every scalar positioner of its structure.
 
 ```python
+# scan: scan 1 of the synthetic beamtime; its table row
 row = scan_row(scan, 1, 1)
 row["status"], row["motors"], row["frames"]      # ('complete', 'chi x mu', 24)
 ```
@@ -1663,7 +1749,9 @@ The row of a scan that cannot be read yet: its `status`, empty text columns, 0 f
 energy, so that it sits in the table next to the others.
 
 ```python
+# the row of a scan that cannot be read yet: its status and nothing else
 placeholder_row(6, 6, ScanStatus.RUNNING)["status"]   # 'running'
+placeholder_row(6, 6, ScanStatus.EMPTY, dataset="beamtime")["dataset"]  # 'beamtime'
 ```
 
 #### `arrange`
@@ -1674,6 +1762,7 @@ The rows as a DataFrame in the table's column order: `LEAD_COLUMNS` (`id`, `data
 `missing`), `energy_keV`, then the positioners sorted by name.
 
 ```python
+# rows of three scans put in the table's column order
 table = arrange([scan_row(ds[n], n, n) for n in (1, 2, 3)])
 list(table.columns[:5])                          # ['id', 'scan', 'status', 'type', 'title']
 ```
@@ -1690,6 +1779,7 @@ energy column as `energy`; aliases such as `z1` beside `samz` counted once), pre
 otherwise. `Dataset.motor_candidates` calls it.
 
 ```python
+# scan: scan 1 of the synthetic beamtime; the motors it and the table could be read along
 motor_candidates(scan, ds.table(), [])           # {'chi': MotorCandidate(n_values=3, where='scan', default=True), 'mu': MotorCandidate(n_values=8, where='scan', default=True)}
 ```
 
@@ -1700,6 +1790,7 @@ A named tuple: the distinct values a motor takes, `where` it moves (`"scan"`: wi
 `"stack"`: between the scans) and whether a reader takes it by default.
 
 ```python
+# one candidate: five values, between the scans, pressed by default
 MotorCandidate(5, "stack", True).default        # True
 ```
 
@@ -1712,6 +1803,7 @@ leader drives (`motors.coupled`), a drift below `motors.min_step`, `missing` whe
 missing frames and `status` when every scan is complete.
 
 ```python
+# ds: the synthetic beamtime; the columns a compact table leaves out
 dropped = compact_columns(ds.table(), scan.spec)
 "ccmth" in dropped, "status" in dropped          # (True, False): one scan is running
 ```
@@ -1723,6 +1815,7 @@ dropped = compact_columns(ds.table(), scan.spec)
 step between two scans is the motor's drift, not a move.
 
 ```python
+# the smallest move of a motor that counts as a step (the spec's motors.min_step)
 min_steps(scan.spec)["uz"]                       # 0.0005: half a micron for the ID03 stage
 ```
 
@@ -1733,6 +1826,7 @@ min_steps(scan.spec)["uz"]                       # 0.0005: half a micron for the
 motor drives (`uz` moves `samz`), counted once by `varying` and the compact table.
 
 ```python
+# the motors a stepping leader drives (the spec's motors.coupled)
 followers(scan.spec)["uz"][:3]                   # ['samx', 'samy', 'samz']
 ```
 
@@ -1757,7 +1851,7 @@ import bexa
 from bexa.core import stacks
 
 ds = bexa.open_dataset(bexa.demo("zstack").path, cache=tempfile.mkdtemp())   # the demo z-stack, with a disk cache
-stacked = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Preview()], dim="auto", downsample=2, store=True)
+stacked = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Preview()], dim="auto", downsample=2, store=True)  # the previews of the chi x mu scans, stacked on disk
 vol = stacked["preview"]                 # (samz, chi, mu, y, x) = (5, 6, 15, 20, 24), in a cache file, read block by block
 ```
 
@@ -1772,6 +1866,7 @@ report, default every dim but the last two; the totals are summed over the other
 `browser.update(**peak)`. Dims not in front of the image raise `ValueError`.
 
 ```python
+# vol: the previews of a z-stack, on disk; the condition that lights the volume up
 stacks.brightest(vol)                                   # {'samz': 1, 'chi': 2, 'mu': 6}: the brightest frame
 peak = stacks.brightest(vol, over=("chi", "mu"))        # {'chi': 2, 'mu': 6}: the condition that lights up every height
 vol.transpose("chi", "mu", "samz", "y", "x").bexa.browse_volume().update(**peak)
@@ -1789,6 +1884,7 @@ sample of 64 frames spread evenly over the leading dims. `log=True` returns the 
 `log10(1 + I)`, as the browsers show the data. `(0, 1)` when nothing is finite.
 
 ```python
+# vol: the previews of a z-stack, on disk; one colour scale for every frame of it
 stacks.shared_limits(vol)                        # (10.0, 2091.95): from the stored percentiles, no frame read
 stacks.shared_limits(vol, 5, 99.5, log=True)     # (1.0414, 3.3208): limits of log10(1 + I)
 ```
@@ -1808,6 +1904,7 @@ memory, named `total_<name>`, with attrs `summed_over`, `binning` and `method`; 
 not in front of the image raises `ValueError`.
 
 ```python
+# maps: the summed images of a z-stack; the intensity per voxel of the whole sample
 maps = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Sum()], dim="auto", store=True)   # (samz, y, x) summed images
 total = stacks.total_volume(maps["sum"], keep="samz", downsample=2)   # (5, 20, 24): the total intensity per voxel, binned by 2
 total.attrs["summed_over"], float(total.sel(samz=0.0).sum())           # ([], 982299.2): nothing else to sum here; its total at samz = 0
@@ -1825,6 +1922,7 @@ visits only that many frames, spread evenly, and leaves the others NaN: enough f
 limits, not for `brightest`.
 
 ```python
+# vol: a stack with per-frame statistics in its attrs; plain: the same file without them
 st = stacks.block_stats(vol)                     # from the attrs: total, p1, p99 of shape (5, 6, 15)
 plain = bexa.io.cube.open_lazy(stacked.attrs["lazy_file"])["preview"]   # opened again: no statistics in its attrs
 np.isfinite(stacks.block_stats(plain, max_frames=16)["p99"]).sum()       # 16: that many frames read, the rest NaN
@@ -1838,6 +1936,7 @@ with `store=`); an `isel` of it is still lazy (`.values` reads that block), `.lo
 into an in-memory array.
 
 ```python
+# vol: a volume read from the cache file block by block; a block of it; the block loaded
 stacks.is_lazy(vol), stacks.is_lazy(vol.isel(samz=0)), stacks.is_lazy(vol.isel(samz=0).load())   # (True, True, False)
 ```
 
@@ -1856,8 +1955,8 @@ as `roi=` to the verbs, `preview`, `read`, `reduce` and `stack`, or set `scan.ro
 ```python
 import bexa
 
-scan = bexa.demo("mosa")
-prev = scan.preview(downsample=4)
+scan = bexa.demo("mosa")                        # chi x mu scan, 6 x 16 frames of 64 x 80 pixels
+prev = scan.preview(downsample=4)               # the scan binned 4 x 4 in the pixels
 ```
 
 #### `ROI`
@@ -1893,10 +1992,11 @@ Converting:
 - `to_dict()` and `ROI.from_dict(data)`: a plain dict for YAML and JSON, and back.
 
 ```python
+# a pixel window plus a motor range, and the ROI changed, range by range
 roi = bexa.ROI(y=(700, 1100), x=(800, 1200), chi=(0, 8))
-roi.set("mu", (-0.2, 0.2)).clear("chi")
+roi.set("mu", (-0.2, 0.2)).clear("chi")         # ROI(y=(700, 1100), x=(800, 1200), mu=(-0.2, 0.2))
 roi.pixel_slices((2160, 2560))                    # (slice(700, 1100), slice(800, 1200))
-bexa.ROI(mu=(-0.1, 0.1)).describe(scan.structure)
+bexa.ROI(mu=(-0.1, 0.1)).describe(scan.structure)  # 'ROI: mu -0.1 to 0.1 (values) -> grid (6, 2), 12 frames'
 bexa.ROI(mu=(2, 10), index_dims=["mu"]).motor_region(scan.structure)   # (slice(None), slice(2, 10))
 bexa.ROI(y=(10, 20), x=(5, 15)).from_downsampled((4, 4))               # ROI(y=(40, 80), x=(20, 60))
 bexa.ROI.from_dict(roi.to_dict()) == roi          # True
@@ -1910,7 +2010,9 @@ motor bounds numbers, a missing bound (`x=800:`) means "to the edge", and empty 
 gives an empty ROI. The `--roi` option of the `bexa scan` commands uses it.
 
 ```python
+# the same ROI from the text the command line takes
 roi = bexa.ROI.parse("y=700:1100,x=800:,chi=-0.2:0.2")
+roi                                             # ROI(y=(700, 1100), x=(800, None), chi=(-0.2, 0.2))
 ```
 
 #### `ROI.from_indices`
@@ -1922,7 +2024,9 @@ back. Plain arrays are taken as full resolution; motor ranges pass through uncha
 `image.bexa.roi(y=..., x=...)` calls it.
 
 ```python
+# prev: a binned preview; a window given in its own pixels, kept as full-resolution pixels
 peak = bexa.ROI.from_indices(prev, y=(5, 10), x=(2, 8))   # ROI(y=(20, 40), x=(8, 32)) at 4 x 4
+bexa.ROI.from_indices(prev, mu=(2, 6))          # ROI(mu=(2, 6))
 ```
 
 #### `ROI.to_indices`
@@ -1932,8 +2036,10 @@ The inverse of `from_indices`: `(slice_y, slice_x)` of this ROI in the pixel ind
 `image`, for cutting a preview or overlaying the ROI on it.
 
 ```python
+# peak: an ROI in full-resolution pixels; the slices that cut it out of the binned preview
 ys, xs = peak.to_indices(prev)
 cut = prev[..., ys, xs]
+cut.shape                                       # (6, 16, 5, 6)
 ```
 
 `PIXEL_DIMS = ("y", "x")` names the pixel dims everywhere in bexa.
@@ -1976,7 +2082,7 @@ import numpy as np
 import bexa
 
 scan = bexa.demo("mosa")                      # dims ('chi', 'mu', 'y', 'x'), shape (6, 16, 64, 80)
-window = bexa.ROI(y=(8, 56), x=(8, 72))
+window = bexa.ROI(y=(8, 56), x=(8, 72))         # a pixel window inside the frame
 ```
 
 #### `reduce`
@@ -2009,6 +2115,7 @@ in at the same time, one thread each (numpy and scipy release the GIL), so a `Su
 one stream runs them in turn.
 
 ```python
+# scan: the demo chi x mu scan; window: a pixel ROI; two accumulators in one pass
 res = bexa.reduce(scan, [bexa.acc.Sum, bexa.acc.MotorCOM(axes=("mu",))], roi=window, device="cpu")
 list(res)                                     # ['sum', 'total', 'com_mu', 'width_mu']
 ```
@@ -2020,7 +2127,9 @@ The summed image `(y, x)` over the frames of the plan, named `sum`, with the num
 its attrs (`n_frames`).
 
 ```python
+# scan: the demo chi x mu scan; the summed image
 res = scan.reduce([bexa.acc.Sum()])
+res["sum"].dims, float(res["sum"].max())        # (('y', 'x'), 28060.0)
 ```
 
 #### `Mean`
@@ -2029,7 +2138,9 @@ res = scan.reduce([bexa.acc.Sum()])
 The mean frame `(y, x)`, named `mean`.
 
 ```python
+# scan: the demo chi x mu scan; the mean frame
 res = scan.reduce([bexa.acc.Mean()])
+res["mean"].dims, float(res["mean"].max())      # (('y', 'x'), 292.29)
 ```
 
 #### `Max`
@@ -2038,7 +2149,9 @@ res = scan.reduce([bexa.acc.Mean()])
 The pixel-wise maximum over the frames `(y, x)`, named `max`.
 
 ```python
+# scan: the demo chi x mu scan; the brightest value of every pixel
 res = scan.reduce([bexa.acc.Max()])
+res["max"].dims, float(res["max"].max())        # (('y', 'x'), 3786.0)
 ```
 
 #### `Min`
@@ -2047,7 +2160,9 @@ res = scan.reduce([bexa.acc.Max()])
 The pixel-wise minimum over the frames `(y, x)`, named `min`.
 
 ```python
+# scan: the demo chi x mu scan; the darkest value of every pixel
 res = scan.reduce([bexa.acc.Min()])
+res["min"].dims, float(res["min"].min())        # (('y', 'x'), 10.0)
 ```
 
 #### `Preview`
@@ -2069,6 +2184,7 @@ its cache key. The volume is checked against the memory budget before it is allo
 downsample, an ROI or `bexa.stack(..., store=True)`). `scan.preview` and `scan.read` use it.
 
 ```python
+# scan: the demo chi x mu scan; the whole scan binned in the pixels, from the pass
 vol = scan.reduce([bexa.acc.Preview(apply_log=True)], downsample=(1, 1, 4, 4))["preview"]
 res = scan.reduce([bexa.acc.Preview(downsample=4), bexa.acc.Sum(), bexa.acc.MotorCOM(axes=("mu",))])   # one pass, two resolutions
 res["preview"].dims, res["preview"].shape, res["sum"].shape    # ('chi', 'mu', 'yb', 'xb'), (6, 16, 16, 20), (64, 80)
@@ -2084,6 +2200,7 @@ one pixel axis) and, for two or more motors, `<motor_i>_<motor_j>` (for example 
 Replaces `plotter.plot_projections`; `bexa.viz.volume.projections_panel` draws them.
 
 ```python
+# scan: the demo chi x mu scan; its projections onto every pair of axes
 proj = scan.reduce([bexa.acc.Projections()])
 proj["mu_x"].dims, proj["chi_mu"].dims        # ('mu', 'x'), ('chi', 'mu')
 ```
@@ -2097,6 +2214,7 @@ or a single ROI, named `roi`). `method` is `"sum"`, `"mean"` or `"max"` over the
 `scan.rocking_curve` uses it.
 
 ```python
+# scan: the demo chi x mu scan; the intensity of two pixel windows at every grid point
 res = scan.reduce([bexa.acc.RoiIntegral({"peak": bexa.ROI(y=(20, 40), x=(30, 50)), "bg": bexa.ROI(y=(0, 8))})])
 res["roi_peak"].dims                          # ('chi', 'mu')
 ```
@@ -2127,6 +2245,7 @@ take 1.6 s on the CPU (4.9 s before the threads and the dropped copy) and 0.6 s 
 (1.4 s before). `scan.com` uses it. Replaces the per-pixel loops of the `betterCOM*` notebooks.
 
 ```python
+# scan: the demo chi x mu scan; window: a pixel ROI; moments of every pixel's rocking curve
 res = scan.reduce([bexa.acc.MotorCOM(axes=("chi", "mu"), sigma=3.0, moments=4)], roi=window)
 res["com_mu"].attrs["units"]                  # 'deg'
 ```
@@ -2139,8 +2258,10 @@ given: `com_energy` (keV), `width_energy` and `total`. The keywords are those of
 except `axes`. `scan.energy_com` uses it.
 
 ```python
+# series: an energy series (one scan per energy); the energy centre of mass of every pixel
 series = bexa.demo("energy")
 res = series.reduce([bexa.acc.Sum(), bexa.acc.EnergyCOM(), bexa.acc.MotorCOM(axes=("mu",))])
+sorted(res.data_vars)                           # ['com_energy', 'com_mu', 'sum', 'total', 'width_energy', 'width_mu']
 ```
 
 #### `ArgmaxMotor`
@@ -2151,7 +2272,9 @@ value, `peak`: a robust alternative to the centre of mass when the rocking curve
 peaks. `axis` defaults to the last (fastest) motor dim.
 
 ```python
+# scan: the demo chi x mu scan; the mu at which every pixel is brightest
 res = scan.reduce([bexa.acc.ArgmaxMotor(axis="mu")])      # argmax_mu, peak
+scan.reduce([bexa.acc.ArgmaxMotor(axis="chi")])["argmax_chi"].dims  # ('y', 'x')
 ```
 
 #### `FrameStats`
@@ -2162,7 +2285,9 @@ Per-frame sum, mean, maximum and detector centre of mass on the motor grid: `fra
 `scan.stats` uses it.
 
 ```python
+# scan: the demo chi x mu scan; window: a pixel ROI; the total and centre of every frame
 res = scan.reduce([bexa.acc.FrameStats()], roi=window)
+sorted(res.data_vars), res["frame_sum"].dims    # (['frame_com_x', 'frame_com_y', 'frame_max', 'frame_mean', 'frame_sum'], ('chi', 'mu'))
 ```
 
 #### `Histogram`
@@ -2173,7 +2298,9 @@ with a `value` coordinate at the bin centres. `range=(low, high)` fixes the bins
 they span the values of the first batch.
 
 ```python
+# scan: the demo chi x mu scan; the histogram of every pixel value of the scan
 hist = scan.reduce([bexa.acc.Histogram(bins=64, range=(0, 5000))])["histogram"]
+scan.reduce([bexa.acc.Histogram()])["histogram"].size  # 256
 ```
 
 #### `OnOffSplit`
@@ -2185,6 +2312,7 @@ the per-frame channel in `scan.structure.per_frame` that holds 1 (on) or 0 (off)
 `laser_flag` for PAL-XFEL point files. The results are prefixed `on_` and `off_`.
 
 ```python
+# pal: a PAL-XFEL run with a laser flag per shot; the laser-on and laser-off sums
 from bexa.testing.synthetic import make_pal_run
 
 pal = bexa.open(make_pal_run("pal_data", run=42).measurement_dir)
@@ -2206,6 +2334,7 @@ how `examples/13_esrf_dfxm_general.ipynb` gets the maps and curves of its `ROIS`
 records the regions and the inner accumulators, so cached results tell them apart.
 
 ```python
+# scan: the demo chi x mu scan; the same accumulators inside two regions, one pass
 rois = {"edge": bexa.ROI(x=(0, 32)), "tight": bexa.ROI(chi=(-0.2, 0.2), mu=(-0.5, 0.5))}
 res = scan.reduce([bexa.acc.PerRoi(rois, [bexa.acc.Sum(), bexa.acc.FrameStats(), bexa.acc.MotorCOM(axes=("mu",), sigma=0)])])
 res["edge_sum"].dims, res["tight_frame_sum"].dims, res["tight_com_mu"].dims   # (('y', 'edge_x'), ('tight_chi', 'tight_mu'), ('y', 'x'))
@@ -2234,6 +2363,7 @@ keeps everything a fresh pass needs in attributes set by `__init__` (what `_allo
 left out, and `xp` is numpy again after unpickling).
 
 ```python
+# an accumulator of your own, registered under a name and used like the built-in ones
 from bexa.core.registry import register_accumulator
 
 @register_accumulator("squared_sum")
@@ -2261,6 +2391,7 @@ window, and the downsampled grid. Returns a `Plan`. Motor downsampling keeps eve
 point; the request takes every form `parse_downsample` does, a mapping by name included.
 
 ```python
+# scan: the demo chi x mu scan; what one pass will read: the frames, the window, the binning
 from bexa.core.reductions import make_plan
 
 plan = make_plan(scan.structure, bexa.ROI(y=(0, 32), mu=(-0.5, 0.5)), (1, 1, 2, 2))
@@ -2284,8 +2415,9 @@ grid itself as a `Structure`, for plans within this one (`PerRoi`).
 - `all_coords()`: motor and pixel coordinates together.
 
 ```python
-plan.grid_positions(plan.frame_ids[:3]), plan.motor_values("mu", plan.frame_ids[:3])
-plan.describe()
+# plan: the pass over a motor and pixel window, binned 2 x 2; its frames and grid
+plan.grid_positions(plan.frame_ids[:3]), plan.motor_values("mu", plan.frame_ids[:3])  # ((array(list of 3), array(list of 3)), array(list of 3))
+plan.describe()                                 # {'window': [0, 32, 0, 80], 'downsample': [1, 1, 2, 2], 'grid': [6, 8], 'n_frames': 48, ...
 ```
 
 #### `Window`
@@ -2297,6 +2429,7 @@ downsampling. `full_shape` and `shape` (properties) are its size before and afte
 is what the `y` and `x` coordinates of every result hold.
 
 ```python
+# plan: the pass of make_plan; the pixel window it reads, before and after binning
 plan.window.full_shape, plan.window.shape, plan.window.coords()["x"][:3]   # (32, 80), (16, 40), [0 2 4]
 ```
 
@@ -2312,6 +2445,7 @@ point, so k times fewer frames are read; a pixel factor bins blocks of pixels. A
 raises with the expected forms.
 
 ```python
+# scan: the demo chi x mu scan; a downsample given as one factor, a tuple or by name
 from bexa.core.reductions import parse_downsample
 
 parse_downsample(4, scan.structure)             # ((1, 1), (4, 4))
@@ -2328,6 +2462,7 @@ Downsample the last two axes of a numpy or cupy array by integer factors, combin
 `bexa.analysis.preprocess.bin_spatial` wraps it.
 
 ```python
+# a (10, 64, 80) array binned 4 x 4 in the pixels
 from bexa.core.reductions import block_reduce
 
 small = block_reduce(np.ones((10, 64, 80), np.float32), 4, 4)   # (10, 16, 20)
@@ -2346,6 +2481,7 @@ the reading thread only reads: on a share delivering 1 GB/s the conversion in th
 halved the reading speed. `Scan.batches` calls it.
 
 ```python
+# scan: the demo chi x mu scan; plan: its pass; the frames in batches of 16
 from bexa.core.reductions import iter_batches
 
 for batch in iter_batches(scan.source, plan, batch_frames=16):
@@ -2362,6 +2498,7 @@ out the pauses of a network file system while the frames keep being processed, a
 that many batches of host memory.
 
 ```python
+# how many batches are read ahead of the accumulators, for a batch of a given size
 from bexa.core.reductions import prefetch_depth
 
 prefetch_depth(10**6), prefetch_depth(10**15)    # (8, 2): tiny batches go deep, huge ones stay at two
@@ -2383,9 +2520,9 @@ saving one call away. The accessor is registered when `bexa.core.scan`,
 ```python
 import bexa
 
-scan = bexa.demo("mosa")
-res = scan.com(axes=("chi", "mu"))
-prev = scan.preview(downsample=(1, 1, 4, 4))
+scan = bexa.demo("mosa")                        # chi x mu scan, 6 x 16 frames of 64 x 80 pixels
+res = scan.com(axes=("chi", "mu"))              # com_chi, com_mu, width_chi, width_mu, total per pixel
+prev = scan.preview(downsample=(1, 1, 4, 4))    # DataArray (chi, mu, y, x) = (6, 16, 16, 20)
 ```
 
 #### `ArrayAccessor`
@@ -2394,6 +2531,7 @@ prev = scan.preview(downsample=(1, 1, 4, 4))
 `DataArray.bexa`. xarray creates it on first access; its methods follow.
 
 ```python
+# res: the COM maps of the demo scan; the .bexa accessor of one map
 res["com_mu"].bexa             # the accessor of one map
 ```
 
@@ -2406,8 +2544,9 @@ percentile limits, a curve, projections of a volume); `kind` forces one, and the
 the plotting function. Returns what that function returns.
 
 ```python
-res["com_mu"].bexa.plot()
-scan.sum().bexa.plot(log=True, title="summed")
+# res: the COM maps of the demo scan; the figure that fits the map
+res["com_mu"].bexa.plot()                       # (Figure, Axes, AxesImage)
+scan.sum().bexa.plot(log=True, title="summed")  # (Figure, Axes, AxesImage)
 ```
 
 #### `ArrayAccessor.browse`
@@ -2417,7 +2556,8 @@ scan.sum().bexa.plot(log=True, title="summed")
 (`bexa.viz.interactive.browse`).
 
 ```python
-prev.bexa.browse()
+# prev: a preview (chi, mu, y, x); sliders over chi and mu
+prev.bexa.browse()                              # Browser
 ```
 
 #### `ArrayAccessor.browse_volume`
@@ -2428,8 +2568,9 @@ isosurface), with a slider for every dim in front of them (`bexa.viz.interactive
 a stack built with `store=True` is read one block per move.
 
 ```python
+# stack: the summed images of a z-stack (samz, y, x); the volume with its projections
 stack = bexa.stack(bexa.demo("zstack").select(type="fscan2d"), [bexa.acc.Sum()], dim="samz")
-stack["sum"].bexa.browse_volume()
+stack["sum"].bexa.browse_volume()               # VolumeBrowser
 ```
 
 #### `ArrayAccessor.roi`
@@ -2439,7 +2580,9 @@ stack["sum"].bexa.browse_volume()
 a preview), returned in full-resolution pixels (`ROI.from_indices`).
 
 ```python
+# prev: a binned preview; an ROI in its own pixels, as ROI.from_indices
 peak = prev.bexa.roi(y=(5, 10), x=(2, 8))        # ROI(y=(20, 40), x=(8, 32))
+prev.bexa.roi(x=(2, 8))                         # ROI(x=(8, 32))
 ```
 
 #### `ArrayAccessor.render`
@@ -2450,7 +2593,9 @@ follow the intensity (`bexa.viz.volume.render`; needs plotly). Show it in a note
 `bexa.notebook.show_plotly`.
 
 ```python
+# stack: the summed images of a z-stack; a plotly rendering in micrometres
 fig = stack["sum"].bexa.render(spacing=(10, 0.235, 0.235), units="um")
+fig.layout.scene.xaxis.title.text               # 'x (um)'
 ```
 
 #### `ArrayAccessor.browse_render`
@@ -2461,8 +2606,9 @@ dim in front of them gets a slider; the block is rendered again when a slider is
 (`bexa.viz.interactive.browse_render`).
 
 ```python
+# layers: the previews of a z-stack; sliders over chi and mu, one rendering per move
 layers = bexa.demo("zstack").series(type="fscan2d", dim="samz").preview(downsample=2)
-layers.transpose("chi", "mu", "samz", "y", "x").bexa.browse_render(mode="translucent")
+layers.transpose("chi", "mu", "samz", "y", "x").bexa.browse_render(mode="translucent")  # RenderBrowser
 ```
 
 #### `ArrayAccessor.save`
@@ -2472,7 +2618,8 @@ layers.transpose("chi", "mu", "samz", "y", "x").bexa.browse_render(mode="translu
 provenance kept) and return the path.
 
 ```python
-res["com_mu"].bexa.save("com_mu.h5")
+# res: the COM maps of the demo scan; one map to a bexa HDF5 file
+res["com_mu"].bexa.save("com_mu.h5")            # Path('.../com_mu.h5')
 ```
 
 #### `DatasetAccessor`
@@ -2485,8 +2632,9 @@ res["com_mu"].bexa.save("com_mu.h5")
 - `save(path, **kwargs)`: `bexa.save` of the whole dataset.
 
 ```python
+# res: the COM maps of the demo scan; the panel of every map, and the file of all of them
 res.bexa.plot()                  # one panel per map
-res.bexa.save("scan_maps.h5")
+res.bexa.save("scan_maps.h5")                   # Path('.../scan_maps.h5')
 ```
 
 ### bexa.io.formats: format specs, sniffing and drafting
@@ -2522,7 +2670,7 @@ from bexa.testing import make_esrf_scan, make_pal_run
 work = Path(tempfile.mkdtemp())                  # synthetic files go here
 esrf = make_esrf_scan(work / "esrf")             # an ID03 chi x mu scan, 2026 layout
 pal = make_pal_run(work / "pal", run=1)          # a PAL-XFEL run, September 2025 layout
-spec = formats.load_spec("esrf_id03_bliss_2026")
+spec = formats.load_spec("esrf_id03_bliss_2026")  # the ESRF ID03 spec of 2026, by name
 ```
 
 #### `load_spec`
@@ -2535,6 +2683,7 @@ name raises `FileNotFoundError` listing the available ones. `bexa.open(..., form
 overrides=...)` and a profile's `format_overrides` go through it.
 
 ```python
+# spec: the ESRF 2026 spec loaded by name; its engine, its layout, a copy with an override
 spec.engine, spec.layout["frames"]               # ('hdf5_stack', 'entry_0000/ESRF-ID03/{detector}/data')
 renamed = formats.load_spec("esrf_id03_bliss_2026", overrides={"motors": {"aliases": {"mu": ["mu_new1"]}}})
 renamed.motors["aliases"]                        # {'z1': ['samz'], 'mu': ['mu_new1']}
@@ -2548,6 +2697,7 @@ folder hides the same name later, so a spec in `BEXA_FORMAT_DIR` replaces a ship
 profile list` prints it.
 
 ```python
+# every format spec bexa ships
 sorted(formats.list_specs())[:3]                 # ['bexa_cube', 'bexa_cube_legacy', 'esrf_bliss_base']
 ```
 
@@ -2562,8 +2712,10 @@ folder and file names (`dir_globs`, `file_globs`), HDF5 paths and attributes (`h
 Abstract specs, specs without a fingerprint and specs that fail to load (warning) are skipped.
 
 ```python
-[(score, s.name) for score, s in formats.match_spec(esrf.dataset_dir)[:3]]
+# esrf: a synthetic ESRF dataset; every spec scored against it
+[(score, s.name) for score, s in formats.match_spec(esrf.dataset_dir)[:3]]  # [(1.0, 'esrf_id03_bliss_2026'), (1.0, 'esrf_id03_bliss_2025'), (1.0, 'esrf_id03_bliss_2...
 # [(1.0, 'esrf_id03_bliss_2026'), (1.0, 'esrf_id03_bliss_2025'), (1.0, 'esrf_id03_bliss_2024')]
+formats.match_spec(esrf.dataset_dir, [spec])[0][0]  # 1.0
 ```
 
 #### `best_spec`
@@ -2573,6 +2725,7 @@ The first spec of `match_spec(path)` if its score is 1, else `None`. `bexa.open(
 without a full match, raises `ValueError` naming the three closest specs.
 
 ```python
+# esrf, pal: synthetic ESRF and PAL-XFEL data; the spec whose fingerprint matches
 formats.best_spec(esrf.scan_folder).name         # 'esrf_id03_bliss_2026' (through its dataset folder)
 formats.best_spec(pal.measurement_dir).name      # 'pal_xfel_points_2025_09'
 ```
@@ -2603,11 +2756,12 @@ Unknown entries are kept. Methods:
 - `detector_info(detector)`: a copy of the `detectors` entry of `detector` (`{}` if unknown).
 
 ```python
+# pal_spec: the PAL-XFEL points spec; what a FormatSpec knows about its layout
 pal_spec = formats.load_spec("pal_xfel_points_2025_09")
 pal_spec.aliases("laser_flag")                   # ['event_info.THIRTY_HERTZ', 'event_info.FIFTEEN_HERTZ']
 pal_spec.resolve_key("laser_flag", ["delay_input", "event_info.FIFTEEN_HERTZ"])   # 'event_info.FIFTEEN_HERTZ'
-spec.path("scan_folder", dataset="D", scan=7), spec.motor_path("per_frame", scan=7, motor="mu")
-spec.known_motors()[:3], spec.motor_aliases("z1"), spec.detector_info("pco_ff")["pixel_size_um"]
+spec.path("scan_folder", dataset="D", scan=7), spec.motor_path("per_frame", scan=7, motor="mu")  # ('D/scan0007', '7.1/measurement/mu')
+spec.known_motors()[:3], spec.motor_aliases("z1"), spec.detector_info("pco_ff")["pixel_size_um"]  # (['mu', 'chi', 'phi'], ['z1', 'samz'], 6.5)
 ```
 
 #### `draft_spec`
@@ -2619,6 +2773,7 @@ folder and its sub-folders): 3-D datasets of frames at least 16 x 16 pixels are 
 `TODO` marks what a person must fill in. `FileNotFoundError` without HDF5 files.
 
 ```python
+# esrf: a synthetic ESRF dataset; a spec drafted from what its files hold
 draft = formats.draft_spec(esrf.dataset_dir, name="id03_new")
 draft["engine"], draft["layout"]["frames"]       # ('hdf5_stack', 'entry_0000/ESRF-ID03/pco_ff/data')
 ```
@@ -2631,6 +2786,7 @@ path; `bexa profile sniff PATH -o OUT` runs it. Fill in the `TODO` entries, then
 `configs/formats/` or a `BEXA_FORMAT_DIR` folder so that `load_spec` finds it.
 
 ```python
+# esrf: a synthetic ESRF dataset; the drafted spec written as YAML and loaded back
 out = formats.write_draft(esrf.dataset_dir, work / "id03_new.yaml", name="id03_new")
 formats.load_spec(out).engine                    # 'hdf5_stack'
 ```
@@ -2642,6 +2798,7 @@ The existing folders searched for specs, in order: those of `BEXA_FORMAT_DIR` (j
 `os.pathsep`), `configs/formats` under the current directory, the repository's `configs/formats`.
 
 ```python
+# where format specs are looked for, in order
 formats.format_dirs()                            # [the repository's configs/formats] by default
 ```
 
@@ -2652,7 +2809,8 @@ The merge behind `extends` and `overrides`: dicts merge key by key, other values
 (lists included) replace those of `base`. Returns a new dict.
 
 ```python
-formats.deep_merge({"known": ["mu"], "units": {"mu": "deg"}}, {"known": ["chi"], "units": {"chi": "deg"}})
+# two spec dicts merged the way extends does: lists joined, dicts merged
+formats.deep_merge({"known": ["mu"], "units": {"mu": "deg"}}, {"known": ["chi"], "units": {"chi": "deg"}})  # {'known': ['chi'], 'units': {'mu': 'deg', 'chi': 'deg'}}
 # {'known': ['chi'], 'units': {'mu': 'deg', 'chi': 'deg'}}
 ```
 
@@ -2662,6 +2820,7 @@ formats.deep_merge({"known": ["mu"], "units": {"mu": "deg"}}, {"known": ["chi"],
 `str.format` that leaves placeholders without a field untouched, so path templates fill in steps.
 
 ```python
+# a path pattern of a spec filled in (missing names stay as they are)
 formats.safe_format("{dataset}/scan{scan:04d}", scan=7)      # '{dataset}/scan0007'
 ```
 
@@ -2713,8 +2872,9 @@ the helpers:
 - `normalise_index(index, n_frames)`: static; a slice or ids as sorted unique `int64` ids; `IndexError` outside `[0, n_frames)`.
 
 ```python
+# src: the source behind the demo scan; what every engine answers
 src.frame_shape, src.n_frames, src.dtype, src.chunk_frames      # ((64, 80), 96, dtype('uint16'), 1)
-src.energy_keV, src.scalars()["samz"], [f.name for f in src.files()]
+src.energy_keV, src.scalars()["samz"], [f.name for f in src.files()]  # (17.0, 0.0, ['demo_mosa.h5', 'pco_ff_0000.h5'])
 src.cache_records()[0]                                          # {'path': '.../demo_mosa.h5', 'entry': '1.1', 'n_frames': 96}
 s = src.structure()
 s.dims, s.motor_shape, s.scan_type, s.units["mu"]              # (('chi', 'mu', 'y', 'x'), (6, 16), 'fscan2d', 'deg')
@@ -2731,6 +2891,7 @@ stored), written into `out` if given. Consecutive ids are read as one block. It 
 `scan.read`, previews and reductions; `scan.structure.frame_index` maps a grid position to its id.
 
 ```python
+# src: the source behind the demo scan; four frames, a pixel window, as float32
 frames = src.read_frames(np.array([0, 1, 2, 50]), y=slice(10, 40), x=slice(20, 60), dtype=np.float32)
 frames.shape, frames.dtype                       # ((4, 30, 40), dtype('float32'))
 fid = scan.structure.frame_index[2, 5]           # the frame at chi index 2, mu index 5
@@ -2746,6 +2907,7 @@ The `typing.Protocol` of a reader: `name`, `files`, `frame_shape`, `n_frames`, `
 in type hints and, being runtime-checkable, in `isinstance` tests.
 
 ```python
+# the protocol: a source is anything with the members of BaseSource
 isinstance(src, Source), isinstance(np.zeros(3), Source)      # (True, False)
 ```
 
@@ -2757,6 +2919,7 @@ windowed and downsampled (numpy, or cupy on the GPU), their `frame_ids`, and the
 slices; `len(batch)` is `n`. `scan.batches(roi=..., downsample=...)` yields them.
 
 ```python
+# scan: the demo chi x mu scan; the first batch of 16 frames and what it carries
 batch = next(iter(scan.batches(batch_frames=16)))
 len(batch), batch.frames.shape, batch.frame_ids[:3]     # (16, (16, 64, 80), array([0, 1, 2]))
 ```
@@ -2790,6 +2953,7 @@ last block shares it between the motors; a command without motor blocks gives an
 list; an empty `text` raises `ValueError`.
 
 ```python
+# the command line of an amesh scan, as the master's title records it
 mesh = parse_scan_command("amesh mu 9.5558 10.5558 20 phi -1.0827 -0.4827 12 0.4")   # a step mesh of ID03
 mesh.command, mesh.names, mesh.shape, mesh.n_points   # ('amesh', ['mu', 'phi'], (21, 13), 273)
 parse_scan_command("fscan2d chi 4.14 0.0233 31 mu 11.92 0.04 200 2 2.08").shape      # (31, 200): points, as fscans count
@@ -2807,6 +2971,7 @@ false for an unknown command). Properties: `shape` (points per motor), `names` (
 names) and `n_points` (the frames the command plans, `None` when unknown).
 
 ```python
+# mesh: the parsed amesh command; its motors, the planned grid, whether it was understood
 mesh.motors[0].name, mesh.shape, mesh.exact      # ('mu', (21, 13), True)
 ```
 
@@ -2817,6 +2982,7 @@ A dataclass for one motor of a command: its name, the range (`start`, `stop`; th
 continuous scan) and the number of points.
 
 ```python
+# mesh: the parsed amesh command; its second motor
 mesh.motors[1]                                   # ScanMotor(name='phi', start=-1.0827, stop=-0.4827, npoints=13)
 ```
 
@@ -2838,7 +3004,7 @@ import h5py
 from bexa.io.h5files import RETRY_DELAY, locking_kwargs, open_h5
 from bexa.testing import make_esrf_scan
 
-made = make_esrf_scan(tempfile.mkdtemp(), "scan", n_files=1)
+made = make_esrf_scan(tempfile.mkdtemp(), "scan", n_files=1)  # a synthetic BLISS scan: a master and one detector file
 ```
 
 #### `open_h5`
@@ -2851,6 +3017,7 @@ readers, which a file written that way allows); the first error is raised when a
 Other keywords go to `h5py.File` (the chunk cache settings of the frame reader).
 
 ```python
+# made: a synthetic scan; its master opened read-only without an HDF5 lock
 with open_h5(made.master) as f:                  # the master, even while BLISS holds it open
     list(f)                                      # ['1.1']
 ```
@@ -2863,6 +3030,7 @@ with open_h5(made.master) as f:                  # the master, even while BLISS 
 the library itself and wins.
 
 ```python
+# what open_h5 passes to h5py.File on this machine's HDF5
 locking_kwargs()                                 # {'locking': False} with h5py 3.12 on HDF5 1.14
 ```
 
@@ -2887,9 +3055,9 @@ from bexa.io.engines.hdf5_stack import Hdf5StackSource
 from bexa.io.formats import load_spec
 from bexa.testing import make_esrf_scan
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 made = make_esrf_scan(work, dataset="synth_dfxm")    # chi x mu, 48 frames of 48 x 64 in 2 files
-spec = load_spec("esrf_id03_bliss_2026")
+spec = load_spec("esrf_id03_bliss_2026")        # the ESRF ID03 spec of 2026
 src = bexa.open(made.dataset_dir, scan=1).source    # an Hdf5StackSource
 ```
 
@@ -2942,9 +3110,10 @@ written and reads its status again. Also:
 - attributes: `root`, `dataset`, `scan`, `detector`, `master`, `scan_folder`, `frames_path`.
 
 ```python
+# src: the engine behind a synthetic ESRF scan; its files and cache records
 [f.name for f in src.files()]                    # ['synth_dfxm.h5', 'pco_ff_0000.h5', 'pco_ff_0001.h5']
 src.cache_records()[0]                           # {'path': '.../synth_dfxm.h5', 'entry': '1.1', 'n_frames': 48}
-src.structure().dims, src.energy_keV, src.structure().scalars["ffz"]
+src.structure().dims, src.energy_keV, src.structure().scalars["ffz"]  # (('chi', 'mu', 'y', 'x'), 17.0, 100.0)
 src.status, src.structure().planned_frames       # (<ScanStatus.COMPLETE: 'complete'>, 48)
 Hdf5StackSource(spec, work, "synth_dfxm", 1, energy_keV=17.1).energy_keV      # 17.1
 Hdf5StackSource.list_scans(spec, work, "synth_dfxm"), bexa.list_scans(made.dataset_dir)   # ([1], [1])
@@ -2964,6 +3133,7 @@ the scan). Without `scan`, a one-scan dataset opens it and one with several rais
 constructor.
 
 ```python
+# made: a synthetic ESRF scan; the engine from its master file, or from a scan folder
 Hdf5StackSource.from_path(spec, made.master, scan=1).n_frames      # 48
 Hdf5StackSource.from_path(spec, made.scan_folder).scan              # 1
 ```
@@ -2995,8 +3165,8 @@ from bexa.io.scan_commands import parse_scan_command
 from bexa.testing import make_esrf_scan
 
 made = make_esrf_scan(tempfile.mkdtemp(), "mesh", motors=(("samy", 3), ("samz", 5)), n_files=1, command="dmesh")   # a step mesh: no fscan_parameters
-spec = load_spec("esrf_id03_bliss_2026")
-f = h5py.File(made.master, "r")
+spec = load_spec("esrf_id03_bliss_2026")        # the ESRF ID03 spec of 2026
+f = h5py.File(made.master, "r")                 # the master file, open for reading
 ```
 
 #### `read_motor_table`
@@ -3009,6 +3179,7 @@ The `MotorTable` of scan `scan` in the open master `f`: every 1-D numeric channe
 `NXpositioner` groups of an older layout).
 
 ```python
+# f: the master of a synthetic scan, open; every per-frame channel and positioner of scan 1
 table = read_motor_table(f, spec, 1, "pco_ff")
 sorted(table.channels), table.scalars["ccmth"], "samy" in table.motor_names   # (['elapsed_time', 'samy', 'samz'], 6.678..., True)
 ```
@@ -3021,6 +3192,7 @@ leads the detector files while a scan runs), `scalars` (`{name: value}`) and `mo
 (a frozenset), as `read_motor_table` fills them.
 
 ```python
+# table: the motor table of scan 1; one per-frame channel of it
 len(table.channels["samy"]), table.channels["samy"][:4]   # (15, array([0., 0., 0., 0., ...]))
 ```
 
@@ -3033,6 +3205,7 @@ spec's `motors.structure` template names (`MOTOR_KEYS`: `motor`, `slow_motor`/`f
 has none (a step scan, the 2024 layout).
 
 ```python
+# f: an open master; what the scan declares as its motors (fscan_parameters)
 declared_motors(f, spec, 1)                      # None: a dmesh declares nothing
 fscan = make_esrf_scan(made.root, "fscan", n_files=1)
 with h5py.File(fscan.master, "r") as g:
@@ -3045,6 +3218,7 @@ with h5py.File(fscan.master, "r") as g:
 The command line of the scan entry (`"1.1"`), or an empty string.
 
 ```python
+# f: an open master; the command line of scan 1
 read_title(f, "1.1")                             # 'dmesh samy 0 1 2 samz 0 1 4 0.1'
 ```
 
@@ -3057,6 +3231,7 @@ status words when written, and the planned frame count from `layout.frames_total
 (`acq_nb_frames`).
 
 ```python
+# f: an open master; whether scan 1 started, ended, how it ended, how many frames it planned
 state = entry_state(f, "1.1", spec, 1, "pco_ff")
 state.started, state.ended, state.end_reason, state.planned_frames   # (True, True, 'SUCCESS', 15)
 entry_state(f, "9.1", spec, 9, "pco_ff").present                      # False: not in the master yet
@@ -3068,7 +3243,9 @@ entry_state(f, "9.1", spec, 9, "pco_ff").present                      # False: n
 A dataclass with the fields `entry_state` reads.
 
 ```python
+# the state of a scan that has started and not ended
 EntryState(started=True)                         # a scan that started and has not ended
+EntryState(started=True, ended=True, end_reason="SUCCESS").ended  # True
 ```
 
 #### `decide`
@@ -3081,6 +3258,7 @@ frame at all is `empty`; an end reason other than success, or fewer frames than 
 Masters without the time fields (older files) are judged by the frames alone.
 
 ```python
+# state: the entry state of a finished scan; the status for 15 frames, for 10, for a scan just started
 decide(state, 15), decide(state, 10)             # (<ScanStatus.COMPLETE: 'complete'>, <ScanStatus.ABORTED: 'aborted'>)
 decide(EntryState(started=True), 0)              # <ScanStatus.RUNNING: 'running'>
 ```
@@ -3098,6 +3276,7 @@ candidates), `min_steps` its `motors.min_step`, `logical_name` the `{physical: l
 renames of `motors.aliases`.
 
 ```python
+# table, command: the channels and the parsed title of scan 1; the motors that move
 command = parse_scan_command(read_title(f, "1.1"), motor_names=table.motor_names)
 choice = discover_motors(table.channels, None, command, table.motor_names, spec.known_motors(), spec.min_steps())
 choice.scan_type, choice.order, choice.planned_shape, choice.candidates   # ('dmesh', ['samy', 'samz'], (3, 5), ['samy', 'samz'])
@@ -3112,6 +3291,7 @@ channels that step with a dim (`{dim: [channels]}`, kept as coordinates) and eve
 that is a motor and moved, the choices a reader has.
 
 ```python
+# choice: the motors found for scan 1; the channels stepping together
 choice.lockstep                                  # {}: nothing steps with another motor here
 ```
 
@@ -3124,6 +3304,7 @@ a motor when the file lists it as a positioner or the spec knows it (`motor_name
 exceeds the spec's `min_step` for it (else `MOVE_THRESHOLD`).
 
 ```python
+# table: the motor table of scan 1; every motor that moves within the scan
 moving_motors(table.channels, table.motor_names, spec.known_motors(), spec.min_steps())   # ['samz', 'samy']
 ```
 
@@ -3134,6 +3315,7 @@ Keep one of several channels that step together (`a2scan`, a motor and its encod
 that remain, in order, and `{kept: [dropped]}`.
 
 ```python
+# three channels, two of them stepping together: one dim for the pair
 twins = {"mu": table.channels["samz"], "mu_enc": table.channels["samz"] + 1e-7, "chi": table.channels["samy"]}
 collapse_lockstep(["mu", "mu_enc", "chi"], twins)   # (['mu', 'chi'], {'mu': ['mu_enc']})
 ```
@@ -3145,6 +3327,7 @@ Bytes and 0-d string arrays as `str`; anything else as it is (the way HDF5 strin
 back).
 
 ```python
+# f: an open master; a text dataset as str, whatever HDF5 stored it as
 decode(f["1.1/title"][()])                       # 'dmesh samy 0 1 2 samz 0 1 4 0.1'
 f.close()
 ```
@@ -3170,9 +3353,9 @@ from bexa.io.engines.hdf5_points import Hdf5PointsSource, point_number, split_ru
 from bexa.io.formats import load_spec
 from bexa.testing import make_pal_run
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 pal = make_pal_run(work, run=1, n_points=5, shots_per_point=16)   # 5 delays, 80 shots of 24 x 32
-spec = load_spec("pal_xfel_points_2025_09")
+spec = load_spec("pal_xfel_points_2025_09")     # the PAL-XFEL points spec
 scan = bexa.open(pal.measurement_dir)            # .../type=measurement/run=001/scan=001
 src = scan.source                                # an Hdf5PointsSource
 ```
@@ -3199,6 +3382,7 @@ Also:
 - `refresh()` re-lists the points of a run still being written; attributes `raw_root`, `run`, `scan`, `points_dir`, `frames_dir`, `frames_path`.
 
 ```python
+# src: the engine behind a synthetic PAL-XFEL run; its points, shots and per-shot columns
 src.n_points, src.n_frames, src.read_point(2).shape        # (5, 80, (16, 24, 32))
 src.columns()["laser_flag"], src.columns()["i0"]            # ('event_info.THIRTY_HERTZ', 'qbpm:eh1:qbpm1:sum')
 src.scan_axis(), Hdf5PointsSource.list_runs(spec, work)     # ('delay', [1])
@@ -3212,6 +3396,7 @@ Classmethod: the source from a `scan=NNN` folder (under `type=measurement` or `t
 `ValueError` when the path names no run. Other `kwargs` go to the constructor.
 
 ```python
+# pal: a synthetic PAL-XFEL run; the engine from its raw folder, or from a run number
 Hdf5PointsSource.from_path(spec, pal.raw_dir).n_points, Hdf5PointsSource.from_path(spec, work, run=1).run   # (5, 1)
 ```
 
@@ -3224,7 +3409,8 @@ then the files' columns. It replaces the tables built by hand in
 `PAL-XFEL_FXS_Data plot_200918.ipynb`.
 
 ```python
-src.shot_table()[["point", "shot", "delay_input", "event_info.THIRTY_HERTZ"]].head(3)
+# src: a PAL-XFEL run; one row per shot with its point, delay and event flags
+src.shot_table()[["point", "shot", "delay_input", "event_info.THIRTY_HERTZ"]].head(3)  # DataFrame: 3 rows x 4 columns (point, shot, delay_input, event_info.THIRTY_HERTZ)
 ```
 
 #### `Hdf5PointsSource.point_summary`
@@ -3235,7 +3421,8 @@ One pandas row per point: `point`, `n_shots` (frames), `n_rows` (table rows), `n
 numeric key (`delay`, `i0`, `th`, ...), the value the legacy cube builder stored for a point.
 
 ```python
-src.point_summary()[["point", "n_shots", "n_on", "n_off", "delay"]]
+# src: a PAL-XFEL run; one row per point: shots, laser on and off, delay
+src.point_summary()[["point", "n_shots", "n_on", "n_off", "delay"]]  # DataFrame: 5 rows x 5 columns (point, n_shots, n_on, n_off, delay)
 ```
 
 #### `PointFiles`
@@ -3245,6 +3432,7 @@ A dataclass for one motor point: its `number`, the `table` and `raw` file paths,
 in the raw file) and `offset` (the flat id of its first frame).
 
 ```python
+# src: a PAL-XFEL run; the files and shots of its third point
 p = src.points[2]
 p.number, p.n_shots, p.offset, p.raw.name        # (3, 16, 32, 'p0003.h5')
 ```
@@ -3257,6 +3445,7 @@ folder and the numbers of the first `run=NNN` and `scan=NNN` folders after it (`
 a path without `type=` gives `(path, None, None)`.
 
 ```python
+# the run folder of a PAL-XFEL measurement split into root, type and run number
 split_run_path(pal.measurement_dir)[1:], split_run_path(work / "type=raw" / "run=007")[1:]   # ((1, 1), (7, None))
 ```
 
@@ -3266,6 +3455,7 @@ split_run_path(pal.measurement_dir)[1:], split_run_path(work / "type=raw" / "run
 The number of a `pNNNN.h5` file name, -1 for other names; the point files are sorted by it.
 
 ```python
+# the point number in a PAL-XFEL file name
 point_number(Path("p0012.h5")), point_number(Path("notes.h5"))     # (12, -1)
 ```
 
@@ -3290,10 +3480,10 @@ from bexa.io.engines.spec_h5 import SpecH5Source, parse_scan_command
 from bexa.io.formats import load_spec
 from bexa.testing import make_pal_spec_scan
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 one = make_pal_spec_scan(work, run=1)            # a1scan delay -1 6 8: 8 images of 20 x 24
-two = make_pal_spec_scan(work, run=2, motors=(("th", 3, 0.0, 1.0), ("delay", 4, -1.0, 2.0)), partial=2)
-spec = load_spec("pal_xfel_spec_2025_04")
+two = make_pal_spec_scan(work, run=2, motors=(("th", 3, 0.0, 1.0), ("delay", 4, -1.0, 2.0)), partial=2)  # a SPEC-style file holding two scans
+spec = load_spec("pal_xfel_spec_2025_04")       # the PAL-XFEL spec-style spec
 scan = bexa.open(one.path)                       # sniffed from the scanHistory attribute
 ```
 
@@ -3315,6 +3505,7 @@ file). Also:
 - attributes: `command` (a `ScanCommand`), `scan_mode`, `coords`, `detector`, `path`, `scan`.
 
 ```python
+# scan: a synthetic SPEC-style scan; its command and detector; one scan of a file of two
 scan.source.command.text, scan.source.detector   # ('a1scan delay -1 6 8 0.1', 'jungfrau')
 part = SpecH5Source.from_path(spec, two.path)    # a2scan th 0 1 3 delay -1 2 4, 2 of 3 rows recorded
 part.command.shape, part.n_frames, part.is_partial, part.structure().n_missing   # ((3, 4), 8, True, 4)
@@ -3333,6 +3524,7 @@ SPEC command line, is `bexa.io.scan_commands.parse_scan_command`, which also def
 `ScanCommand` and `ScanMotor` (re-exported here).
 
 ```python
+# a SPEC a2scan command line, parsed
 cmd = parse_scan_command("12 a2scan th 0 1 3 delay -1 2 4 0.1")
 cmd.command, cmd.shape                           # ('a2scan', (3, 4))
 [m.name for m in cmd.motors], cmd.motors[1]      # (['th', 'delay'], ScanMotor(name='delay', start=-1.0, stop=2.0, npoints=4))
@@ -3354,7 +3546,7 @@ from bexa.io.engines.array_cube import ArrayCubeSource
 from bexa.io.formats import load_spec
 from bexa.testing import make_lcls_cube, make_legacy_cube
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 legacy = make_legacy_cube(work / "run42.h5")     # laser off/on x 6 delays, 20 x 24 frames
 lcls = make_lcls_cube(work / "lcls", run=296)    # Run0296_onStk.npy, _offStk.npy, _stats.csv
 scan = bexa.open(legacy)                         # sniffed as bexa_cube_legacy
@@ -3376,6 +3568,7 @@ spread to per-frame channels, energy from `energy_keV` or the `energy_keV` attr.
 - attributes: `frames_name`, `lead_dims`, `pixel_dims`, `path`, `run`.
 
 ```python
+# scan: a reduced LCLS cube opened as a scan; its dims and the laser axis
 scan.dims, scan.coords["laser"], "signal" in scan.structure.per_frame   # (('laser', 'delay', 'y', 'x'), array([0., 1.]), True)
 ArrayCubeSource.from_path(load_spec("lcls_xcs_cube"), lcls.on_path).structure().dims   # ('laser', 'shot', 'y', 'x')
 np.save(work / "stack.npy", np.ones((7, 4, 5), dtype=np.uint16))
@@ -3389,6 +3582,7 @@ The cube as loaded, an `xarray.Dataset` (frames, per-point series, coordinates, 
 for cube-level analysis such as `bexa.analysis.pump_probe`.
 
 ```python
+# scan: a reduced cube opened as a scan; the cube as an xarray Dataset again
 cube = scan.source.dataset()
 (cube["frames"].sel(laser="on") - cube["frames"].sel(laser="off")).dims     # ('delay', 'y', 'x')
 ```
@@ -3414,9 +3608,9 @@ import bexa
 from bexa.io.engines.smalldata import SmalldataSource
 from bexa.io.formats import load_spec
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 path = work / "xcsl1004621_Run0043.h5"           # a tiny smalldata file: 30 events, 8 x 10 ROI
-rng = np.random.default_rng(0)
+rng = np.random.default_rng(0)                  # the random generator of the synthetic file
 with h5py.File(path, "w") as f:
     f["event_time"] = np.arange(30)
     f["lightStatus/laser"] = np.arange(30) % 2
@@ -3425,7 +3619,7 @@ with h5py.File(path, "w") as f:
     f["ebeam/photon_energy"] = np.full(30, 9500.0)                 # eV
     f["jungfrau1M/ROI_0_area"] = rng.random((30, 8, 10)).astype(np.float32)
     f["Sums/jungfrau1M_calib"] = f["jungfrau1M/ROI_0_area"][()].sum(axis=0)
-scan = bexa.open(path)
+scan = bexa.open(path)                          # the smalldata run opened as a scan
 src = scan.source                                # a SmalldataSource
 ```
 
@@ -3445,6 +3639,7 @@ or the median `photon_energy` (eV in the file) in keV. Also:
 - `from_path(spec, path, scan=None, **kwargs)`: classmethod, from the file or a folder (its first `.h5`); `scan` is ignored.
 
 ```python
+# src: the engine behind a synthetic LCLS smalldata run; detector, frames, energy, columns
 src.detector, src.n_frames, src.frame_shape, scan.energy_keV      # ('jungfrau1M', 30, (8, 10), 9.5)
 src.columns["laser_flag"], src.columns["delay"], scan.structure.units["scan_axis"]   # ('lightStatus/laser', 'scan/lxt', 'delay')
 SmalldataSource.from_path(load_spec("lcls_smalldata"), work, detector="jungfrau1M").n_frames   # 30
@@ -3457,6 +3652,7 @@ Dict of the run-level summed images under `Sums/` (name to numpy array; `{}` wit
 at each call. It replaces the `Sums/` cell of the `Usefulthings` notebook.
 
 ```python
+# src: an LCLS smalldata run; the summed images the file carries
 {name: image.shape for name, image in src.sums().items()}      # {'jungfrau1M_calib': (8, 10)}
 ```
 
@@ -3467,7 +3663,8 @@ Every resolved per-event scalar in a pandas DataFrame, one row per event, column
 logical keys (`laser_flag`, `i0`, `scanvar`, `delay`, `photon_energy`, `event_time`, ...).
 
 ```python
-src.scalars_table().head(3)
+# src: an LCLS smalldata run; one row per shot of its scalar channels
+src.scalars_table().head(3)                     # DataFrame: 3 rows x 6 columns (laser_flag, i0, scanvar, delay, photon_energy, event_time)
 ```
 
 ### bexa.io.engines.extra_data: EuXFEL runs through extra_data
@@ -3504,6 +3701,7 @@ alias or when its length differs from the images (with a warning). Also:
 - attributes: `run_data` (the `extra_data` run), `images` (the key data), `proposal`, `run`.
 
 ```python
+# a EuXFEL run opened through extra_data (not installed here: shown, not run)
 src = ExtraDataSource(spec, 6832, 259)           # needs extra_data and access to the run
 src.n_frames, src.frame_shape, src.motor_values()[:5]
 scan = bexa.open("p6832_r0259", format="euxfel_extra_data")      # the same through from_path
@@ -3519,6 +3717,7 @@ single frame for that step (its first train), not the mean over the step's train
 docstring promises.
 
 ```python
+# dark: the dark run averaged; the run binned per scan step after dark subtraction
 dark = ExtraDataSource(spec, 6832, 258).read_frames(slice(0, 200), dtype=np.float64).mean(axis=0)
 steps = src.binned_steps(dark=dark)              # DataArray (ssry, y, x)
 ```
@@ -3531,6 +3730,7 @@ otherwise. A full EuXFEL folder path, with `raw/` between the proposal and the r
 (`.../p006832/raw/r0259`), is not understood, nor a Windows path with a backslash.
 
 ```python
+# a EuXFEL run id split into proposal and run
 parse_run_id("p6832_r0259")                      # (6832, 259)
 ```
 
@@ -3550,7 +3750,7 @@ import numpy as np
 import bexa
 from bexa.io import generic
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 stack = np.random.default_rng(0).random((6, 4, 5)).astype(np.float32)    # 6 frames of 4 x 5
 np.save(work / "stack.npy", stack)
 with h5py.File(work / "stack.h5", "w") as f:
@@ -3572,6 +3772,7 @@ Also:
 - `from_path(spec, path, scan=None, **kwargs)`: classmethod used by `bexa.open`; drops `detector`, ignores `scan`, passes `coords` and `energy_keV`.
 
 ```python
+# a plain .npy stack with a coords.json beside it, opened as a scan
 scan = bexa.open(work / "stack.npy", format="generic_stack", coords=work / "coords.json")
 scan.dims, scan.shape                            # (('mu', 'chi', 'y', 'x'), (2, 3, 4, 5))
 src = generic.GenericStackSource(None, f"{work / 'stack.h5'}::/entry/data", coords={"z": np.arange(6.0)})
@@ -3588,6 +3789,7 @@ array), a tiff or multi-page tiff (tifffile, or Pillow without it), or a folder 
 name order). `ValueError` for other suffixes.
 
 ```python
+# an array from an HDF5 dataset (file::path) or a .npy file
 generic.load_array(f"{work / 'stack.h5'}::/entry/data").shape     # (6, 4, 5)
 type(generic.load_array(work / "stack.npy")).__name__             # 'memmap'
 ```
@@ -3599,6 +3801,7 @@ Per-frame motor values from a `.json` (name to list), a `.npy` (1-D: motor `axis
 `axis0` to `axis{k-1}`) or else a CSV with a header row, as a dict of float arrays.
 
 ```python
+# the motor coordinates of a generic stack, from a JSON file
 generic.read_coords(work / "coords.json")["chi"]      # array([0., 1., 2., 0., 1., 2.])
 ```
 
@@ -3609,6 +3812,7 @@ Splits `"file.h5::/entry/data"` into `(Path("file.h5"), "/entry/data")`, droppin
 `path=` prefix and turning backslashes into slashes; without `::` the dataset path is `None`.
 
 ```python
+# a file::path URL split into the file and the dataset path
 generic.split_h5_url("scan.h5::/entry/data")[1], generic.split_h5_url("stack.npy")[1]   # ('/entry/data', None)
 ```
 
@@ -3632,9 +3836,9 @@ import bexa
 from bexa.io.multi import MultiScanSource
 from bexa.testing import make_esrf_energy_series
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 made = make_esrf_energy_series(work, motors=(("chi", 3), ("mu", 8)), n_files=1)   # scans 1-3, 17.00-17.10 keV
-series = bexa.open(made[0].dataset_dir, scan=(1, 3))
+series = bexa.open(made[0].dataset_dir, scan=(1, 3))  # three scans of one dataset opened as one series
 ```
 
 #### `MultiScanSource`
@@ -3654,6 +3858,7 @@ coordinates, `status` is the worst of the parts' (`bexa.core.status.worst`), and
 `coords`.
 
 ```python
+# series: several scans opened as one; the source that stacks them
 src = series.source
 src.dim, src.coords, series.dims                 # ('energy', array([17.  , 17.05, 17.1 ]), ('energy', 'chi', 'mu', 'y', 'x'))
 src.status                                       # <ScanStatus.COMPLETE: 'complete'>: every part is
@@ -3673,7 +3878,7 @@ from pathlib import Path
 from bexa.io.inspect import describe, h5_tree, print_h5_structure
 from bexa.testing import make_esrf_scan
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 made = make_esrf_scan(work, dataset="synth_dfxm")      # a master file and 2 compressed detector files
 ```
 
@@ -3686,7 +3891,9 @@ with the file name; datasets show shape, dtype, chunks, compression filters (`gz
 the top), `attrs=True` adds `@name = value` lines, and the list stops at `max_items` lines.
 
 ```python
+# made: a synthetic scan; the tree of one of its detector files, as text lines
 h5_tree(made.detector_files[0])[4].strip()       # 'data  (24, 48, 64) uint16 chunks (1, 48, 64) [bitshuffle] ratio 3.4x'
+len(h5_tree(made.master, max_depth=1))          # 9
 ```
 
 #### `print_h5_structure`
@@ -3696,7 +3903,8 @@ Prints `h5_tree(path, **kwargs)`: the `print_h5_structure` helper of the lab's `
 under its name, now with shapes, chunks and compression.
 
 ```python
-print_h5_structure(made.master, max_depth=1)
+# made: a synthetic scan; the groups of its master, one level deep
+print_h5_structure(made.master, max_depth=1)     # prints the groups of the master, one level deep
 ```
 
 #### `describe`
@@ -3708,7 +3916,9 @@ to `max_depth`, a `.npy`'s shape, dtype and size in GB (header only), or the fil
 `FileNotFoundError` for a missing path.
 
 ```python
+# made: a synthetic scan; what bexa sees in its folder, as text
 print(describe(made.dataset_dir))                # format: esrf_id03_bliss_2026 (engine hdf5_stack), ...
+describe(made.master, max_depth=1).splitlines()[0]  # 'path: C:\\Users\\sport\\AppData\\Local\\Temp\\claude\\x--Dressel...'
 ```
 
 ### bexa.io.cube: bexa files, `bexa.save` and `bexa.load`
@@ -3727,7 +3937,7 @@ import bexa
 from bexa.io import cube as cube_io
 from bexa.testing import make_lcls_cube, make_legacy_cube
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 scan = bexa.demo("rocking", root=work)           # a synthetic mu scan
 res = scan.com(axes=("mu",))                     # Dataset: com_mu, width_mu, total
 legacy = make_legacy_cube(work / "run42.h5")     # a legacy PAL-XFEL cube
@@ -3752,8 +3962,9 @@ HDF5 keeps attributes in the object header. GPU arrays are copied to the host;
 is this function.
 
 ```python
+# res: the COM maps of the demo scan; written to one bexa HDF5 file, then as zarr
 path = bexa.save(res, work / "scan_com.h5")
-bexa.save({"com": res["com_mu"], "sum": res["total"]}, work / "maps.zarr")
+bexa.save({"com": res["com_mu"], "sum": res["total"]}, work / "maps.zarr")  # Path('.../maps.zarr')
 ```
 
 #### `load`
@@ -3768,6 +3979,7 @@ a `MemoryError` that points to `open_lazy`. `bexa.load` is this function; it rep
 `runN.h5` with h5py by hand.
 
 ```python
+# path: the file save wrote; the maps read back with their provenance
 back = bexa.load(path)
 sorted(back.data_vars), back["com_mu"].dims       # (['com_mu', 'total', 'width_mu'], ('y', 'x'))
 bexa.load(work / "maps.zarr")["com"].dims          # ('y', 'x')
@@ -3786,6 +3998,7 @@ stacked with `store=` is browsed without fitting in memory; `bexa.core.stacks.is
 lazy array from a loaded one. `ValueError` for a file that is not a bexa file.
 
 ```python
+# path: a bexa file; its arrays read from disk only when sliced
 lazy = cube_io.open_lazy(path)                     # nothing read yet
 lazy["com_mu"].isel(y=slice(0, 8)).values.shape    # (8, 80): only that block is read
 lazy.attrs["lazy_file"]                            # the path
@@ -3810,6 +4023,7 @@ The file reads back with `load` or `open_lazy`. Members:
 - attribute `path`.
 
 ```python
+# a file built layer by layer, one array at a time, for stacks too large for memory
 import numpy as np
 writer = cube_io.StoreWriter(work / "layers.h5", attrs={"note": "built layer by layer"})
 writer.add_coord("samz", [0.0, 0.001, 0.002], attrs={"units": "mm"})
@@ -3831,6 +4045,7 @@ Reads a `runN.h5` of the legacy PAL-XFEL cube builder (`Aaron_allscan_cube_paral
 without `jungfrau_on`.
 
 ```python
+# legacy: a pump-probe cube written by the old XFEL scripts; read as a Dataset
 cube = cube_io.load_legacy_cube(legacy)
 cube["frames"].dims, cube.attrs["scan_axis"]      # (('laser', 'delay', 'y', 'x'), 'delay')
 cube_io.load_legacy_cube(legacy, axis="phi")["signal"].dims                  # ('laser', 'phi')
@@ -3846,6 +4061,7 @@ given or the first of the folder. Attrs: provenance and `scan_axis = "scanvar"`.
 `bexa.analysis.pump_probe.bin_lcls` bins it.
 
 ```python
+# lcls: a synthetic LCLS cube folder; the shots read as a Dataset
 shots = cube_io.load_lcls_cube(lcls.root)
 shots["frames"].dims, shots["i0"].dims           # (('laser', 'shot', 'y', 'x'), ('laser', 'shot'))
 ```
@@ -3857,6 +4073,7 @@ True for an `.h5` or `.hdf5` file whose root has the `bexa_format` attribute tha
 False otherwise (unreadable files included).
 
 ```python
+# path: a bexa file; legacy: an old cube file
 cube_io.is_bexa_file(path), cube_io.is_bexa_file(legacy)      # (True, False)
 ```
 
@@ -3889,6 +4106,7 @@ scan = bexa.demo("rocking")                      # a mu scan in the ESRF BLISS l
 is seeded with the first. `ValueError` for a source without `frames_path` (meant for `hdf5_stack`).
 
 ```python
+# scan: the demo mu scan; the HDF5 URLs darfix reads its frames from
 darfix.data_urls(scan)[0].split("::")[1]         # 'entry_0000/ESRF-ID03/pco_ff/data'
 ```
 
@@ -3899,6 +4117,7 @@ darfix.data_urls(scan)[0].split("::")[1]         # 'entry_0000/ESRF-ID03/pco_ff/
 `ValueError` for a source without a master file.
 
 ```python
+# scan: the demo mu scan; the HDF5 URL darfix reads the motor positions from
 darfix.metadata_url(scan).split("::")[1]         # '/1.1/instrument/positioners'
 ```
 
@@ -3910,6 +4129,7 @@ A darfix `Dataset` (`darfix.core.dataset.Dataset`) seeded with `data_urls(scan)[
 working files to `work_dir`. Needs darfix (`pip install darfix`); `ImportError` without it.
 
 ```python
+# scan: the demo mu scan; a darfix Dataset built from it (needs darfix: shown, not run)
 dfx = darfix.to_darfix_dataset(scan, "darfix_work")      # needs darfix
 ```
 
@@ -3921,6 +4141,7 @@ darfix's `compute_moments` gives them, computed without darfix by `bexa.analysis
 Four `(y, x)` float arrays; com and std in motor units, kurtosis the excess kurtosis.
 
 ```python
+# scan: the demo mu scan; the darfix moments of every pixel's rocking curve
 com, std, skew, kurt = darfix.compute_moments(scan.coords["mu"], scan.read().values)
 com.shape                                        # (64, 80)
 ```
@@ -3934,6 +4155,7 @@ as an `xarray.Dataset` of `com_<motor>`, `std_<motor>`, `skew_<motor>`, `kurtosi
 (default `dim_0`, ...). `ValueError` for a block that is not `(4, y, x)`.
 
 ```python
+# com, std, skew, kurt: the darfix moments; as a bexa Dataset of maps
 maps = darfix.moments_dataset({"mu": np.stack([com, std, skew, kurt])})
 sorted(maps.data_vars)                           # ['com_mu', 'kurtosis_mu', 'skew_mu', 'std_mu']
 ```
@@ -3970,6 +4192,7 @@ Returns `frames - dark`. `dark` is one image `(y, x)` or a dark stack with as ma
 other value). The dark step of the `basicDFXM` notebook.
 
 ```python
+# frames: the demo mu scan in memory; dark: a dark frame; the dark taken off every frame
 clean = preprocess.subtract_dark(frames, dark)          # or mode="median"
 ```
 
@@ -3981,6 +4204,7 @@ default filters each frame separately over 3 x 3 pixels, so an isolated hot or d
 the median of its neighbours; a single image needs `size=3`. From `basicDFXM`.
 
 ```python
+# hot: a copy of the frames with one pixel saturated; the hot pixel replaced by its neighbours
 hot = frames.copy()
 hot[5, 20, 30] = 65535                                  # one saturated pixel
 float(preprocess.remove_hot_pixels(hot)[5, 20, 30])     # 681.0
@@ -3993,6 +4217,7 @@ Divides frame `k` of an `(n, y, x)` stack by `i0[k]`, one monitor value per fram
 I0 is 0 become NaN instead of infinite.
 
 ```python
+# frames: the demo mu scan; every frame divided by its monitor reading
 normed = preprocess.normalize_i0(frames, np.linspace(1.0, 0.9, 25))   # e.g. a decaying beam
 ```
 
@@ -4005,8 +4230,9 @@ Python slices. `robust=True` first replaces the box values above its 90th percen
 median, then those below the 10th, as the legacy laser-off animation did.
 
 ```python
+# frames: the demo mu scan; the mean of a background box in every frame
 preprocess.box_mean(frames, ((0, 8), (0, 8)))[:3]      # [258.86, 457.22, 724.3]
-preprocess.box_mean(frames, bexa.ROI(y=(0, 8), x=(0, 8)), robust=True)[:3]
+preprocess.box_mean(frames, bexa.ROI(y=(0, 8), x=(0, 8)), robust=True)[:3]  # array([256.79, 454.74, 721.9])
 ```
 
 #### `normalize_box`
@@ -4015,7 +4241,9 @@ preprocess.box_mean(frames, bexa.ROI(y=(0, 8), x=(0, 8)), robust=True)[:3]
 Divides every frame by its `box_mean` (gain normalisation), so the box averages 1 in every frame.
 
 ```python
+# frames: the demo mu scan; every frame divided by its background box
 normed = preprocess.normalize_box(frames, ((0, 8), (0, 8)))
+preprocess.normalize_box(frames, bexa.ROI(y=(0, 8), x=(0, 8)), robust=True).shape  # (25, 64, 80)
 ```
 
 #### `crop`
@@ -4025,6 +4253,7 @@ Cuts the last two axes to a pixel window (any form `box_mean` accepts; motor ran
 `bexa.ROI` are ignored) and returns a view.
 
 ```python
+# frames: the demo mu scan; a pixel window cut out of every frame
 preprocess.crop(frames, bexa.ROI(y=(16, 48), x=(20, 60))).shape         # (25, 32, 40)
 ```
 
@@ -4036,6 +4265,7 @@ Block-reduces the last two axes by integer factors (one int, or `(fy, fx)`) with
 `scan.preview` (`bexa.core.reductions.block_reduce`).
 
 ```python
+# frames: the demo mu scan; the pixels binned 2 x 2, then 4 x 2 by sum
 preprocess.bin_spatial(frames, 2).shape                        # (25, 32, 40)
 preprocess.bin_spatial(frames, (4, 2), method="sum").shape     # (25, 16, 40)
 ```
@@ -4048,6 +4278,7 @@ builder (dead Jungfrau pixels read negative), so logarithms and ratios stay fini
 copy unless `copy=False`; in an integer array `eps` rounds to 0.
 
 ```python
+# clean: dark-subtracted frames with negative pixels; made strictly positive for a log
 positive = preprocess.clip_nonpositive(clean)
 round(float(clean.min()), 2), round(float(positive.min()), 6)    # (-1.52, 0.0001)
 ```
@@ -4058,7 +4289,9 @@ round(float(clean.min()), 2), round(float(positive.min()), 6)    # (-1.52, 0.000
 Raises every value below the `percentile`-th percentile of the whole stack to that level.
 
 ```python
+# frames: the demo mu scan; everything below the 5th percentile set to it
 floored = preprocess.threshold_floor(frames, percentile=5)
+float(preprocess.threshold_floor(frames).min())  # 10.0
 ```
 
 #### `log_scale`
@@ -4068,6 +4301,7 @@ floored = preprocess.threshold_floor(frames, percentile=5)
 `scan.preview(apply_log=True)`.
 
 ```python
+# frames: the demo mu scan; log10(1 + I)
 round(float(preprocess.log_scale(frames).max()), 2)    # 3.6
 ```
 
@@ -4097,6 +4331,7 @@ leaves them). On `(mu, y, x)` it equals `com_mu` of `scan.com(axes=("mu",), sigm
 volume with two motor axes `sigma` smooths the pixels only, never along the other motor.
 
 ```python
+# vol: the demo mu scan in memory; mu: its motor values; the centre of mass of every pixel
 com = rocking.motor_com(vol, mu, sigma=1.0)       # (64, 80) map in deg
 round(float(com[32, 40]), 4)                      # 0.0075
 ```
@@ -4107,6 +4342,7 @@ round(float(com[32, 40]), 4)                      # 0.0075
 `motor_com` under a second name, for the per-pixel energy centre of mass (keV) of an energy series.
 
 ```python
+# series: an energy series; the energy centre of mass of every pixel from its summed images
 series = bexa.demo("energy")                      # dims (energy, chi, mu, y, x)
 e_com = rocking.energy_com(series.read().sum(("chi", "mu")).values, series.coords["energy"])
 ```
@@ -4126,6 +4362,7 @@ block and the float64 temporaries stay the size of one slice. `ValueError` when 
 dim of `sums`.
 
 ```python
+# sums: the summed images of an energy series stacked on energy; the same from a stack
 ds = bexa.demo("zstack")                                   # five mu scans at 16.98 to 17.02 keV per height
 sums = bexa.stack(ds.select(type="fscan1d"), [bexa.acc.Sum()], dim="auto")["sum"]   # (samz, energy, y, x)
 e = rocking.energy_com_from_stack(sums)                    # com_energy, width_energy, total: dims (samz, y, x)
@@ -4140,6 +4377,7 @@ A dict of maps as darfix computes them: `com`, `std` (equal to `width_mu` of `sc
 and `total` (sum of the weights). `sigma` and `clip` as for `motor_com`.
 
 ```python
+# vol, mu: the demo mu scan and its motor; width, skew and kurtosis of every pixel
 stats = rocking.moments(vol, mu, sigma=1.0)
 round(float(stats["fwhm"][32, 40]), 3), round(float(stats["kurtosis"][32, 40]), 2)   # (0.579, 0.27)
 ```
@@ -4151,7 +4389,9 @@ Motor value of the brightest frame per pixel: the peak position on the scan grid
 tails.
 
 ```python
+# vol, mu: the demo mu scan and its motor; the mu at which every pixel is brightest
 peak_mu = rocking.argmax_motor(vol, mu)
+peak_mu.shape, float(peak_mu[32, 40])           # ((64, 80), 0.0)
 ```
 
 #### `weighted_median`
@@ -4161,7 +4401,9 @@ Per-pixel weighted median of the motor values (`weighted_quantile` with `q=0.5`)
 than `motor_com` to a second peak or a sloping background. Motor values come first here.
 
 ```python
+# vol, mu: the demo mu scan and its motor; the median mu of every pixel's curve
 med = rocking.weighted_median(mu, vol)
+med.shape, round(float(med[32, 40]), 4)         # ((64, 80), 0.0)
 ```
 
 #### `weighted_quantile`
@@ -4172,7 +4414,9 @@ weight reaches `q` of the total. Vectorises the `Yue idea` notebook's `weighted_
 cutoff `total / 1.5` is `q=2/3`.
 
 ```python
+# vol, mu: the demo mu scan and its motor; the upper tercile of every pixel's curve
 upper = rocking.weighted_quantile(mu, vol, q=2 / 3)     # the notebook's "weighted median"
+float(rocking.weighted_quantile(mu, vol, q=0.5)[32, 40]) == float(med[32, 40])  # True
 ```
 
 #### `stat_images`
@@ -4183,6 +4427,7 @@ axis and `com`, per pixel the motor value of the frame whose intensity is closes
 mean (not a centre of mass).
 
 ```python
+# vol, mu: the demo mu scan and its motor; every statistic map at once
 images = rocking.stat_images(vol, mu)                   # keys com, mean, std
 ```
 
@@ -4194,6 +4439,7 @@ The `Topography` notebook's `rocking_curves`, one value per frame: `sum`, `min` 
 mean of the pixels between those percentiles.
 
 ```python
+# vol: the demo mu scan in memory; the rocking curve of the whole frame and of its brightest pixels
 curves = rocking.rocking_curve_stats(vol, qmin=5, qmax=95)
 float(mu[np.argmax(curves["sum"])])                     # 0.0: the brightest frame
 ```
@@ -4205,7 +4451,9 @@ The combined tilt `mu + sign * phi`, which puts mu scans taken at different phi 
 stitching. Always a numpy float array.
 
 ```python
+# mu: the motor values of the demo scan; combined with a second axis into one
 rocking.combine_axes(mu, 0.2)[:3]                       # [-1.2, -1.1167, -1.0333]
+rocking.combine_axes(mu, 0.2, sign=1.0)[:3]     # array([-0.8, -0.71667, -0.63333])
 ```
 
 Constants:
@@ -4237,6 +4485,7 @@ of `scipy.ndimage.center_of_mass` without the loop. With `roi` (pixel ranges onl
 the window's corner. Takes an image, a stack or more leading axes; empty frames give NaN.
 
 ```python
+# frames: the demo mu scan in memory; the centre of the spot in every frame
 com_y, com_x = peaks.frame_com(frames)
 np.round(com_x[::6], 1)                      # [12.1, 17.2, 39.6, 61.9, 67.0]: moves with mu
 ```
@@ -4250,6 +4499,7 @@ Raw central moments about the frame COM, per axis: `com_y`, `com_x` and per orde
 plots. `centre=(com_y, com_x)` gives the centres. Replaces the LCLS notebooks' per-frame loops.
 
 ```python
+# frames, roi: the demo mu scan and a pixel window; variance, skew and kurtosis of every frame
 m = peaks.frame_moments(frames, orders=(2, 3, 4), roi=roi)
 round(float(np.sqrt(m["var_x"][12])), 2)     # 12.96: r.m.s. width along x of frame 12, pixels
 ```
@@ -4260,7 +4510,9 @@ round(float(np.sqrt(m["var_x"][12])), 2)     # 12.96: r.m.s. width along x of fr
 `frame_moments` plus the `total` and `max` of every frame, in one call.
 
 ```python
+# frames, roi: the demo mu scan and a pixel window; total, maximum and centre of every frame
 stats = peaks.frame_stats(frames, roi=roi)   # com_*, var_*, skew_*, kurt_*, total, max
+sorted(stats)                                   # ['com_x', 'com_y', 'kurt_x', ..., 'var_y' (10 items)]
 ```
 
 #### `gaussian2d_fit`
@@ -4273,6 +4525,7 @@ legacy notebook: amplitude = max, centre = COM, `(sigma_x, sigma_y)` = `sigma0`,
 may come out negative.
 
 ```python
+# frames[12]: the frame at the peak of the demo mu scan; a 2-D Gaussian fitted to its spot
 fit = peaks.gaussian2d_fit(frames[12])
 round(fit["x0"], 2), round(fit["y0"], 2), fit["success"]      # (39.58, 32.0, 1.0)
 ```
@@ -4284,7 +4537,9 @@ round(fit["x0"], 2), round(fit["y0"], 2), fit["success"]      # (39.58, 32.0, 1.
 Gaussian fit per delay of the LCLS notebooks.
 
 ```python
+# frames: the demo mu scan; the spot fitted in a few frames
 np.round(peaks.fit_stack(frames[6:19:6], roi=roi)["x0"], 1)   # [2.0, 29.6, 57.2] in the window
+peaks.fit_stack(frames[6:19:6])["success"]      # array([1.0, 1.0, 1.0])
 ```
 
 #### `find_peaks_1d`
@@ -4294,7 +4549,9 @@ Indices of the `n_peaks` most prominent peaks of a curve, most prominent first, 
 `scipy.signal.find_peaks` (keywords go to it), as a numpy array, empty when there is none.
 
 ```python
+# the rocking curve of the demo mu scan; the mu of its peaks
 scan.coords["mu"][peaks.find_peaks_1d(frames.sum(axis=(1, 2)))]   # [0.0]
+peaks.find_peaks_1d(frames.sum(axis=(1, 2)), n_peaks=2)  # array([12])
 ```
 
 #### `gaussian2d`
@@ -4304,8 +4561,10 @@ The model of `gaussian2d_fit`, `amp exp(-(x - x0)^2 / (2 sigma_x^2) - (y - y0)^2
 + offset` on grids `xy = (x, y)`, flattened as `curve_fit` expects.
 
 ```python
+# the 2-D Gaussian the fits use, evaluated on a pixel grid
 x, y = np.meshgrid(np.arange(80), np.arange(64))
 model = peaks.gaussian2d((x, y), 4000, 40, 32, 14, 29, 10).reshape(64, 80)
+model.shape, round(float(model.max()), 1)       # ((64, 80), 4010.0)
 ```
 
 Constants:
@@ -4326,7 +4585,7 @@ from bexa.analysis import fitting
 
 scan = bexa.demo("rocking")                                    # synthetic mu scan
 curve = scan.rocking_curve(bexa.ROI(y=(24, 40), x=(30, 50)))  # DataArray: ROI intensity against mu
-mu, y = curve.coords["mu"].values, curve.values
+mu, y = curve.coords["mu"].values, curve.values  # the motor values and the rocking curve
 ```
 
 #### `fit_multi_gaussian`
@@ -4343,6 +4602,7 @@ Replaces the lmfit cells of the `Topography` notebook.
 - `scale`: fit `y / max|y|` for stability; amplitudes and background come back in units of `y`.
 
 ```python
+# mu, y: the rocking curve of the demo mu scan; one Gaussian plus a constant fitted to it
 fit = fitting.fit_multi_gaussian(mu, y, n=1, background="constant")
 round(float(fit.centers[0]), 4), round(float(fit.fwhm[0]), 3), round(fit.r2, 5)   # (0.0002, 0.603, 1.0)
 two = fitting.fit_multi_gaussian(mu, y, centers=[-0.1, 0.1], background="gaussian")
@@ -4360,6 +4620,7 @@ for counts); `best_fit`, the model on `x`; `background`, a dict (`c`; `slope`, `
 - `to_dict()`: the fields as plain lists and numbers, without `best_fit` and `result` (for JSON).
 
 ```python
+# fit: the Gaussian fit of the rocking curve; the fitted curve, the background, the report
 fit.best_fit.shape, fit.background["c"] > 0, fit.to_dict()["success"]   # ((25,), True, True)
 ```
 
@@ -4370,6 +4631,7 @@ A `FitResult` as one flat dict: `center_1`, `sigma_1`, `amplitude_1`, `fwhm_1`, 
 `background_<name>`, `r2`, `reduced_chi2` and `success`; one row of a results table.
 
 ```python
+# fit: the Gaussian fit of the rocking curve; its parameters as text lines
 list(fitting.fit_report(fit))    # ['center_1', 'sigma_1', 'amplitude_1', 'fwhm_1', 'background_c', 'r2', ...]
 ```
 
@@ -4380,6 +4642,7 @@ list(fitting.fit_report(fit))    # ['center_1', 'sigma_1', 'amplitude_1', 'fwhm_
 curves of several ROIs, in `workers` threads. Returns a list of `FitResult` in row order.
 
 ```python
+# curves: the rocking curves of three pixel windows of the demo scan; all fitted at once
 vol = scan.read().values
 curves = np.stack([vol[:, 24:40, x0:x0 + 10].sum(axis=(1, 2)) for x0 in (10, 35, 60)])
 [round(float(f.centers[0]), 2) for f in fitting.fit_rocking_curves(mu, curves, n=1)]   # [-0.38, 0.0, 0.38]
@@ -4393,7 +4656,9 @@ guess or at `center`. `amplitudes` holds the peak height, `fwhm` the Voigt FWHM 
 `background["c"]` the constant.
 
 ```python
+# mu, y: the rocking curve of the demo mu scan; a Voigt profile fitted to it
 round(float(fitting.fit_voigt(mu, y).fwhm[0]), 3)       # 0.618
+fitting.fit_voigt(mu, y, center=float(mu[np.argmax(y)])).r2 > 0.9  # True
 ```
 
 #### `fit_edge`
@@ -4406,6 +4671,7 @@ before the step. `center` sets the start. A fit that does not converge raises sc
 RuntimeError, so `success` is always True.
 
 ```python
+# edge_scan: a height scan of the sample edge through the beam; the edge position fitted
 edge_scan = bexa.demo("alignment")[3].rocking_curve()    # scan 3 of the demo is a samz edge scan
 step = fitting.fit_edge(edge_scan.coords["samz"].values, edge_scan.values)
 round(float(step.centers[0]), 4), round(float(step.fwhm[0]), 4)   # (0.0002, 0.0514) mm
@@ -4420,7 +4686,9 @@ The lmfit `Model` of `fit_multi_gaussian`, for constraints of your own: `n` Gaus
 background.
 
 ```python
+# the lmfit model behind the fits: two Gaussians on a linear background
 fitting.multi_gaussian_model(2, background="linear").param_names   # ['g1_amplitude', ..., 'bg_intercept']
+fitting.multi_gaussian_model(1).param_names     # ['g1_amplitude', 'g1_center', 'g1_sigma']
 ```
 
 #### `gaussian`
@@ -4429,6 +4697,7 @@ fitting.multi_gaussian_model(2, background="linear").param_names   # ['g1_amplit
 `amplitude exp(-(x - center)^2 / (2 sigma^2))`, with the peak height (not the area) as amplitude.
 
 ```python
+# the Gaussian the models use, evaluated at two points
 fitting.gaussian(np.array([0.0, 0.25]), 1.0, 0.0, 0.25)      # [1.0, 0.6065]
 ```
 
@@ -4440,6 +4709,7 @@ step of height `amplitude` at `center` blurred by a Gaussian of width `sigma`. N
 numpy `x`.
 
 ```python
+# the error-function edge the models use, evaluated at three points
 fitting.edge(np.array([-1.0, 0.0, 1.0]), 100.0, 0.0, 0.1, 10.0)   # [10, 60, 110]
 ```
 
@@ -4455,7 +4725,7 @@ import bexa
 from bexa.analysis import registration
 
 scan = bexa.demo("rocking")                   # synthetic mu scan, 25 frames of 64 x 80 pixels
-frames, mu = scan.read().values, scan.coords["mu"]
+frames, mu = scan.read().values, scan.coords["mu"]  # the frames in memory and the motor values
 image = frames.sum(axis=0)                    # summed image (64, 80)
 drifted = np.stack([np.roll(image, (k, -k), axis=(0, 1)) for k in range(5)])   # drifts 1 pixel per frame
 parts, axes = [frames[:18], frames[8:]], [mu[:18], mu[8:]]   # as two mu scans overlapping by 10 frames
@@ -4470,7 +4740,9 @@ images: the `correlate2d` search of `basicDFXM` with periodic boundaries, thousa
 faster. `max_shift` limits the search to `|dy|, |dx| <= max_shift`. Returns Python ints.
 
 ```python
+# image, drifted: the demo image and a drifted copy; the shift between them
 registration.phase_correlation_shift(image, drifted[3])      # (-3, 3)
+registration.phase_correlation_shift(image, drifted[3], max_shift=4)  # (-3, 3)
 ```
 
 #### `align_stack`
@@ -4483,6 +4755,7 @@ motor-driven shifts. The correlation is measured on the unshifted frame, so the 
 of `detect_and_apply_shifts` (`basicDFXM`).
 
 ```python
+# drifted: frames that drifted over the scan; aligned, with the shift found for each
 aligned, shifts = registration.align_stack(drifted, max_shift=6)
 shifts[:, 0]                                            # [0, -1, -2, -3, -4]
 ```
@@ -4494,6 +4767,7 @@ Pixel shift of every frame relative to the first, `(values - values[0]) * pixels
 motor readback such as a sample translation. Two side by side make the `expected` of `align_stack`.
 
 ```python
+# three motor positions and the pixels per motor unit; the shift expected in pixels
 registration.motor_expected_shift([0.0, 0.47, 0.94], pixels_per_unit=1 / 0.235)   # um, 235 nm pixels: [0, 2, 4]
 ```
 
@@ -4505,7 +4779,9 @@ first value falls on the grid of the first axis (nearest sample), then all are s
 earliest starts at 0. With `tolerance` (motor units) a start between grid points is a ValueError.
 
 ```python
+# axes: the motor values of two overlapping parts; where the parts overlap
 offsets = registration.find_overlap_by_axis(axes)          # [0, 8]
+registration.find_overlap_by_axis(axes, tolerance=0.01)  # [0, 8]
 ```
 
 #### `find_overlap_1d`
@@ -4517,6 +4793,7 @@ least `min_overlap` shared samples, as the stitching notebooks did. Returns
 `(best_offset, scores)`, a dict of the score per offset. For scans whose motor values are wrong.
 
 ```python
+# parts: two overlapping parts of the demo scan; the offset that lines up their curves
 best, scores = registration.find_overlap_1d(parts[0].sum(axis=(1, 2)), parts[1].sum(axis=(1, 2)))
 best                                                    # 8
 ```
@@ -4530,6 +4807,7 @@ of the mu-stitching notebook), `"sum"` or `"mean"`; indices no array covers take
 float64.
 
 ```python
+# parts, offsets: two overlapping parts and their offsets; stitched into one scan
 stitched = registration.stitch_along_axis(parts, offsets, mode="brightest")
 stitched.shape, np.array_equal(stitched, frames)        # ((25, 64, 80), True)
 ```
@@ -4542,6 +4820,7 @@ pixel `(i * step_y, j * step_x)` (`step_px` one int or a pair); overlaps keep th
 `"sum"` or `"mean"`. Replaces the `RLP_code_SpatialOverlap` mosaic.
 
 ```python
+# tiles: a 2 x 2 grid of overlapping windows of the demo image; the mosaic they form
 tiles = np.stack([[image[i:i + 40, j:j + 50] for j in (0, 30)] for i in (0, 24)])   # (2, 2, 40, 50)
 mosaic = registration.mosaic_from_grid(tiles, step_px=(24, 30))
 mosaic.shape, np.allclose(mosaic, image)                # ((64, 80), True)
@@ -4554,8 +4833,9 @@ Places 2-D tiles of one size with their top-left corners at pixel positions `(y,
 integers; `mode` and `fill` as for `mosaic_from_grid`, which calls it.
 
 ```python
+# flat: the same tiles as a list with their positions; the same mosaic
 flat = [tiles[0, 0], tiles[0, 1], tiles[1, 0], tiles[1, 1]]
-registration.mosaic_from_positions(flat, [(0, 0), (0, 30), (24, 0), (24, 30)], mode="mean").shape
+registration.mosaic_from_positions(flat, [(0, 0), (0, 30), (24, 0), (24, 30)], mode="mean").shape  # (64, 80)
 ```
 
 #### `stack_layers`
@@ -4566,6 +4846,7 @@ pixels (down and right when positive) inside a canvas of the same size, the unco
 taking `fill`: the `phi_off`/`mu_off` sliders of `Slices_to_Voxels`.
 
 ```python
+# two images with known offsets stacked into a (layer, y, x) volume
 volume = registration.stack_layers([image, drifted[2]], offsets=[(0, 0), (-2, 2)])
 float(np.abs(volume[1] - volume[0])[4:-4, 4:-4].max())      # 0.0: the drift is undone
 ```
@@ -4592,6 +4873,7 @@ Reduces a volume over `dims` with the reducer named by `method` (`"sum"`, `"max"
 dim names for a DataArray, which keeps its other coordinates, axis numbers for an array.
 
 ```python
+# vol: the demo chi x mu scan in memory; projected along mu, then onto the pixels by maximum
 projections.project(vol, "mu").dims                           # ('chi', 'y', 'x')
 projections.project(vol.values, (0, 1), method="max").shape    # (64, 80)
 ```
@@ -4604,7 +4886,9 @@ ranges of `roi` and reduced. A DataArray gives a DataArray on the motor dims, li
 `scan.rocking_curve(roi)` does while streaming.
 
 ```python
+# vol: the demo chi x mu scan in memory; the intensity of a pixel window at every grid point
 integrated = projections.integrated_map(vol, bexa.ROI(y=(24, 40), x=(30, 50)))   # (chi, mu)
+projections.integrated_map(vol, method="max").dims  # ('chi', 'mu')
 ```
 
 #### `rlp_points`
@@ -4619,6 +4903,7 @@ angles (deg). NaN points and those below `threshold` are dropped. Uses
 `bexa.viz.volume.rlp_scatter`.
 
 ```python
+# scan: the demo chi x mu scan; integrated: its intensity per grid point; the points in Q
 two_theta = 2 * bragg_angle_deg(2.338, scan.energy_keV)      # Al 111 at 17 keV, deg
 points = projections.rlp_points(scan.structure, integrated, scan.geometry, space="Q",
                                 two_theta=two_theta, threshold=1e5)
@@ -4642,7 +4927,7 @@ scan = bexa.demo("mosa", **dfxm_sample((64, 80)).scan_kwargs)   # chi x mu scan 
 res = scan.com(axes=("chi", "mu"), sigma=1.0)       # com_chi, com_mu, width_chi, width_mu, total
 bright = res["total"] > 2000                         # grains in the scan range; the others stay dark
 com_chi = res["com_chi"].where(bright).values        # deg, NaN outside those grains
-com_mu = res["com_mu"].where(bright).values
+com_mu = res["com_mu"].where(bright).values     # the COM in mu, NaN outside the bright pixels
 ```
 
 #### `kmeans_com`
@@ -4654,7 +4939,9 @@ k-means of the pixels by their two COM values: the angle `atan2(b, a)` and magni
 `scale`. Returns a float label map, NaN where either COM is NaN.
 
 ```python
+# com_mu, com_chi: the COM maps of the demo scan; pixels clustered by tilt (needs scikit-learn)
 labels = segmentation.kmeans_com(com_mu, com_chi, n_clusters=3)   # grain B and the two domains of grain A
+segmentation.kmeans_com(com_mu, com_chi, n_clusters=2).shape  # (64, 80)
 ```
 
 #### `dbscan_map`
@@ -4665,6 +4952,7 @@ neighbourhood radius in standard deviations, `min_samples` the neighbours of a c
 a label map, `-1` for noise and NaN where a COM is NaN.
 
 ```python
+# com_mu, com_chi: the COM maps of the demo scan; clusters by density, noise as NaN
 db = segmentation.dbscan_map(com_mu, com_chi, eps=0.1, min_samples=10)
 np.unique(db[np.isfinite(db)])                                   # [-1, 0, 1, 2]
 ```
@@ -4677,7 +4965,9 @@ frame (`scale` standardises them), which groups pixels by the shape and position
 curves. Returns a `(y, x)` label map, NaN where a curve holds a NaN.
 
 ```python
+# the rocking curves of every pixel of the demo scan; pixels clustered by curve shape
 profiles = segmentation.kmeans_profiles(scan.read().sum("chi").values, n_clusters=4)   # mu curves
+np.unique(profiles).size                        # 4
 ```
 
 #### `cluster_stats`
@@ -4687,6 +4977,7 @@ profiles = segmentation.kmeans_profiles(scan.read().sum("chi").values, n_cluster
 cluster, NaN pixels left out.
 
 ```python
+# labels: the k-means clusters; the mean and spread of every map inside each cluster
 stats = segmentation.cluster_stats(labels, {"com_mu": com_mu, "com_chi": com_chi})
 {k: round(v["com_mu"]["mean"], 2) for k, v in stats.items()}   # {0: -0.12, 1: 0.36, 2: 0.08} deg
 ```
@@ -4700,6 +4991,7 @@ the border where the window does not fit. NaN spreads over its window. Same numb
 sliding-window loop, from two uniform filters.
 
 ```python
+# res: the COM maps of the demo scan; where the COM varies smoothly (inside a grain)
 smooth, metric, threshold = segmentation.smoothness_mask(res["com_mu"].values, window=6)
 round(float(smooth.mean()), 2)                                   # 0.74 of the pixels are smooth
 ```
@@ -4717,7 +5009,7 @@ from bexa.analysis import fields
 from bexa.testing.synthetic import dfxm_sample
 
 scan = bexa.demo("mosa", **dfxm_sample((64, 80)).scan_kwargs)   # chi x mu scan of a synthetic polycrystal
-res = scan.com(axes=("chi", "mu"), sigma=1.0)
+res = scan.com(axes=("chi", "mu"), sigma=1.0)   # the COM maps of the demo scan
 com_chi, com_mu = res["com_chi"].values, res["com_mu"].values   # deg, (64, 80)
 ```
 
@@ -4728,7 +5020,9 @@ The field `(u, v)`: the two maps minus their centre, `"median"` or `"mean"` (NaN
 or a given `(a0, b0)`. Plot with `bexa.viz.maps.vector_field`; v9's `plot_vector_field` step.
 
 ```python
+# com_mu, com_chi: the COM maps of the demo scan; the tilt of every pixel as a vector
 u, v = fields.vector_field(com_mu, com_chi)            # u along mu, v along chi, deg
+fields.vector_field(com_mu, com_chi, center="mean")[0].shape  # (64, 80)
 ```
 
 #### `angle_magnitude`
@@ -4737,7 +5031,9 @@ u, v = fields.vector_field(com_mu, com_chi)            # u along mu, v along chi
 `(atan2(v, u), hypot(u, v))`: the direction in radians (-pi to pi) and the length of the field.
 
 ```python
+# u, v: the tilt vectors; their direction and length
 angle, magnitude = fields.angle_magnitude(u, v)
+angle.shape, bool(np.nanmax(magnitude) > 0)     # ((64, 80), True)
 ```
 
 #### `edge_mask`
@@ -4748,6 +5044,7 @@ height `h` gives `4 h`) or `"laplace"`, the absolute Laplacian of Gaussian of `s
 is `strength > threshold`. NaN pixels are filled with the mean for filtering and never count.
 
 ```python
+# com_mu: the COM map in mu; where the tilt jumps (grain boundaries)
 boundaries, strength = fields.edge_mask(com_mu, threshold=0.5)   # grain boundaries, domain wall
 int(boundaries.sum())                                            # 330
 ```
@@ -4758,6 +5055,7 @@ int(boundaries.sum())                                            # 330
 `(d/dy, d/dx)` of a map with `numpy.gradient`, per pixel.
 
 ```python
+# com_mu: the COM map in mu; its gradients along y and x
 dmu_dy, dmu_dx = fields.gradients(com_mu)               # deg per pixel
 ```
 
@@ -4769,6 +5067,7 @@ Derivatives of the two shear-strain maps and their compatibility term, as in `Yu
 `dev2nd = (ezx_py - eyz_px) / 2`. `examples/06` passes the chi and mu COM maps as `eyz` and `ezx`.
 
 ```python
+# com_chi, com_mu: the COM maps as strain components; the compatibility terms
 parts = fields.compatibility(eyz=com_chi, ezx=com_mu)   # dict of five maps
 ```
 
@@ -4779,7 +5078,9 @@ The notebook's "first integration": `df/dy`, the cumulative sum of `dev2nd` alon
 row, its last-column value and `eyz` there.
 
 ```python
+# parts: the compatibility terms; the displacement integrated from them
 dfdy = fields.integrate_displacement(parts["dev2nd"], com_chi)
+dfdy.shape                                      # (64, 80)
 ```
 
 #### `integrate_second`
@@ -4789,7 +5090,9 @@ The notebook's "second integration", a dict: `f1` (cumulative sum of `ezx` along
 `eyz` along x) and `f = f1 - f1[:, 0] + f2[:, 0]` row by row.
 
 ```python
+# com_mu, com_chi: the COM maps; the field whose second derivatives they are
 f = fields.integrate_second(com_mu, com_chi)["f"]
+f.shape                                         # (64, 80)
 ```
 
 ### bexa.analysis.pump_probe: laser on/off analysis
@@ -4806,15 +5109,15 @@ from bexa.analysis import pump_probe
 from bexa.pipelines import xfel_cube
 from bexa.testing.synthetic import make_lcls_cube, make_pal_run
 
-work = tempfile.mkdtemp()
+work = tempfile.mkdtemp()                       # a scratch folder for the files the examples write
 run = make_pal_run(f"{work}/raw", run=1, n_points=6, shots_per_point=12)   # synthetic PAL-XFEL run
-scan = bexa.open(run.measurement_dir, cache=False)
+scan = bexa.open(run.measurement_dir, cache=False)  # the PAL-XFEL run as a scan
 shots = scan.source.shot_table()             # pandas, one row per shot
-roi = bexa.ROI(y=(2, 22), x=(4, 28))
+roi = bexa.ROI(y=(2, 22), x=(4, 28))            # a pixel window
 cube = xfel_cube.build_cube(scan.source, roi=roi, workers=1)   # frames(laser, delay, y, x), signal(laser, delay)
 lcls = bexa.load(make_lcls_cube(f"{work}/lcls").root, squeeze_single=False)   # frames(laser, shot, y, x)
 flag, i0 = "event_info.THIRTY_HERTZ", "qbpm:eh1:qbpm1:sum"   # columns of the shot table
-roi_sum = "detector:eh1:jungfrau2:ROI1_stat.sum"
+roi_sum = "detector:eh1:jungfrau2:ROI1_stat.sum"  # the per-shot ROI sum column
 ```
 
 #### `split_on_off`
@@ -4825,6 +5128,7 @@ off)`; NaN flags (dropped laser shots) belong to neither. `dropna` also drops ro
 any column, as the legacy cube builder did.
 
 ```python
+# shots, flag: the shots of a PAL-XFEL point and their laser flag; split in two
 on, off = pump_probe.split_on_off(shots, flag)
 len(on), len(off), len(shots)                           # (32, 34, 72)
 ```
@@ -4836,6 +5140,7 @@ len(on), len(off), len(shots)                           # (32, 34, 72)
 numbers, numpy or cupy arrays and DataArrays (coordinates kept). ValueError for another mode.
 
 ```python
+# cube: a laser on/off cube; the change of the signal with the laser, in percent
 signal = cube["signal"]                                  # ROI signal per point (laser, delay)
 change = pump_probe.differential(signal.sel(laser="on"), signal.sel(laser="off"), mode="percent")
 change.values.round(1)                                   # [-29.3, -0.4, 29.2, 30.1, 29.9, 30.3]
@@ -4850,6 +5155,7 @@ Averages arrays over the points whose axis values agree after rounding to `decim
 `(centres, [binned, ...])`.
 
 ```python
+# on: the laser-on shots; their normalised signal binned by delay
 ratio = (on[roi_sum] / on[i0]).values                   # I0-normalised ROI sum per laser-on shot
 delays, (per_delay,) = pump_probe.bin_by_axis(on["delay_input"].values, [ratio])
 delays.round(2)                                          # [-2, 0, 2, 4, 6, 8]
@@ -4864,6 +5170,7 @@ variables every run has; the frame shapes must match (same ROI). Records the sou
 `attrs["scan_axis"]` and `attrs["combined_runs"]`. Replaces `Scan_Combiner.py`; `bexa cube combine`.
 
 ```python
+# cube, cube2: the cubes of two runs on the same axis; combined into one
 run2 = make_pal_run(f"{work}/raw", run=2, n_points=6, shots_per_point=12, seed=1)
 cube2 = xfel_cube.build_cube(bexa.open(run2.measurement_dir, cache=False).source, roi=roi, workers=1)
 combined = pump_probe.combine_runs([cube, cube2], axis="delay")
@@ -4877,6 +5184,7 @@ The scan dimension of a cube: `ds.attrs["scan_axis"]`, else the first dim of `ds
 than `laser`, `y` and `x` (ValueError when there is none).
 
 ```python
+# cube, lcls: a PAL-XFEL cube and an LCLS cube; the axis each was scanned along
 pump_probe.scan_axis_of(cube), pump_probe.scan_axis_of(lcls)     # ('delay', 'scanvar')
 ```
 
@@ -4889,6 +5197,7 @@ I0-normalised shots of every value (`bin_shots`, I0 = 0 skipped), `i0` sums I0 a
 counts the shots, to divide by for means. Keeps the attrs. Replaces the `kieran_analysis` binning.
 
 ```python
+# lcls: an LCLS cube of shots; the shots binned by delay into laser on and off
 binned = pump_probe.bin_lcls(lcls)
 binned["frames"].dims, binned["n_shots"].values        # (('laser', 'scanvar', 'y', 'x'), [3, 4, 4, 4, 4, 4])
 ```
@@ -4901,10 +5210,12 @@ every unique `scanvar`, skipping shots where either I0 is zero. Returns
 `(bins, sum_on, sum_off, counts)`, the sums `(bins, y, x)` of the kind of `on`.
 
 ```python
+# frames, shot_i0: the shots and monitor of the LCLS cube; binned by delay, on and off apart
 frames, shot_i0 = lcls["frames"], lcls["i0"]
 bins, sum_on, sum_off, counts = pump_probe.bin_shots(
     frames.sel(laser="on").values, frames.sel(laser="off").values, lcls["scanvar"].values,
     shot_i0.sel(laser="on").values, shot_i0.sel(laser="off").values)
+len(bins), sum_on.shape                         # (6, (6, 24, 24))
 ```
 
 #### `linearity_check`
@@ -4915,6 +5226,7 @@ or `{"on": ..., "off": ...}` with a laser flag per shot, each with `slope`, `int
 `n`; NaN shots are skipped and fewer than 2 points give NaN.
 
 ```python
+# shots: a PAL-XFEL point; whether the signal follows the monitor, laser on and off
 check = pump_probe.linearity_check(shots[roi_sum], shots[i0], shots[flag])
 round(check["off"]["r2"], 3), round(check["on"]["r2"], 3)      # (0.998, 0.239): on varies with delay
 ```
@@ -4989,7 +5301,9 @@ keeps the paper tick settings (`matplotlib.rcdefaults()` resets all); an unknown
 `KeyError`.
 
 ```python
+# the paper theme (fonts, ticks, dpi) for the figures from here on
 style.use("paper")                               # the figures from here on
+style.use("screen")
 ```
 
 #### `set`
@@ -5004,6 +5318,7 @@ function, or of global options for that kind only, which win over the global val
 option, kind or keyword raises `ValueError`.
 
 ```python
+# other defaults for every figure, then for COM maps and tile grids only
 style.set(cmap="magma", colorbar=False)          # every image
 style.set(com={"span": 0.1}, tiles={"per_row": 4, "title_size": 7})   # COM maps and tile grids only
 style.defaults.cmap, style.defaults.kinds        # ('magma', {'com': {'span': 0.1}, 'tiles': {'per_row': 4, 'title_size': 7}})
@@ -5017,6 +5332,7 @@ Back to the shipped defaults (`PlotDefaults()`); `rcParams` are not touched
 (`matplotlib.rcdefaults()` does that).
 
 ```python
+# a default changed, then the shipped defaults again
 style.set(cmap="gray")
 style.reset()
 style.defaults.cmap                              # None
@@ -5029,6 +5345,7 @@ A `with` block with other defaults, the same `options` as `set`; the previous de
 back when the block ends, whatever happens inside.
 
 ```python
+# other defaults for one figure, restored after the block
 with style.context(clim="p2-98", colorbar=False):
     fig, ax, im = bexa.plot(res["total"])        # 2nd to 98th percentile, no colourbar
 im.get_clim()                                    # (10781.7, 27625.8)
@@ -5044,6 +5361,7 @@ that name (`global_name` when the global is called differently: a COM map's `cma
 own.
 
 ```python
+# how a plot function resolves one keyword: given, the kind's override, the global, a fallback
 style.option("image", "cmap", "gray")            # 'gray': given
 style.option("image", "cmap")                    # None: the global cmap is None (rcParams decide)
 with style.context(cmap="magma", tiles={"cmap": "gray"}):
@@ -5059,7 +5377,9 @@ unless asked, whatever `colorbar` says, and a COM map's `clim` overrides centre 
 when given.
 
 ```python
+# the same without the global: tile grids draw no colourbar unless asked
 style.local_option("tiles", "colorbar", fallback=False)   # False, although style.defaults.colorbar is True
+style.local_option("tiles", "colorbar", True)   # True
 ```
 
 #### `limits`
@@ -5070,6 +5390,7 @@ the global `clim` default (`render_clim` for the `render` kind); `clim=None` giv
 `(None, None)` (matplotlib scales by itself).
 
 ```python
+# res: the COM maps of the demo scan; the colour limits of a map under the defaults
 style.limits(res["total"])                       # (10171.6, 27822.9): the default percentiles
 style.limits(res["total"], "p5-95")              # (12044.2, 27016.0)
 style.limits(res["total"], None)                 # (None, None)
@@ -5085,6 +5406,7 @@ own (`"each"`, `("each", lo, hi)`, `None`) and `("fixed", (vmin, vmax))` for a p
 Left at `DEFAULT`, the kind's or the global `clim` decides, its percentiles for the bare words.
 
 ```python
+# how a stack of frames is scaled, from a clim spec
 style.stack_mode("shared")                       # ('shared', (1.0, 99.0))
 style.stack_mode(("each", 2, 98))                # ('each', (2.0, 98.0))
 style.stack_mode((0, 500))                       # ('fixed', (0.0, 500.0))
@@ -5097,6 +5419,7 @@ The `(lo, hi)` percentiles named by a spec (`("p", 2, 98)`, `("shared", 2, 98)`,
 `(1, 99)` for a `(vmin, vmax)` pair; an unknown word raises `ValueError`.
 
 ```python
+# the percentiles a clim spec names
 style.percentiles_of("p5-95")                    # (5.0, 95.0)
 style.percentiles_of((0, 500))                   # (1.0, 99.0)
 ```
@@ -5108,6 +5431,7 @@ The colormap of a plot kind: the argument, else the kind's override, else the gl
 (`diverging_cmap`, RdBu, for the `com` kind). `None` leaves `rcParams["image.cmap"]` in charge.
 
 ```python
+# the colormap of an image, and of a COM map (the diverging one)
 style.colormap("image")                          # None
 style.colormap("com")                            # 'RdBu'
 ```
@@ -5120,6 +5444,7 @@ and `colorbar_pad`) when `show`, the kind's override or the global `colorbar` sa
 the `Colorbar`, or `None` when none is drawn.
 
 ```python
+# fig, im, ax: a figure drawn without a colourbar; one added afterwards
 fig, ax, im = bexa.plot(res["total"], colorbar=False)
 bar = style.colorbar(fig, im, ax, label="counts")   # add it afterwards
 ```
@@ -5133,6 +5458,7 @@ own size or `rcParams`); for a panel figure, `panel` inches per pane (the kind's
 `panel_size` instead, when set) times `cols` and `rows`.
 
 ```python
+# the size of a single-panel figure and of a 2 x 3 grid of tiles
 style.figure_size("image")                       # None
 style.figure_size("tiles", rows=2, cols=3, panel=(3.2, 3.0))   # (9.6, 6.0)
 with style.context(panel_size=(2, 2)):
@@ -5146,6 +5472,7 @@ with style.context(panel_size=(2, 2)):
 `title_size` is `None` (matplotlib's own size): `ax.set_title(name, **style.title_font("tiles"))`.
 
 ```python
+# the font of the pane titles of a tile grid
 style.title_font("tiles")                        # {'fontsize': 9}
 ```
 
@@ -5158,8 +5485,9 @@ applied to that image's own data in the units shown) and `cmap`, every colourbar
 Returns the figure.
 
 ```python
+# fig: the panel of every map of the demo scan; its limits, colormap and size changed
 fig, axes = bexa.plot(res)                       # the panel of every map
-style.apply(fig, clim="p5-95", cmap="magma", figsize=(10, 7))
+style.apply(fig, clim="p5-95", cmap="magma", figsize=(10, 7))  # Figure
 ```
 
 #### `resolve_clim`
@@ -5172,6 +5500,7 @@ floats, `None` gives `(None, None)` (matplotlib then scales by itself) and `DEFA
 `stack_mode`. The `clim` of every image goes through it (`limits` adds the defaults).
 
 ```python
+# res: the COM maps of the demo scan; percentile and fixed limits for its total map
 style.resolve_clim(res["total"], ("p", 5, 95))   # (12044.2, 27016.0)
 style.resolve_clim(res["total"], "p2-98")        # (10781.7, 27625.8)
 style.resolve_clim(res["total"], (0, 1000))      # (0.0, 1000.0)
@@ -5185,7 +5514,9 @@ infinities. Gives `(0.0, 1.0)` when nothing is finite and moves `vmax` just abov
 constant image, so the range is always usable.
 
 ```python
+# res: the COM maps of the demo scan; the 1st and 99th percentiles of a COM map
 lo, hi = style.percentile_limits(res["com_mu"], 1, 99)   # (-0.533, 0.534) deg
+style.percentile_limits(res["com_mu"], 5, 95)   # (-0.50147, 0.50277)
 ```
 
 #### `as_array`
@@ -5196,6 +5527,7 @@ anything `np.asarray` accepts. Every plot function calls it, so all of them take
 numpy and cupy arrays alike.
 
 ```python
+# res: the COM maps of the demo scan; one map as a plain numpy array
 arr = style.as_array(res["com_mu"])              # numpy array (64, 80)
 ```
 
@@ -5207,6 +5539,7 @@ arr = style.as_array(res["com_mu"])              # numpy array (64, 80)
 own plotting helpers can too.
 
 ```python
+# a new figure of a given size, then the same axes passed back
 fig, ax = style.new_axes(figsize=(5, 4))
 fig, ax = style.new_axes(ax)                     # the same axes and figure back
 ```
@@ -5218,6 +5551,7 @@ Axis label for the dim `dim` of `da`: `"mu (deg)"` when its coordinate has a `un
 attribute, the bare name otherwise (also for plain arrays).
 
 ```python
+# prev: a preview (chi, mu, y, x); the axis label of its mu dim, with and without units
 style.dim_label(prev, "mu")                      # 'mu'
 prev.coords["mu"].attrs["units"] = "deg"
 style.dim_label(prev, "mu")                      # 'mu (deg)'
@@ -5232,6 +5566,7 @@ The `scalebar=True` default of `images.show` and of the `maps` functions reads i
 `scalebar=scan.geometry.effective_pixel_nm`) or set the attribute.
 
 ```python
+# res: the COM maps of the demo scan; the pixel size in nm, once set in the attrs
 style.pixel_size_nm(res["com_mu"])               # None
 res["com_mu"].attrs["effective_pixel_nm"] = 235.0
 style.pixel_size_nm(res["com_mu"])               # 235.0
@@ -5265,7 +5600,7 @@ import bexa
 from bexa.viz import auto
 
 scan = bexa.demo("mosa")                         # chi x mu scan, 6 x 16 frames of 64 x 80 pixels
-res = scan.reduce([bexa.acc.Sum(), bexa.acc.MotorCOM(axes=("chi", "mu"), sigma=1.0)])
+res = scan.reduce([bexa.acc.Sum(), bexa.acc.MotorCOM(axes=("chi", "mu"), sigma=1.0)])  # sum, com_chi, com_mu, width_chi, width_mu, total
 prev = scan.preview(downsample=(1, 1, 4, 4))     # DataArray (chi, mu, y, x) = (6, 16, 16, 20)
 ```
 
@@ -5293,6 +5628,7 @@ function. A numpy array with three or more dims gets the dims `axis0, ..., y, x`
 | `"render"` | `volume.render` | plotly `Figure` |
 
 ```python
+# res: the COM maps of the demo scan; the figure that fits each object
 fig, ax, im = auto.plot(res["com_mu"])                          # com_map: RdBu around the mean
 fig, ax, im = bexa.plot(res["sum"], log=True, title="summed")   # images.show
 fig, axes = res.bexa.plot()                                     # grid: one panel per 2-D map
@@ -5314,6 +5650,7 @@ The kind `plot` would choose for `obj`, as a string:
 `"rocking"`, `"browse"`, `"volume"` and `"render"` are never guessed; ask for them with `kind=`.
 
 ```python
+# res, prev: the COM maps and a preview of the demo scan; the kind plot would choose
 auto.guess_kind(res["width_mu"])                 # 'width'
 auto.guess_kind(prev)                            # 'projections'
 auto.guess_kind(res)                             # 'grid'
@@ -5332,8 +5669,10 @@ pane (`style.set(panel_size=...)`). Returns `(fig, axes)`, `axes` a 2-D numpy ar
 although not in the module's `__all__`).
 
 ```python
+# res: the COM maps of the demo scan; one panel per map
 fig, axes = auto.grid(res, names=["sum", "com_chi", "com_mu", "width_mu"], per_row=2)
 fig, axes = res.bexa.plot(cmap="magma", colorbar=False, panes={"com_mu": {"span": 0.1}})
+axes.shape                                      # (2, 3)
 ```
 
 Constants:
@@ -5370,6 +5709,7 @@ line up; the axes are labelled after those dims and the title defaults to the ar
 - Other keywords go to `ax.imshow`; an input that is not 2-D raises `ValueError`.
 
 ```python
+# image: the summed image of the demo scan; peak: a pixel window; the image with the window drawn
 fig, ax, im = images.show(image, log=True, roi={"peak": peak}, scalebar=235)
 fig, ax, im = images.show(prev.isel(chi=3, mu=8), clim=None, cmap="gray", interpolation="nearest")
 fig, ax, im = image.bexa.plot(log=True)          # the same function through the accessor
@@ -5391,6 +5731,7 @@ scale for every tile, the style's percentiles of the frames shown), `("shared", 
 inches per tile. Returns `(fig, axes)`, `axes` a 2-D numpy array (ticks removed, spares off).
 
 ```python
+# prev: a preview (chi, mu, y, x); eight frames along mu side by side
 fig, axes = images.tiles(prev, axis="mu", n=8, per_row=4)                  # chi summed away
 fig, axes = images.tiles(prev.values[3], indices=[0, 5, 10, 15], clim="each", log=True)
 ```
@@ -5405,8 +5746,10 @@ an ROI without both bounds in `y` and in `x` is skipped. The boxes use the data 
 Returns the list of matplotlib `Rectangle` patches.
 
 ```python
+# image: the summed image of the demo scan, shown; two windows drawn on it
 fig, ax, im = images.show(image)
 boxes = images.roi_overlay(ax, {"peak": peak, "background": bexa.ROI(y=(0, 10), x=(0, 10))}, color="w")
+len(boxes)                                      # 2
 ```
 
 #### `add_scalebar`
@@ -5417,8 +5760,10 @@ keywords go to `ScaleBar` (`color`, `box_alpha`, `length_fraction`, ...). Return
 or `None` when matplotlib-scalebar is not installed.
 
 ```python
+# image: the summed image shown without a scalebar; one added by hand
 fig, ax, im = images.show(image, scalebar=False)
 bar = images.add_scalebar(ax, 235, location="lower left", color="white", box_alpha=0)
+type(bar).__name__                              # 'ScaleBar'
 ```
 
 #### `scalebar_nm`
@@ -5430,6 +5775,7 @@ when the attribute is missing. `show` and the `maps` functions resolve their `sc
 through it after the style defaults.
 
 ```python
+# image: the summed image with its pixel size in the attrs; the nm per pixel of a scalebar argument
 images.scalebar_nm(235, image), images.scalebar_nm(True, image), images.scalebar_nm(False, image)   # (235.0, 235.0, None)
 ```
 
@@ -5444,7 +5790,7 @@ from bexa.testing import make_legacy_cube
 from bexa.viz import curves
 
 scan = bexa.demo("rocking")                      # mu scan, 25 frames of 64 x 80 pixels
-peak = bexa.ROI(y=(16, 48), x=(20, 60))
+peak = bexa.ROI(y=(16, 48), x=(20, 60))         # a pixel window
 curve = scan.rocking_curve(peak)                 # DataArray (mu,): intensity inside the window
 stats = scan.stats()                             # frame_sum, frame_mean, frame_max, frame_com_y, frame_com_x
 cube = bexa.load(make_legacy_cube("run42.h5"))   # pump-probe cube: frames (laser, delay, y, x), signal
@@ -5461,6 +5807,7 @@ of `bexa.analysis.fitting` pass `(x, fit.best_fit)`, as the object itself raises
 x label comes from the coordinate unless `xlabel` is given. Returns `(fig, ax)`.
 
 ```python
+# curve: the rocking curve of the demo mu scan; shown with its Gaussian fit
 from bexa.analysis.fitting import fit_multi_gaussian
 x = curve.coords["mu"].values
 fit = fit_multi_gaussian(x, curve.values, n=1, background="constant")    # needs lmfit
@@ -5476,8 +5823,10 @@ legend label defaults to the array's name, the x label carries the coordinate's 
 label is the name; other keywords go to `ax.plot`. Returns `(fig, ax)`; pass `ax` to add lines.
 
 ```python
+# stats: the per-frame statistics of the demo scan; the centre of the spot against mu
 fig, ax = curves.curve(stats["frame_com_x"])
 fig, ax = curves.curve(stats["frame_com_y"], ax=ax, ls="--")
+len(ax.lines)                                   # 2
 ```
 
 #### `on_off_diff`
@@ -5492,8 +5841,10 @@ The scan axis is `axis`, else `ds.attrs["scan_axis"]`, else the first dim of `fr
 Returns `(fig, axes)`. `cube.bexa.plot()` draws the same figure.
 
 ```python
+# cube: a laser on/off cube; the summed image, the on and off curves and their difference
 fig, axes = curves.on_off_diff(cube, roi=bexa.ROI(y=(5, 15), x=(6, 18)), mode="percent", title="run 42")
 fig, axes = cube.bexa.plot(roi=bexa.ROI(y=(5, 15), x=(6, 18)))
+axes.shape                                      # (3,)
 ```
 
 #### `moments_vs_axis`
@@ -5506,6 +5857,7 @@ panel (on red, off black) with, when `difference`, a dashed green on - off line.
 existing axes. Returns `(fig, axes)`.
 
 ```python
+# stats: the per-frame statistics of the demo scan; three of them against mu
 fig, axes = curves.moments_vs_axis(stats, keys=["frame_com_y", "frame_com_x", "frame_max"])
 on = cube["frames"].sel(laser="on").sum(("y", "x"))
 off = cube["frames"].sel(laser="off").sum(("y", "x"))
@@ -5520,6 +5872,7 @@ incident monitor I0 on the y axis. With `laser` flags (1 or `True` for on), lase
 red dots and laser-off points black crosses. Returns `(fig, ax)`.
 
 ```python
+# cube: a laser on/off cube; the detector signal against the monitor, laser on and off
 det = cube["frames"].sum(("y", "x"))                                  # (laser, delay)
 flag = (det["laser"] == "on").broadcast_like(det)
 fig, ax = curves.linearity(det.values.ravel(), cube["signal"].values.ravel(), laser=flag.values.ravel())
@@ -5551,6 +5904,7 @@ name and `attrs["units"]` (`com_mu (deg)`), the title defaults to the name, tick
 `bexa.plot` does for `width_*`. Returns `(fig, ax, im)`.
 
 ```python
+# res: the COM maps of the demo scan; the COM in mu, then a width map
 fig, ax, im = maps.com_map(res["com_mu"])                               # RdBu around the mean
 fig, ax, im = maps.com_map(res["width_mu"], center="median", cmap="viridis")
 fig, ax, im = maps.com_map(res["com_chi"], center=0.0, span=0.1, scalebar=235, title="COM chi")
@@ -5568,8 +5922,10 @@ every pair of values, its axes in the maps' units and labelled with `labels` (de
 DataArray names). `scalebar` as in `images.show`. Returns `(fig, ax)`.
 
 ```python
+# res: the COM maps of the demo scan; the tilts in chi and mu in one colour image
 fig, ax = maps.bivariate(res["com_chi"], res["com_mu"], labels=("chi (deg)", "mu (deg)"))
 fig, ax = maps.bivariate(res["com_chi"], res["com_mu"], limits=((-0.2, 0.2), None), key=False)
+len(ax.images), len(fig.axes)                   # (1, 1)
 ```
 
 #### `hsv_mosaicity`
@@ -5580,7 +5936,10 @@ its minimum and maximum, at full brightness, with an inset key; `labels`, `scale
 `title` as in `bivariate`. Returns `(fig, ax)`.
 
 ```python
+# res: the COM maps of the demo scan; chi as hue, mu as saturation
 fig, ax = maps.hsv_mosaicity(res["com_chi"], res["com_mu"], labels=("chi", "mu"))
+fig, ax = maps.hsv_mosaicity(res["com_chi"], res["com_mu"], key=False, scalebar=False)
+len(ax.images)                                  # 1
 ```
 
 #### `vector_field`
@@ -5592,9 +5951,11 @@ Quiver plot of the field `(u, v)`, one arrow every `step` pixels, coloured by di
 in images and NaN arrows are left out. A new figure is 8 x 6 inches. Returns `(fig, ax)`.
 
 ```python
+# res: the COM maps of the demo scan; the tilt of every pixel as an arrow
 from bexa.analysis import fields
 u, v = fields.vector_field(res["com_mu"].values, res["com_chi"].values, center="median")
 fig, ax = maps.vector_field(u, v, step=4, background=res["total"], title="tilt direction")
+len(ax.collections)                             # 1
 ```
 
 #### `color_wheel`
@@ -5604,8 +5965,9 @@ Draw a ring of the colormap against angle (-pi to pi in `n` steps) on a polar ax
 `vector_field`. Returns `None`.
 
 ```python
+# the hue wheel that keys the arrows of a vector field
 import matplotlib.pyplot as plt
-maps.color_wheel(plt.figure(figsize=(2, 2)).add_subplot(projection="polar"))
+maps.color_wheel(plt.figure(figsize=(2, 2)).add_subplot(projection="polar"))   # the hue wheel on a polar axes
 ```
 
 #### `contour_quiver_overlay`
@@ -5615,7 +5977,9 @@ The image `background` (colormap `cmap`) with `levels` white contour lines and t
 as black arrows every `step` pixels. Returns `(fig, ax)`.
 
 ```python
+# res, u, v: the total map and the tilt vectors of the demo scan; contours with arrows on top
 fig, ax = maps.contour_quiver_overlay(res["total"], u, v, levels=6, step=4)
+fig, ax = maps.contour_quiver_overlay(res["total"], u, v, cmap="gray", step=8)   # grey background, an arrow every 8 pixels
 ```
 
 #### `cluster_map`
@@ -5625,6 +5989,7 @@ Integer cluster labels (from `bexa.analysis.segmentation`, for example) with a d
 colormap, no interpolation and a colourbar labelled `cluster`. Returns `(fig, ax, im)`.
 
 ```python
+# u, v: the tilt vectors of the demo scan; pixels clustered by tilt, shown as labels
 from bexa.analysis import segmentation
 labels = segmentation.kmeans_com(u, v, n_clusters=3)            # by tilt direction and size; needs scikit-learn
 fig, ax, im = maps.cluster_map(labels, title="k-means on the COM maps")
@@ -5668,6 +6033,7 @@ style's `panel_size`). Returns `(fig, axes)`, or with `backend="plotly"` a plotl
 heatmaps with the same limits, colormap and size (90 pixels per inch).
 
 ```python
+# prev: a preview (chi, mu, y, x); every projection of it in one figure
 fig, axes = volume.projections_panel(prev, log=True)             # xy, chi_y, chi_x, mu_y, mu_x, chi_mu
 fig, axes = volume.projections_panel(prev, method="max", keys=["xy", "chi_mu"])
 fig, axes = volume.projections_panel(scan.reduce([bexa.acc.Projections()]))   # from the full frames
@@ -5682,7 +6048,9 @@ a volume name (`indices`, `clim`, `cmap`, `log`, `titles`, `figsize` go to it). 
 `(fig, axes)`.
 
 ```python
+# prev: a preview (chi, mu, y, x); six slices along chi
 fig, axes = volume.slices_grid(prev, axis="chi", n=6, per_row=3, log=True)
+fig, axes = volume.slices_grid(prev, axis="mu", indices=[0, 5, 10, 15], clim="each")   # four chosen slices, each on its own scale
 ```
 
 #### `isosurface`
@@ -5696,8 +6064,9 @@ limits and labels assume `(z, y, x)`, so prefer plotly for volumes that are not 
 `backend="plotly"`: a plotly `Isosurface` figure, two surfaces from the threshold to the maximum.
 
 ```python
+# stack: the summed images of a z-stack (samz, y, x); the surface at a threshold
 fig, ax = volume.isosurface(stack["sum"], threshold=float(stack["sum"].quantile(0.95)))
-fig = volume.isosurface(stack["sum"], backend="plotly")
+fig = volume.isosurface(stack["sum"], backend="plotly")  # a plotly figure of the same surface
 ```
 
 #### `rlp_scatter`
@@ -5712,6 +6081,7 @@ the Q grids of `bexa.geometry.transforms.build_coordinate_grids` or
 figure with `backend="plotly"`.
 
 ```python
+# scan: the demo chi x mu scan; its intensity as points in reciprocal space
 from bexa.geometry.transforms import build_coordinate_grids
 grids = build_coordinate_grids(scan.structure, scan.geometry, space="Q", two_theta=17.9)   # Qx, Qy, Qz
 intensity = prev.sum(("y", "x"))                                                   # (chi, mu), like the grids
@@ -5738,6 +6108,7 @@ with `show_plotly` or save it with `fig.write_html(path)`. `da.bexa.render(...)`
   `downsample`); the axes keep the full-resolution scale.
 
 ```python
+# stack: the summed images of a z-stack; a plotly rendering in micrometres
 fig = volume.render(stack["sum"], log=True, spacing=(1.0, 0.235, 0.235))   # 1 um layers, 235 nm pixels
 fig = stack["sum"].bexa.render(mode="mip", scale=(4, 1, 1), title="z-stack, summed")
 fig.write_html("zstack_sum.html")                                          # opens in any browser
@@ -5757,6 +6128,7 @@ page opens, `True` embeds it (about 5 MB per figure) to work offline.
 `bexa.notebook.show_plotly` is the same function.
 
 ```python
+# fig: a plotly figure; shown in a notebook without the plotly extension, or as HTML
 volume.show_plotly(fig)                                         # in Jupyter: an inline frame to rotate
 page = volume.show_plotly(fig, how="html", include_plotlyjs=True)   # self-contained page as text
 ```
@@ -5789,7 +6161,7 @@ from bexa.viz import interactive
 scan = bexa.demo("mosa")                         # chi x mu scan, 6 x 16 frames of 64 x 80 pixels
 prev = scan.preview(downsample=(1, 1, 4, 4))     # DataArray (chi, mu, y, x) = (6, 16, 16, 20)
 ds = bexa.open_dataset(bexa.demo("zstack").path, cache=tempfile.mkdtemp())   # a z-stack dataset with a disk cache
-vol = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Preview()], dim="auto", downsample=2, store=True)["preview"]
+vol = bexa.stack(ds.select(type="fscan2d"), [bexa.acc.Preview()], dim="auto", downsample=2, store=True)["preview"]  # the previews stacked on disk
 vol = vol.transpose(..., "samz", "y", "x")       # (chi, mu, samz, y, x) = (6, 15, 5, 20, 24), read from the cache file block by block
 ```
 
@@ -5800,6 +6172,7 @@ Open a `Browser` on `volume` (keywords as for `Browser`) and return it. `da.bexa
 does the same.
 
 ```python
+# prev: a preview (chi, mu, y, x); sliders over chi and mu, one frame at a time
 b = interactive.browse(prev)                     # sliders chi and mu
 logged = prev.bexa.browse(log=True, clim="each")
 ```
@@ -5829,6 +6202,7 @@ Members:
   (those of the scale), `volume`, `log`.
 
 ```python
+# prev: a preview (chi, mu, y, x); the browser with matplotlib sliders, every frame rescaled
 b = interactive.Browser(prev, clim="each", widgets=False)   # matplotlib sliders under the image
 b.motor_dims, b.index                                        # (['chi', 'mu'], {'chi': 0, 'mu': 0})
 b.data.shape                                                 # (16, 20): the frame on show
@@ -5844,6 +6218,7 @@ through conditions and save each view. Positions are integer indices, not motor 
 `VolumeBrowser` has the same method; `RenderBrowser` has its own.
 
 ```python
+# b: a browser; moved from code and read back
 b.update(chi=2, mu=8)
 b.title.get_text()                               # 'chi = -0.1, mu = 0.06667'
 b.update(mu=int(abs(prev["mu"] - 0.5).argmin()))   # the index of the mu value closest to 0.5
@@ -5858,6 +6233,7 @@ Change the colour limits of a browser on show, any `stack_mode` spec (`"each"`,
 `RenderBrowser.set_clim` renders the block again.
 
 ```python
+# b: a browser on show; its colour limits changed
 b.set_clim("each")                               # every frame on its own 1st to 99th percentile
 b.limits                                         # None
 b.set_clim((0, 500))
@@ -5873,6 +6249,7 @@ positions. The link is one way; the second browser's sliders move only the secon
 `(first, second)`.
 
 ```python
+# prev: a preview; two browsers moving together, raw and background-subtracted
 raw, clean = interactive.compare(prev, prev - prev.min("mu"))   # raw and background-subtracted frames
 raw.update(mu=10)
 clean.index                                                      # {'chi': 0, 'mu': 10}
@@ -5885,6 +6262,7 @@ Open a `VolumeBrowser` on `volume` (keywords as for `VolumeBrowser`) and return 
 `da.bexa.browse_volume(...)` does the same.
 
 ```python
+# vol: the previews of a z-stack (chi, mu, samz, y, x); the volume with sliders over chi and mu
 view = interactive.browse_volume(vol, log=True)          # sliders chi and mu over the (samz, y, x) volume
 by_height = vol.isel(chi=3).sum("mu").bexa.browse_volume(method="sum")   # (samz, y, x) alone: no slider
 peak = interactive.brightest(vol, over=vol.dims[:-3])   # {'chi': 2, 'mu': 6}: the condition that lights up the whole stack
@@ -5916,6 +6294,7 @@ a stack on disk browses without being loaded. Fewer than three dims, an unknown 
   `limits`, `log`, `volume`.
 
 ```python
+# view: a volume browser; moved from code, the block on show, the isosurface view
 view.update(chi=3, mu=7)
 view.current().shape                             # (5, 20, 24)
 view.title.get_text()                            # 'chi = 0.1, mu = 0'
@@ -5929,6 +6308,7 @@ Open a `RenderBrowser` on `volume` (keywords as for `RenderBrowser`) and return 
 `da.bexa.browse_render(...)` does the same.
 
 ```python
+# vol: the previews of a z-stack; a plotly rendering per condition under ipywidgets sliders
 rb = interactive.browse_render(vol, mode="mip", log=True, spacing=(1.0, 0.47, 0.47))   # um: layers, pixels
 ```
 
@@ -5958,6 +6338,7 @@ of `log10(1 + I)` with `log=True`; from the stack's statistics or a sample of fr
   implemented; use `update`.
 
 ```python
+# rb: a render browser; moved from code, the block on show, the shared colour scale
 rb.update(chi=3, mu=7)
 rb.current().dims                                # ('samz', 'y', 'x')
 rb.render_kwargs["clim"]                         # (1.0414, 2.6687): one scale for every condition, log10(1 + I)
@@ -5973,6 +6354,7 @@ and render the current block again; the new settings stay for the next moves. A 
 is the short form.
 
 ```python
+# rb: a render browser; rendered again with other settings
 rb.restyle(mode="mip", cmap="magma")
 rb.set_clim(("shared", 10, 99))                  # one scale at other percentiles
 rb.render_kwargs["clim"]                         # (1.0414, 2.3198)
@@ -5988,6 +6370,7 @@ widget backend and read `picker.roi` after drawing. Other keywords (`ax`, `cmap`
 `RoiPicker`.
 
 ```python
+# prev: a preview; a rectangle dragged on its summed image gives an ROI
 picker = interactive.pick_roi(prev.sum(("chi", "mu")))   # drag a rectangle on the summed preview
 picker.roi                                               # None until a rectangle is drawn
 peak = interactive.pick_roi(prev.sum(("chi", "mu")), block=True).roi   # script: waits for the window
@@ -6003,6 +6386,7 @@ back), else in the array's pixels, and writes the range in the title; the rectan
 adjustable. Attributes: `roi` (`ROI` or `None`), `selector`, `fig`, `ax`, `image`.
 
 ```python
+# prev: a preview; the picker on one frame, with its own colour limits
 picker = interactive.RoiPicker(prev.isel(chi=3, mu=8), cmap="gray", clim=("p", 5, 99.5))
 picker.selector.extents                          # (xmin, xmax, ymin, ymax) of the rectangle, array pixels
 ```
@@ -6034,6 +6418,7 @@ a shared or fixed scale, `None` per frame), `percentiles`, `kind` (the style kin
 come from), `_sliders` and `_output` (the output area of a static backend).
 
 ```python
+# what the browsers inherit from
 from bexa.viz.interactive import Browser
 issubclass(Browser, sliders.SliderPanel)         # True
 ```
@@ -6045,6 +6430,7 @@ issubclass(Browser, sliders.SliderPanel)         # True
 `log=True`.
 
 ```python
+# prev: a preview (chi, mu, y, x); one frame as the browsers show it with log=True
 sliders.log_block(prev.values[0, 0]).max()       # 1.824
 ```
 
@@ -6055,6 +6441,7 @@ sliders.log_block(prev.values[0, 0]).max()       # 1.824
 show; the browsers' `widgets=None` asks it.
 
 ```python
+# whether ipywidgets can show here
 sliders.in_notebook()                            # False in a script
 ```
 
@@ -6065,7 +6452,24 @@ sliders.in_notebook()                            # False in a script
 redraw into an output area and the sliders act on release.
 
 ```python
+# whether figures are pictures here (inline, Agg)
 sliders.static_backend()                         # True under the inline backend or Agg
+```
+
+#### `plain_layout`
+`bexa.viz.sliders.plain_layout(fig)`
+
+Keep the hand-placed axes of a figure (the sliders under a browser, its colourbar) where they
+are, for good: a placeholder layout engine is set on `fig`, so matplotlib never installs the
+layout `rcParams` asks for (constrained layout under the screen theme) after a `savefig`, which
+cannot lay slider axes out. The browsers call it on their figures; call it on a figure of your own
+that places axes by hand. Returns the figure.
+
+```python
+# b: a browser whose figure holds slider axes placed by hand
+b = Browser(prev, widgets=False)
+type(b.fig.get_layout_engine()).__name__                     # 'PlaceHolderLayoutEngine': set by the browser
+sliders.plain_layout(b.fig) is b.fig                         # True
 ```
 
 #### `format_value`
@@ -6075,6 +6479,7 @@ A slider value for a title: numbers with four significant digits (`0.06667`), an
 text (a quantity name).
 
 ```python
+# a slider value for a title: a number and a name
 sliders.format_value(0.0666667), sliders.format_value("com")   # ('0.06667', 'com')
 ```
 
@@ -6102,6 +6507,7 @@ a division by a background box, as the legacy scripts did). Keep the returned ob
 with `save_gif` or `save_mp4`, or show it with `IPython.display.HTML(anim.to_jshtml())`.
 
 ```python
+# vol: the demo mu scan in memory; a frame per mu, every frame rescaled
 anim = animation.animate(vol, axis="mu", clim="each", title_fmt="mu = {value:.3f} deg")
 flat = animation.animate(vol, normalize=lambda frame: frame / frame[:10, :10].mean())   # background box
 ```
@@ -6113,7 +6519,9 @@ Write an animation to a GIF (matplotlib's Pillow writer) at `fps` frames per sec
 creating the parent folders; logs and returns the path as a `Path`.
 
 ```python
+# anim: the animation of the mu scan; written as a GIF
 path = animation.save_gif(anim, "figures/rocking.gif", fps=8)
+animation.save_gif(anim, "figures/rocking_slow.gif", fps=2).name  # 'rocking_slow.gif'
 ```
 
 #### `save_mp4`
@@ -6123,6 +6531,7 @@ Write an animation to MP4 with ffmpeg at `fps` frames per second and `dpi`, crea
 folders. Needs `ffmpeg` on the PATH (`RuntimeError` without it). Returns the path.
 
 ```python
+# anim: the animation of the mu scan; written as an MP4 (needs ffmpeg)
 path = animation.save_mp4(anim, "figures/rocking.mp4", fps=10)   # needs ffmpeg
 ```
 
@@ -6134,10 +6543,11 @@ looping GIF with imageio, `1000 / fps` ms per frame, creating the parent folders
 path.
 
 ```python
+# RGB frames drawn by hand; written as a GIF
 import numpy as np
 import matplotlib.pyplot as plt
 rgb = [(plt.cm.magma(f / f.max())[..., :3] * 255).astype(np.uint8) for f in vol.values]
-path = animation.frames_to_gif(rgb, "figures/rocking_magma.gif", fps=10)
+path = animation.frames_to_gif(rgb, "figures/rocking_magma.gif", fps=10)  # the GIF written from the frames
 ```
 
 ### bexa.viz.napari_app: napari viewers and the apps behind them
@@ -6169,6 +6579,7 @@ Open a napari viewer in 3-D on a volume `(z, y, x)` or any stack of images, as t
 Returns the `napari.Viewer`.
 
 ```python
+# stack: the summed images of a z-stack; a napari viewer of it (opens a window: shown, not run)
 viewer = napari_app.view_volume(stack, log=True, scale=(4, 1, 1))   # z drawn 4 pixels per layer
 ```
 
@@ -6180,6 +6591,7 @@ The `LayerSpec` of a volume: float32 data (`log10(1 + I)` with `log`), contrast 
 additive blending and, when given, the voxel `scale` `(z, y, x)`.
 
 ```python
+# stack: the summed images of a z-stack; the layer napari would show
 spec = napari_app.volume_layer(stack, log=True, scale=(4, 1, 1))
 spec.name, spec.data.shape                       # ('volume', (5, 40, 48))
 ```
@@ -6192,6 +6604,7 @@ named `proj_xy`, `proj_xz`, `proj_yz` (magma, percentile contrast, `log10(1 + I)
 Arrays with more dims are flattened to `(frames, y, x)` first.
 
 ```python
+# stack: the summed images of a z-stack; its three projections as layers
 proj = napari_app.projection_layers(stack)
 {key: spec.data.shape for key, spec in proj.items()}   # {'xy': (40, 48), 'xz': (5, 48), 'yz': (5, 40)}
 ```
@@ -6207,6 +6620,7 @@ keywords in `kwargs` (a new empty dict by default).
   `napari.components.ViewerModel()`, which has no window.
 
 ```python
+# spec: a layer spec; added to a napari viewer model (no window)
 from napari.components import ViewerModel
 model = ViewerModel()                            # a napari viewer without a window
 layer = spec.add_to(model)
@@ -6224,6 +6638,7 @@ motor-point coordinates in `angular`, `Q` or `hkl` space (or the reason they are
 logic is `Roi3dRlpSession`. Returns the viewer.
 
 ```python
+# scan: the demo chi x mu scan; the ROI-to-reciprocal-space app (opens a window: shown, not run)
 viewer = napari_app.roi_3drlp_app(scan, downsample=4)   # draw rectangles, then "Apply ROI and build volume"
 ```
 
@@ -6248,6 +6663,7 @@ The state of the ROI-to-3D-RLP app without napari. Attributes `scan`, `downsampl
   pixels, every frame smoothed first by a Gaussian of `sigma` pixels.
 
 ```python
+# scan: the demo chi x mu scan; the app's state without a window: load, ROI, points
 session = napari_app.Roi3dRlpSession(scan, downsample=2, log=False)
 prev = session.load()                                             # DataArray (chi, mu, 32, 40)
 roi = session.set_roi_from_shapes({"xy": [[8, 10], [8, 30], [24, 30], [24, 10]]})
@@ -6267,6 +6683,7 @@ integer parts of the extreme vertices, clipped to the volume; a missing range is
 Returns `ROI(z=..., y=..., x=...)` with `z` as an index dim.
 
 ```python
+# shapes: rectangles drawn on the xy and yz views; the ROI they define
 shapes = {"xy": [[2, 3], [2, 15], [12, 15], [12, 3]], "yz": [[1, 2], [4, 2], [4, 12], [1, 12]]}
 roi = napari_app.roi_from_shapes(shapes, (5, 40, 48))
 roi.get("z"), roi.get("y"), roi.get("x")         # ((1, 4), (2, 12), (3, 15))
@@ -6282,6 +6699,7 @@ holds two sliders and averaging radii for all layers, a "LOCAL" panel the offset
 of one layer. `layers`, `dims` and the logic as in `SlicesToVoxels`. Returns the viewer.
 
 ```python
+# layers: the previews of a z-stack; the slices-to-voxels app (opens a window: shown, not run)
 viewer = napari_app.slices_to_voxels_app(layers, scale=(2.1, 1.0, 1.0))   # 1 um layers / 470 nm pixels
 ```
 
@@ -6302,6 +6720,7 @@ radii), `offsets` (`(n_layers, 2)` integer shifts), `visible` (a flag per layer)
   (hidden layers are zeros); `log10` of the values clipped at 1e-6 when `log`.
 
 ```python
+# layers: the previews of a z-stack; the app's state without a window
 model = napari_app.SlicesToVoxels(layers)                # dims from the previews: ('chi', 'mu')
 model.phi_idx, model.mu_idx, model.mu_rad = 3, 7, 1       # global (chi, mu) position, mu averaged +/- 1
 model.offsets[2] = (0, 1)                                 # layer 2 takes the frame one mu step later
@@ -6323,6 +6742,7 @@ window. `theme="screen"` or `"paper"` applies that `bexa.viz.style` theme (fonts
 to matplotlib, in or outside IPython. Changes the IPython session's state; returns `None`.
 
 ```python
+# the first cell of a notebook: backend, wide cells, logging
 import bexa
 bexa.notebook.setup()                                    # widget backend, wide cells, INFO logs in the cell
 bexa.notebook.setup(backend="inline", autoreload=True, log_level="DEBUG")
@@ -6337,6 +6757,7 @@ default is an inline frame, which works in any JupyterLab without the plotly ext
 `how="native"` uses plotly's own display where the extension is installed.
 
 ```python
+# fig: a plotly rendering of the demo mu scan; shown inline
 fig = bexa.viz.volume.render(bexa.demo("rocking").read(), log=True)
 bexa.notebook.show_plotly(fig)                           # drag to rotate, scroll to zoom
 bexa.notebook.show_plotly(fig, how="native")             # with the plotly JupyterLab extension
@@ -6349,6 +6770,7 @@ bexa.notebook.show_plotly(fig, how="native")             # with the plotly Jupyt
 Python script.
 
 ```python
+# whether this runs under IPython
 bexa.notebook.in_ipython()                       # False in a script
 ```
 
@@ -6360,6 +6782,7 @@ show; `False` in terminal IPython and in scripts. `ScanPicker(interactive=None)`
 browsers' `widgets=None` ask it.
 
 ```python
+# whether this runs in a Jupyter kernel, where widgets show
 bexa.notebook.in_kernel()                        # False in a script
 ```
 
@@ -6382,7 +6805,7 @@ import bexa
 from bexa.notebook.picker import ScanPicker, list_datasets
 
 folder = bexa.demo("zstack").path                # a z-stack dataset: a chi x mu scan and an energy series at 5 heights
-picker = ScanPicker(root=folder.parent, folders=[folder], filters={"type": "fscan2d"},
+picker = ScanPicker(root=folder.parent, folders=[folder], filters={"type": "fscan2d"},  # the chi x mu scans, no widgets
                     interactive=False, cache=tempfile.mkdtemp())   # the chi x mu scans, no widgets
 ```
 
@@ -6397,6 +6820,7 @@ recognises (`bexa.io.formats.best_spec`), a spec name those matching that spec. 
 a missing root raises `FileNotFoundError`.
 
 ```python
+# folder: the demo z-stack dataset; the dataset folders under it and under its parent
 list_datasets(folder)                            # [the dataset folder itself]
 [p.name for p in list_datasets(folder.parent)]   # ['demo_zstack', ...]: every demo dataset made so far
 list_datasets(folder.parent, format="auto")      # the same, each checked against the format specs
@@ -6436,6 +6860,7 @@ code-level override of the buttons; `cache`, `cache_reductions` and `open_kwargs
   bars' filters), `view`, `page_size`, `state_file`.
 
 ```python
+# picker: the chi x mu scans of the demo z-stack, no widgets; what it selected and extracts
 picker.ids                                       # [1, 7, 13, 19, 25]: the chi x mu scan at every height
 picker.candidates == picker.selectable           # True: every listed scan is finished
 picker.motors, picker.dims                       # (['chi', 'mu', 'samz'], ['chi', 'mu'])
@@ -6454,6 +6879,7 @@ reported in a warning and left out; `select_all()` takes every selectable scan, 
 Every change calls the `observe` callbacks and writes the state file.
 
 ```python
+# picker: the picker of the demo z-stack; two scans chosen, then all
 picker.select([1, 7])
 picker.status_text()                             # '2 of 5 scans selected'
 picker.varying()                                 # {'samz': array([-0.002, -0.001])}
@@ -6470,6 +6896,7 @@ or `"complete"`). A filter narrows the selection, never widens it. Unknown names
 `ValueError`. The code-level `filters` of the constructor stay underneath.
 
 ```python
+# picker: the picker of the demo z-stack; the listing narrowed by status
 picker.set_filters(status="complete")            # the aborted scans leave the list
 picker.candidates                                # [1, 7, 13, 19, 25]
 picker.set_filters(status="any")
@@ -6489,8 +6916,9 @@ motors that move within a scan become the dims of every selected scan (`Scan.wit
 they differ from bexa's choice: `ccmth` instead of `energy` reads the mono angle in degrees).
 
 ```python
+# series: a picker on the energy series of the demo z-stack; the mono angle pressed instead of the energy
 series = ScanPicker(folders=[folder], filters={"type": "fscan1d"}, interactive=False, cache=False)   # the energy series
-{n: (c.n_values, c.where, c.default) for n, c in series.motor_candidates().items()}
+{n: (c.n_values, c.where, c.default) for n, c in series.motor_candidates().items()}  # {'mu': (8, 'scan', True), 'samz': (5, 'stack', True), 'energy': (5, 'stack', True), 'cc...
 # {'mu': (8, 'scan', True), 'samz': (5, 'stack', True), 'energy': (5, 'stack', True), 'ccmth': (5, 'stack', False)}
 series.axes                                      # ['samz', 'energy']
 series.toggle_motor("ccmth")
@@ -6509,6 +6937,7 @@ for a temperature series); `None` or `"none"` for no stack axis (every pressed m
 scan axis), `"default"` for bexa's choice. Another name raises `ValueError`.
 
 ```python
+# series: the picker of the energy series; the energy as the stack axis, then none, then the default
 series.set_stack_axis("energy")
 series.axes, series.series_axes                  # (['energy', 'samz'], ['samz'])
 series.set_stack_axis(None)
@@ -6525,6 +6954,7 @@ The values of every axis of `axes` over the selected scans, `{dim: sorted values
 The notebook's `position_of` and the stacks read it.
 
 ```python
+# picker: the picker of the demo z-stack; the heights its selection is stacked on
 picker.varying()                                 # {'samz': array([-0.002, -0.001, 0., 0.001, 0.002])}
 ```
 
@@ -6537,6 +6967,7 @@ started since) and keeps the selection; `reset()` goes back to the code defaults
 the selection, the motors and the filters.
 
 ```python
+# picker: the picker of the demo z-stack; the folder opened again, refreshed, reset
 picker.set_folders([folder])                     # the same folder again: the code defaults apply
 picker.refresh()
 picker.reset()
@@ -6550,6 +6981,7 @@ Call `callback(picker)` after every change of the selection, the motors, the sta
 filters or the folders; the widgets register themselves this way.
 
 ```python
+# picker: the picker of the demo z-stack; a callback after every change
 seen = []
 picker.observe(lambda p: seen.append(p.status_text()))
 picker.select([13])
@@ -6564,6 +6996,7 @@ status, type, motors and shape, the positioners that vary over the listing (the 
 `17 keV`) and the frames.
 
 ```python
+# picker: the picker of the demo z-stack; the list line of its first scan
 picker.summary_line(picker.rows_of([1]).iloc[0])   # '  1  complete   fscan2d   chi x mu   6 x 15   17 keV  ccmth 6.678  samz -0.002  90 frames'
 ```
 
@@ -6576,6 +7009,7 @@ once computed (and cached by the dataset's cache); `images` maps ids to summed i
 at hand.
 
 ```python
+# picker: the picker of the demo z-stack; a thumbnail per listed scan
 pngs = picker.thumbnails(size=48)
 sorted(pngs), pngs[1][:4]                        # ([1, 7, 13, 19, 25], b'\x89PNG')
 ```
@@ -6590,6 +7024,7 @@ Called after every change. The file is read back by the next picker built with t
 defaults; a folder that is gone or changed defaults are reported and ignored.
 
 ```python
+# a picker with a state file; its selection survives a kernel restart
 remembered = ScanPicker(folders=[folder], filters={"type": "fscan2d"}, interactive=False,
                         cache=False, state_file=tempfile.mkdtemp() + "/picker.json")
 remembered.select([7, 13])
@@ -6605,6 +7040,7 @@ Build a `ScanPicker` (keywords as above), show it (`show()`: the widgets in a ke
 elsewhere) and return it.
 
 ```python
+# the demo z-stack; a picker built and shown in one call
 from bexa.notebook.picker import pick_scans
 shown = pick_scans(folders=[folder], filters={"type": "fscan2d"}, interactive=False, cache=False)
 shown.ids                                        # [1, 7, 13, 19, 25]
@@ -6647,6 +7083,7 @@ tiles), `motor_row` (one `ToggleButton` per motor), `roles_row` (the stack-axis 
 "Default motors" button, `roles_text`).
 
 ```python
+# live: the picker of the demo z-stack with its widgets built; the list and a button driven from code
 widgets = live.widgets
 type(widgets).__name__, len(widgets.box.children)   # ('PickerWidgets', 7)
 widgets.body.children[0].value = (1, 7)          # as a click in the list would
@@ -6692,13 +7129,14 @@ the session's defaults are untouched. Returns `{name: Path}`. The command is `be
 [--roi y=700:1500,x=800:1800] [--downsample 4] [--sigma 3] [--apply-log]`.
 
 ```python
+# scan: the demo chi x mu scan; work: an output folder; the standard figures and arrays written
 written = report(scan, work / "report", downsample=(1, 1, 2, 2), device="cpu")
 sorted(written)          # ['bivariate', 'com_chi', 'com_mu', 'max', 'projections', 'results', 'sum', 'tiles', 'width_chi', 'width_mu']
 written["com_mu"].name   # 'demo_mosa_com_mu.png'
 res = bexa.load(written["results"])        # xarray.Dataset: sum, max, xy, chi_mu, preview, com_mu, ...
 res["com_mu"].shape                        # (32, 40): binned 2 x 2 like the pass
-report(scan, work / "grain", roi=bexa.ROI(y=(8, 56), x=(10, 70)), downsample=None, prefix="grain")
-report(scan, work / "magma", device="cpu", plot_options={"cmap": "magma", "com": {"span": 0.1}})
+report(scan, work / "grain", roi=bexa.ROI(y=(8, 56), x=(10, 70)), downsample=None, prefix="grain")  # {'sum': Path('.../grain_sum.png'), 'max': Path('.../grain_max.png'), 'projections': Pat...
+report(scan, work / "magma", device="cpu", plot_options={"cmap": "magma", "com": {"span": 0.1}})  # {'sum': Path('.../demo_mosa_sum.png'), 'max': Path('.../demo_mosa_max.png'), 'projectio...
 ```
 
 ### bexa.pipelines.xfel_cube: PAL-XFEL point files to a laser on/off cube
@@ -6722,7 +7160,7 @@ from bexa.config import BeamtimeProfile
 from bexa.pipelines import xfel_cube
 from bexa.testing import make_pal_run
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 run1 = make_pal_run(work / "raw", run=1, n_points=6)    # 6 delay points of 16 shots, 24 x 32 pixels
 profile = BeamtimeProfile(name="demo_pal", format="pal_xfel_points_2025_09",   # or a profile name
                           raw_root=work / "raw", processed_root=work / "reduced")
@@ -6739,12 +7177,13 @@ bexa format (`bexa.load` reads it), or with `legacy=True` in the old `runN.h5` l
 `bexa cube build -p PROFILE --run 42 [--workers 16] [--roi 400:550,200:375] [--legacy]`.
 
 ```python
+# profile: a PAL-XFEL beamtime profile; run 1 reduced to a laser on/off cube
 cube = xfel_cube.reduce_run(profile, 1, workers=1)      # writes <processed_root>/data/run1.h5
 cube["frames"].dims                                      # ('laser', 'delay', 'y', 'x')
 cube.attrs["scan_axis"], cube.sizes["delay"]            # ('delay', 6)
 cube["signal"].sel(laser="on").values                    # mean ROI / I0 per delay, laser on
 bexa.load(work / "reduced" / "data" / "run1.h5")        # the same cube from disk
-xfel_cube.reduce_run(profile, 1, workers=1, out=work / "run1_old.h5", legacy=True)
+xfel_cube.reduce_run(profile, 1, workers=1, out=work / "run1_old.h5", legacy=True)  # Dataset: frames, signal, n_shots
 ```
 
 #### `build_cube`
@@ -6758,10 +7197,11 @@ calling process. `clip` replaces non-positive pixels (default the spec's `clip_n
 1e-4); `axis` forces the scan dim.
 
 ```python
+# scan: run 1 opened as a scan; the cube built from its source inside a pixel window
 scan = bexa.open(run1.measurement_dir)          # the run as a stack of shots
 cube = xfel_cube.build_cube(scan.source, roi=bexa.ROI(y=(4, 20), x=(8, 24)), workers=1)
 cube["frames"].shape                             # (2, 6, 16, 16)
-bexa.save(cube, work / "run1_roi.h5")
+bexa.save(cube, work / "run1_roi.h5")           # Path('.../run1_roi.h5')
 ```
 
 #### `open_run`
@@ -6773,6 +7213,7 @@ The `Hdf5PointsSource` of one run and scan of a profile: the spec named by `form
 spec does not use the `hdf5_points` engine. Close the source when done.
 
 ```python
+# profile: a PAL-XFEL beamtime profile; the source of run 1 (points, shots, frames)
 source = xfel_cube.open_run(profile, 1)
 source.n_points, source.n_frames, source.frame_shape     # (6, 96, (24, 32))
 ```
@@ -6786,6 +7227,7 @@ Where the cube of a run lives: `<processed_root>/data/run<N>.h5` for a number,
 object; `ValueError` without `processed_root`. `bexa cube plot` and the watcher look there.
 
 ```python
+# profile: a PAL-XFEL beamtime profile; where the cube of a run is written
 xfel_cube.cube_path(profile, 1).name                       # 'run1.h5'
 xfel_cube.cube_path(profile, "run79-88Combined").name      # 'run79-88Combined.h5'
 ```
@@ -6798,6 +7240,7 @@ Writes a cube in the `runN.h5` layout of `Aaron_allscan_cube_parallel.py` (the a
 `bexa.load` reads both layouts into the same dataset.
 
 ```python
+# cube: the cube of run 1; written in the layout of the old XFEL scripts and read back
 path = xfel_cube.save_legacy(cube, work / "legacy" / "run1.h5")
 bexa.load(path)["frames"].dims                   # ('laser', 'delay', 'y', 'x')
 ```
@@ -6810,6 +7253,7 @@ The datasets of a legacy `runN.h5` as a dict of numpy arrays: `delays`, `phi`, `
 `signals_off`, `jungfrau_on` and `jungfrau_off` (`(points, y, x)`).
 
 ```python
+# cube: the cube of run 1; the arrays the old scripts named
 arrays = xfel_cube.to_legacy_arrays(cube)
 arrays["jungfrau_on"].shape, arrays["delays"].shape      # ((6, 16, 16), (6,))
 ```
@@ -6824,6 +7268,7 @@ cut to `roi`, non-positive pixels set to `clip`, shots with a NaN laser flag dro
 averaged per state (NaN when a state has no shot). Returns a `PointResult`.
 
 ```python
+# source, keys: the source of run 1 and its column keys; one point reduced to on and off
 source = xfel_cube.open_run(profile, 1)
 keys = xfel_cube.PointKeys.from_spec(source.spec, source.table(0).columns)
 res = xfel_cube.reduce_point(source.table(0), source.read_point(0), keys, number=1)
@@ -6841,6 +7286,7 @@ sum, beam position) and `scalars` (each of `SCALAR_KEYS` to its column).
   spec's aliases present in `columns`.
 
 ```python
+# keys: the column names of run 1: the laser flag, the monitor, the scalars
 keys.laser, keys.i0                  # ('event_info.THIRTY_HERTZ', 'qbpm:eh1:qbpm1:sum')
 keys.scalars["delay"]                # 'delay_input'
 ```
@@ -6853,6 +7299,7 @@ Dataclass of one reduced point: `number`, readback medians `scalars`, the mean s
 and a free `extra` dict that `assemble` ignores.
 
 ```python
+# res: one reduced point; its scalars and the on and off signals
 res.scalars["th"], res.signal_on < res.signal_off        # (12.5, True): the pump lowers the peak at delay -2
 ```
 
@@ -6865,6 +7312,7 @@ readback name or `"index"`), else on `detect_axis(results, priority or [*SCALAR_
 hand.
 
 ```python
+# results: every point of run 1 reduced; assembled into one cube
 results = [xfel_cube.reduce_point(source.table(i), source.read_point(i), keys, number=i + 1)
            for i in range(source.n_points)]
 xfel_cube.assemble(results)["frames"].dims                  # ('laser', 'delay', 'y', 'x')
@@ -6878,6 +7326,7 @@ The first name of `priority` whose values are finite at every point and span mor
 `AXIS_TOLERANCE`, else `"index"`; names after `"index"` in `priority` are not tried.
 
 ```python
+# results: the reduced points; which scalar the run was scanned along
 xfel_cube.detect_axis(results, ["th", "delay", "index"])     # 'delay': th is constant
 xfel_cube.detect_axis(results, ["th", "index"])              # 'index'
 ```
@@ -6904,7 +7353,7 @@ import bexa
 from bexa.pipelines import cube_report
 from bexa.testing import make_legacy_cube
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 cube = bexa.load(make_legacy_cube(work / "run42.h5"))     # 6 delays, frames of 20 x 24 pixels
 peak = bexa.ROI(y=(5, 15), x=(4, 20))                      # rows 5 to 15, columns 4 to 20
 ```
@@ -6925,9 +7374,10 @@ given as `{"y": [y0, y1], "x": [x0, x1]}`, a `ROI` or `((y0, y1), (x0, x1))` (de
 command is `bexa cube plot run42.h5 --roi 400:550,200:375 -o outputs/`.
 
 ```python
+# cube: a laser on/off cube; work: an output folder; the figure set of one cube written
 written = cube_report.figure_set(cube, work / "outputs", label="run42")
 written["diffplot"].name          # 'run42_ROI_0_20_0_24_diffplot.png'
-cube_report.figure_set(cube, work / "outputs", label="run42", roi=peak, kinds=("diffplot", "COMplot"))
+cube_report.figure_set(cube, work / "outputs", label="run42", roi=peak, kinds=("diffplot", "COMplot"))  # {'diffplot': Path('.../run42_ROI_5_15_4_20_diffplot.png'), 'COMplot': Path('.../run42_R...
 ```
 
 #### `animations`
@@ -6942,6 +7392,7 @@ with another ROI overwrites the GIFs. Replaces `animation_allscan.py`; the comma
 `bexa cube animate CUBE -o outputs/`.
 
 ```python
+# cube, peak: a cube and a pixel window; the GIFs of the on and off frames
 gifs = cube_report.animations(cube, work / "outputs", label="run42", roi=peak, fps=8)
 gifs["animation_off"].name        # 'run42_animation_off.gif'
 ```
@@ -6953,6 +7404,7 @@ The ROI part of the legacy file names, `ROI_r0_r1_c0_c1` (rows, then columns), f
 window of `roi` in a frame of `frame_shape`.
 
 ```python
+# peak: a pixel window; the tag the file names carry for it
 cube_report.roi_tag(peak, (20, 24))                    # 'ROI_5_15_4_20'
 ```
 
@@ -6962,6 +7414,7 @@ cube_report.roi_tag(peak, (20, 24))                    # 'ROI_5_15_4_20'
 `ROI(y=(0, H), x=(0, W))`, the whole frame: the default ROI of `figure_set` and `animations`.
 
 ```python
+# the ROI of the whole frame, for files of the full detector
 cube_report.full_roi((20, 24))                         # ROI(y=(0, 20), x=(0, 24))
 ```
 
@@ -6989,10 +7442,10 @@ from bexa.config import BeamtimeProfile
 from bexa.pipelines import auto_process as ap
 from bexa.testing import make_pal_run
 
-work = Path(tempfile.mkdtemp())
-make_pal_run(work / "raw", run=1, n_points=4, shots_per_point=8)
-make_pal_run(work / "raw", run=2, n_points=3, shots_per_point=8, seed=1)
-profile = BeamtimeProfile(name="demo_pal", format="pal_xfel_points_2025_09", raw_root=work / "raw",
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
+make_pal_run(work / "raw", run=1, n_points=4, shots_per_point=8)  # SyntheticPalRun
+make_pal_run(work / "raw", run=2, n_points=3, shots_per_point=8, seed=1)  # SyntheticPalRun
+profile = BeamtimeProfile(name="demo_pal", format="pal_xfel_points_2025_09", raw_root=work / "raw",  # a profile for the synthetic PAL-XFEL run
                           processed_root=work / "reduced", background_box={"y": [0, 8], "x": [0, 8]})
 ```
 
@@ -7008,6 +7461,7 @@ exists) and `auto_process.skip_list` (else `Skip_dict.csv`), the last three rela
 `legacy_cubes`, `animations` or `fps`.
 
 ```python
+# profile: a PAL-XFEL beamtime profile; the watcher's settings derived from it
 cfg = ap.config_from_profile(profile, workers=1)
 cfg.raw_dir.name, cfg.cube_dir.name, cfg.outputs_dir.name   # ('type=raw', 'data', 'outputs')
 cfg.skip_list.name, cfg.log_dir.name                        # ('Skip_dict.csv', 'logs')
@@ -7025,6 +7479,7 @@ sets their speed; `skip_list` is the skip-list file.
 - `log_dir`: property, `<outputs_dir>/logs`.
 
 ```python
+# cfg: the watcher's settings; a copy for a quick look with its own output folder
 quick = ap.AutoConfig(raw_dir=cfg.raw_dir, cube_dir=cfg.cube_dir, outputs_dir=work / "quicklook",
                       profile=profile, workers=1, animations=False)
 quick.log_dir.name, quick.default_rois                      # ('logs', [])
@@ -7039,6 +7494,7 @@ Processes every pending run (`pending_runs`) once with `process_run` and returns
 file is saved as YAML next to it with the axis used for each run. This is `bexa auto -p PROFILE`.
 
 ```python
+# cfg: the watcher's settings; the runs waiting, then every one of them processed
 [r.run for r in ap.run_once(cfg, dry_run=True)]         # ['run1', 'run2']
 records = ap.run_once(cfg)
 [(r.run, r.status) for r in records]                    # [('run1', 'ok'), ('run2', 'ok')]
@@ -7054,6 +7510,7 @@ records of all cycles after that many, without a final sleep. Replaces `scan_aut
 the command is `bexa auto -p PROFILE --watch --interval 60`.
 
 ```python
+# cfg: the watcher's settings; one cycle of the watcher (a new run appeared)
 make_pal_run(work / "raw", run=3, n_points=3, shots_per_point=8)          # a new run appears
 [(r.run, r.status) for r in ap.watch(cfg, interval_s=60, max_cycles=1)]   # [('run3', 'ok')]
 # ap.watch(cfg, interval_s=60)            during the beamtime: polls until interrupted
@@ -7069,6 +7526,7 @@ caught and the run tried again, `retries` times at most. Appends to `logs/bexa_a
 `logs/<run>.json` and returns a `RunRecord`; the skip list is left to `run_once`.
 
 ```python
+# cfg: the watcher's settings; run 1 reduced and its figures written, with a record
 rec = ap.process_run("run1", cfg)        # processes again even though outputs exist
 rec.status, rec.attempts                 # ('ok', 1)
 ```
@@ -7081,6 +7539,7 @@ time in `seconds`, `outputs` as `{"<roi name>:<kind>": path}`, the last `error` 
 `"<exception type>: <message>"` and the number of `attempts`. Saved as `logs/<run>.json`.
 
 ```python
+# rec: the record of run 1; what it wrote, and its JSON on disk
 Path(rec.outputs["full:diffplot"]).name      # 'run1_ROI_0_24_0_32_diffplot.png'
 (cfg.log_dir / "run1.json").exists()         # True
 ```
@@ -7092,7 +7551,9 @@ The runs of `discover_runs` that have no output file yet (`processed_runs`) and 
 skip list, restricted to `only` when given.
 
 ```python
+# cfg: the watcher's settings; the runs on disk that have no cube yet
 ap.pending_runs(cfg)                     # []: every run has its figures
+ap.pending_runs(cfg, only=["run1"])             # []
 ```
 
 #### `discover_runs`
@@ -7103,7 +7564,9 @@ stem of every `*Combined*.h5` in `cube_dir` (the cubes of `bexa cube combine`, f
 `Scan_Combiner.py`), without duplicates.
 
 ```python
+# cfg: the watcher's settings; the raw runs and the cubes found
 ap.discover_runs(cfg.raw_dir, cfg.cube_dir)      # ['run1', 'run2', 'run3']
+ap.discover_runs(cfg.raw_dir)                   # ['run1', 'run2', 'run3']
 ```
 
 #### `processed_runs`
@@ -7113,6 +7576,7 @@ The set of run names with an output: the part before the first `_` of every file
 `outputs_dir` (empty when the folder does not exist).
 
 ```python
+# cfg: the watcher's settings; the runs whose figures exist
 sorted(ap.processed_runs(cfg.outputs_dir))       # ['run1', 'run2', 'run3']
 ```
 
@@ -7123,6 +7587,7 @@ The run names of a skip-list file (the legacy `Skip_dict.csv`: a `0` line, then 
 line; numbers and empty lines are ignored), without duplicates; `[]` for `None` or a missing file.
 
 ```python
+# cfg: the watcher's settings; the runs listed to be left alone
 ap.read_skip_list(cfg.skip_list)                 # []: nothing failed
 ```
 
@@ -7133,7 +7598,8 @@ Writes run names in the same format, replacing the file (the folder is created);
 path. Listed runs are never processed: delete a line to retry a run.
 
 ```python
-ap.write_skip_list(cfg.skip_list, ["run7", "run8"])
+# cfg: the watcher's settings; two runs added to the skip list
+ap.write_skip_list(cfg.skip_list, ["run7", "run8"])  # Path('.../Skip_dict.csv')
 ap.read_skip_list(cfg.skip_list)                 # ['run7', 'run8']
 ```
 
@@ -7144,6 +7610,7 @@ The axis to plot a cube against: `requested` (the ROI table's; `"delays"` means 
 cube has it as a dim or coordinate, else the cube's `scan_axis` (with a warning if one was asked).
 
 ```python
+# cube: the cube of run 1; the values of its scan axis, by name or by default
 cube = bexa.load(cfg.cube_dir / "run1.h5")
 ap.cube_axis(cube, "delays"), ap.cube_axis(cube, "th"), ap.cube_axis(cube, None)   # ('delay', 'th', 'delay')
 ```
@@ -7165,6 +7632,7 @@ legacy `ROI_dict.csv` (one column per run: the axis, then `r0 r1 c0 c1` quadrupl
   `.yaml` (the CSV is never overwritten); returns the path, or `None` without one.
 
 ```python
+# a ROI_dict.csv of the old scripts; the pixel window of every run read from it
 import pandas as pd
 pd.DataFrame({"run1": ["delays", 4, 20, 8, 24]}).to_csv(work / "ROI_dict.csv", index=False)
 table = ap.RoiTable.load(work / "ROI_dict.csv")
@@ -7192,7 +7660,7 @@ from pathlib import Path
 import bexa
 from bexa.pipelines import benchmark
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 ```
 
 #### `run_suite`
@@ -7206,6 +7674,7 @@ timed as well. Returns `{"machine", "quick", "device", "cupy", "cpu_count", "tim
 "cases"}`, with `cases` holding `"esrf_synthetic"` (and `"real_stack"`).
 
 ```python
+# the quick benchmark suite on synthetic data; the timings of one case
 results = benchmark.run_suite(quick=True)
 case = results["cases"]["esrf_synthetic"]
 case["frames"], case["frame_shape"]              # (48, [48, 64])
@@ -7220,7 +7689,8 @@ The text `bexa bench` prints: per case the frames and frame shape, the timings i
 `compute_to_read`, `peak_rss_mb` and `gpu_used_mb`.
 
 ```python
-print(benchmark.format_results(results))
+# results: the suite's timings; as a text table
+print(benchmark.format_results(results))        # one line per case, the timings in seconds
 ```
 
 #### `save_baseline`
@@ -7230,6 +7700,7 @@ Writes `results` as JSON to `<folder>/<results["machine"]>.json`, creating the f
 returns the path. `bexa bench --save` writes to `benchmarks/baselines/`.
 
 ```python
+# results: the suite's timings; written as this machine's baseline
 path = benchmark.save_baseline(results, work / "baselines")
 path.name == benchmark.machine_id() + ".json"    # True
 ```
@@ -7241,6 +7712,7 @@ The results stored for `machine` (default this one, `machine_id()`) in
 `<folder>/<machine>.json`, or `None` when there are none.
 
 ```python
+# work: a folder with a baseline; read back, and a folder without one
 baseline = benchmark.load_baseline(work / "baselines")
 benchmark.load_baseline(work / "nowhere")        # None
 ```
@@ -7254,6 +7726,7 @@ than `tolerance` (0.2 is 20 percent), such as
 `bexa bench` then exits with code 1. Timings of a few milliseconds are noisy.
 
 ```python
+# results, baseline: the timings and the baseline; a slower run flagged
 benchmark.compare(results, baseline)             # []
 slower = {"cases": {"esrf_synthetic": {**case, "reduce_s": 2 * case["reduce_s"] + 1}}}
 benchmark.compare(slower, baseline)              # ['esrf_synthetic.reduce_s: <now> s vs baseline <before> s']
@@ -7266,6 +7739,7 @@ benchmark.compare(slower, baseline)              # ['esrf_synthetic.reduce_s: <n
 else `cpu`), spaces replaced by `_`: the name of the baseline file.
 
 ```python
+# the name the baseline file carries for this machine
 benchmark.machine_id()                           # '<hostname>-cuda' or '<hostname>-cpu'
 ```
 
@@ -7280,6 +7754,7 @@ used, `peak_rss_mb` and `gpu_used_mb` (held by the cupy pool at the end; `None` 
 `batch_frames` sets the batch size of the pass.
 
 ```python
+# the demo mu scan; the read and reduce timings of one scan
 timings = benchmark.bench_scan(bexa.demo("rocking"), device="cpu")
 timings["frames"], timings["device"]             # (25, 'cpu')
 ```
@@ -7291,6 +7766,7 @@ Times `dfxm_report.report(scan, <temporary folder>, downsample=4, device="cpu")`
 `{"report_s": seconds}`. Switches matplotlib to the Agg backend (no windows) for the session.
 
 ```python
+# the demo mu scan; the timings of the standard figures
 benchmark.bench_plots(bexa.demo("rocking"))      # {'report_s': seconds}
 ```
 
@@ -7323,6 +7799,7 @@ unknown `kind` raises `ValueError`. The kinds:
   (16, an edge) and ccmth (15).
 
 ```python
+# a synthetic mu scan with smaller frames and more noise than the default
 import bexa
 scan = bexa.demo("rocking", frame_shape=(32, 40), noise=5.0)     # kwargs go to make_esrf_scan
 scan.dims, scan.shape                            # (('mu', 'y', 'x'), (25, 32, 40))
@@ -7352,7 +7829,7 @@ from bexa.testing import (dfxm_sample, make_esrf_beamtime, make_esrf_energy_seri
                           make_esrf_zstack, make_lcls_cube, make_legacy_cube, make_pal_run,
                           make_pal_spec_scan, polycrystal)
 
-work = Path(tempfile.mkdtemp())
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
 ```
 
 #### `make_esrf_scan`
@@ -7402,6 +7879,7 @@ frames, as LIMA writes them, and a partial scan fills fewer files). Read by
   any other word (a beamline macro, read from its readbacks).
 
 ```python
+# work: a scratch folder; a chi x mu scan written as BLISS would, then opened
 made = make_esrf_scan(work, dataset="grain", motors=(("chi", 5), ("mu", 20)), noise=3.0)
 scan = bexa.open(made.dataset_dir)               # esrf_id03_bliss_2026, dims (chi, mu, y, x)
 res = scan.com(axes=("chi", "mu"), sigma=0)
@@ -7424,6 +7902,7 @@ running with 15 frames taken, scan 6 has just started and holds no frame, and a 
 (`layout`, `n_files`...). Returns a `SyntheticBeamtime`.
 
 ```python
+# work: a scratch folder; a beamtime with complete, aborted, running and empty scans
 live = make_esrf_beamtime(work)
 ds = bexa.open_dataset(live.dataset_dir, cache=False)
 ds.table()["status"].tolist()                    # ['complete', 'complete', 'complete', 'aborted', 'running', 'running']
@@ -7439,6 +7918,7 @@ SyntheticEsrfScan}`), the ids of the `complete` scans, the `aborted`, `running` 
 `bexa.open_dataset` takes.
 
 ```python
+# live: the synthetic beamtime; which scan is which, and the frames of the running one
 live.complete, live.aborted, live.running, live.empty, live.stray.name   # ([1, 2, 3], 4, 5, 6, 'scan0004_old')
 live.scans[5].n_frames                           # 15
 ```
@@ -7456,6 +7936,7 @@ of every frame in acquisition order), `frame_shape`, `n_frames` (after `partial`
 - `scan_folder`: property, `<root>/<dataset>/scan<NNNN>`.
 
 ```python
+# made: the synthetic chi x mu scan; its grid, frames and files
 made.motor_shape, made.n_frames, made.frames.shape      # ((5, 20), 100, (100, 48, 64))
 made.scan_folder.name, made.master.name                 # ('scan0001', 'grain.h5')
 sorted(made.truth)                                      # ['chi_center', 'mu_center']
@@ -7469,6 +7950,7 @@ energy series is recorded; `**kwargs` go to `make_esrf_scan`, whose layout and s
 a list of `SyntheticEsrfScan`; `bexa.open(dataset_dir, scan=(1, 3))` stacks them on `energy`.
 
 ```python
+# work: a scratch folder; one mu scan per energy, opened as a series
 series = make_esrf_energy_series(work, motors=(("mu", 8),), n_files=1)
 bexa.open(series[0].dataset_dir, scan=(1, 3)).dims     # ('energy', 'mu', 'y', 'x')
 ```
@@ -7491,6 +7973,7 @@ difference maps between two datasets (the planted `chi_center`/`mu_center` move 
 `make_esrf_scan` (spec `esrf_id03_bliss_2026`); returns a `SyntheticZStack`.
 
 ```python
+# work: a scratch folder; a mosaicity scan and an energy series at every height
 zs = make_esrf_zstack(work)                     # 5 heights x (90 + 5 x 8 frames), 40 x 48 pixels
 zs.mosa_scans, zs.energy_scans[0]               # ([1, 7, 13, 19, 25], (2, 6))
 bexa.open(zs.dataset_dir, scan=zs.energy_scans[0]).dims     # ('energy', 'mu', 'y', 'x')
@@ -7513,6 +7996,7 @@ column of grain A) and the `(heights, H, W)` maps `energy_center` (keV), `chi_ce
 - `dataset_dir`: property, `<root>/<dataset>`, for `bexa.open_dataset`.
 
 ```python
+# zs: the synthetic z-stack; its folder opened as a dataset, the scans per height
 ds = bexa.open_dataset(zs.dataset_dir)
 len(ds), ds.groups("samz")[0.0]                 # (30, [13, 14, 15, 16, 17, 18])
 ```
@@ -7529,6 +8013,7 @@ intensity by about 10 %; a wider curve is lower, keeping the area. The brightest
 near `peak` counts. Returns a `SampleModel`; `**sample.scan_kwargs` passes it to `make_esrf_scan`.
 
 ```python
+# a sample model (grains, boundaries) for a scan of 48 x 56 pixels
 sample = dfxm_sample((48, 56))
 np.unique(sample.labels)                        # array([0, 1, 2, 3])
 made = make_esrf_scan(work, dataset="grains", motors=(("chi", 9), ("mu", 21)), frame_shape=(48, 56),
@@ -7546,6 +8031,7 @@ column of grain A; NaN when absent) and the `microstructure` it was cut from.
 - `scan_kwargs`: property, `{"amplitude": ..., "centers": ..., "widths": ...}` for `make_esrf_scan`.
 
 ```python
+# sample: the sample model; what make_esrf_scan takes from it, the grain centre
 sorted(sample.scan_kwargs)                      # ['amplitude', 'centers', 'widths']
 sample.grain_center                             # (24.66..., 19.91...): row, column of grain A
 ```
@@ -7560,6 +8046,7 @@ higher, and a jittered grid of grains oriented outside the scans (|chi| above 1 
 `dfxm_sample(..., microstructure=micro)` cuts it at any height.
 
 ```python
+# a 3-D polycrystal of 48 x 56 pixels with seeded grains
 micro = polycrystal((48, 56), seed=0)
 micro.shape, len(micro.seeds)                   # ((58, 48, 56), 14)
 upper = dfxm_sample((48, 56), z=10, microstructure=micro)    # another section of the same grains
@@ -7577,6 +8064,7 @@ smooth random field at a quarter of the resolution) and the indices of grains A 
   of the domain wall (bool) and the texture.
 
 ```python
+# micro: the polycrystal; one slice through it at a height
 grains, side, texture = micro.slice(29.0)
 grains.shape, side.dtype                        # ((48, 56), dtype('bool'))
 ```
@@ -7591,6 +8079,7 @@ map), `tilt` (chi and mu centre of the rocking curve, deg; `None`: each grain it
 four defaults; pass a changed copy as `regions`.
 
 ```python
+# the regions of the standard sample plus one of your own
 from bexa.testing import SAMPLE_REGIONS, Region
 regions = {**SAMPLE_REGIONS, "grain_b": Region(3, (0.3, 0.6), (0.08, 0.12), 0.75, 0.01)}
 sample_b = dfxm_sample((48, 56), regions=regions)       # grain B further off and more strained
@@ -7609,6 +8098,7 @@ peak is scaled by 1 + 0.3 tanh(delay); `delays` default to `linspace(-2, 8, n_po
 `pal_xfel_points_2025_09` (`bexa.open`, `xfel_cube`); returns a `SyntheticPalRun`.
 
 ```python
+# work: a scratch folder; a PAL-XFEL run of four points, opened as a scan
 pal = make_pal_run(work / "pal", run=7, n_points=4)
 bexa.open(pal.measurement_dir).dims             # ('frame', 'y', 'x'): every shot is a frame
 pal.truth["frames_on"].shape, pal.truth["signals_off"].shape     # ((4, 24, 32), (4,))
@@ -7626,6 +8116,7 @@ and `signals_off` (`(points,)`).
 - `raw_dir`: property, `<root>/type=raw/run=RRR/scan=SSS`.
 
 ```python
+# pal: the synthetic PAL-XFEL run; its folders and the columns of its first point
 pal.measurement_dir.parent.name, pal.raw_dir.name       # ('run=007', 'scan=001')
 list(pal.tables[0].columns)[:3]         # ['timestamp', 'delay_input', 'event_info.THIRTY_HERTZ']
 ```
@@ -7641,6 +8132,7 @@ I0 in `det/ohqbpm2_totalsum` and images in `det/<detector>/data`. `motors` holds
 by `pal_xfel_spec_2025_04`; returns a `SyntheticSpecScan`.
 
 ```python
+# work: a scratch folder; a SPEC-style PAL-XFEL scan file, opened
 spec = make_pal_spec_scan(work / "pal_spec")
 bexa.open(spec.path).dims                       # ('delay', 'y', 'x')
 ```
@@ -7652,6 +8144,7 @@ Dataclass: the file `path`, `motors` (name to planned positions), `n_recorded` p
 (`(n_recorded, H, W)` float32) and `i0` (`(n_recorded,)`).
 
 ```python
+# spec: the synthetic SPEC-style scan; its file, the points recorded, its images
 spec.path.name, spec.n_recorded, spec.images.shape      # ('p0001.h5', 8, (8, 20, 24))
 ```
 
@@ -7664,6 +8157,7 @@ one frame per shot, `n_steps` scan values times `repeats` shots) and `Run<NNNN>_
 Read by `lcls_xcs_cube` (`bexa.load` or `bexa.open` of the folder); returns a `SyntheticLclsCube`.
 
 ```python
+# work: a scratch folder; an LCLS cube of shots, loaded back
 lcls = make_lcls_cube(work / "lcls")
 bexa.load(lcls.root)["frames"].shape            # (2, 24, 24, 24): laser, shot, y, x
 ```
@@ -7676,6 +8170,7 @@ binning: `bins` (the unique scan values), `avg_on` and `avg_off` (`(bins, H, W)`
 I0-normalised images per bin, shots with an I0 of 0 skipped; sums despite the name).
 
 ```python
+# lcls: the synthetic LCLS cube; the planted truth it was made from
 lcls.truth["bins"], lcls.truth["avg_on"].shape   # (array([-1.,  0.,  1.,  2.,  3.,  4.]), (6, 24, 24))
 ```
 
@@ -7689,6 +8184,7 @@ from -1 to 4, the others are 1.5), `index`, `signals_on`, `signals_off` and floa
 axis). Read by `bexa_cube_legacy` (`bexa.load`, `bexa.open`); returns the path.
 
 ```python
+# work: a scratch folder; a cube in the layout of the old XFEL scripts, loaded back
 path = make_legacy_cube(work / "reduced" / "run42.h5", axis="th")
 bexa.load(path)["frames"].dims                  # ('laser', 'th', 'y', 'x')
 ```
@@ -7740,6 +8236,7 @@ from the bottom up); `False` rotates about fixed lab axes, `R = R_n ... R_1` (`i
 - `with_eta_offset(eta_zero_offset)`: a copy with another eta zero (degrees).
 
 ```python
+# pal: the PAL-XFEL four-circle convention; the sample rotation for two angles
 pal = CONVENTIONS["pal_fourc"]
 R = pal.sample_rotation(mu=10.0, omega=30.0)               # 3 x 3; chi and phi stay at 0
 Q = k * (pal.kf_direction(40.0) - np.array(pal.beam))      # lab Q for 2theta = 40 deg
@@ -7755,6 +8252,7 @@ The registered `Convention` for a name; a `Convention` passes through and `None`
 Unknown names raise `KeyError` listing the known ones. Every `convention=` argument goes through it.
 
 ```python
+# a convention by name, and the default one
 get_convention("lcls_xcs").name, get_convention(None).name     # ('pal_fourc', 'id03')
 ```
 
@@ -7767,6 +8265,7 @@ Azimuth eta in degrees from the horizontal and vertical components of `k_f` (num
 towards -horizontal and 90 straight up.
 
 ```python
+# the azimuth of a scattered beam in two conventions
 eta_of_kf([0.0, 0.5], [1.0, 0.5], CONVENTIONS["pal_fourc"])    # [0.0, 45.0]
 eta_of_kf(0.0, 1.0, CONVENTIONS["sacla"])                      # 90.0
 ```
@@ -7777,6 +8276,7 @@ eta_of_kf(0.0, 1.0, CONVENTIONS["sacla"])                      # 90.0
 3 x 3 right-handed rotation about `axis` (normalised inside) by `angle_deg` degrees (Rodrigues).
 
 ```python
+# a 120 degree rotation about the body diagonal applied to x
 rotation_axis((1, 1, 1), 120.0) @ [1, 0, 0]      # [0, 1, 0]
 ```
 
@@ -7786,6 +8286,7 @@ rotation_axis((1, 1, 1), 120.0) @ [1, 0, 0]      # [0, 1, 0]
 Rotation about the lab x axis by `angle_deg` degrees.
 
 ```python
+# a 90 degree rotation about x applied to y
 rotation_x(90.0) @ [0, 1, 0]                     # [0, 0, 1]
 ```
 
@@ -7795,6 +8296,7 @@ rotation_x(90.0) @ [0, 1, 0]                     # [0, 0, 1]
 Rotation about the lab y axis by `angle_deg` degrees.
 
 ```python
+# a 90 degree rotation about y applied to z
 rotation_y(90.0) @ [0, 0, 1]                     # [1, 0, 0]
 ```
 
@@ -7804,6 +8306,7 @@ rotation_y(90.0) @ [0, 0, 1]                     # [1, 0, 0]
 Rotation about the lab z axis by `angle_deg` degrees.
 
 ```python
+# a 90 degree rotation about z applied to x
 rotation_z(90.0) @ [1, 0, 0]                     # [0, 1, 0]
 ```
 
@@ -7821,7 +8324,7 @@ Constants:
 import bexa
 from bexa.geometry import DetectorGeometry
 
-geom = DetectorGeometry(energy_keV=17.0, pixel_size_um=6.5, distance_mm=850.0,
+geom = DetectorGeometry(energy_keV=17.0, pixel_size_um=6.5, distance_mm=850.0,  # the far-field camera at 17 keV: pixel size, distance, beam centre
                         beam_center=(1080, 1280), detector_shape=(2160, 2560))
 ```
 
@@ -7839,6 +8342,7 @@ angles), `effective_pixel_nm` (pixel size on the sample, for scalebars), `detect
 - `with_energy(energy_keV)`: a copy at another energy.
 
 ```python
+# geom: the detector geometry of the demo scan; its wavelength, wavevector and pixel size
 print(geom)                                          # 17.0000 keV, 6.5 um pixels, 850 mm, convention id03
 geom.wavelength_A, geom.k0, geom.pixel_size_mm       # (0.7293, 8.6151, 0.0065)
 DetectorGeometry(detector_shape=(2160, 2560)).center()     # (1080.0, 1280.0)
@@ -7853,6 +8357,7 @@ Classmethod behind `bexa.open`: pixel size, effective pixel and shape from the f
 the profile's `geometry` section (a pydantic model or a dict) on top.
 
 ```python
+# the geometry of the ESRF far-field camera, from the format spec at 17 keV
 from bexa.io.formats import load_spec
 ff = DetectorGeometry.from_spec(load_spec("esrf_id03_bliss_2026"), "pco_ff", energy_keV=17.0,
                                 profile={"distance_mm": 850.0})
@@ -7877,7 +8382,7 @@ from bexa.geometry import DetectorGeometry
 from bexa.geometry.transforms import (angles_to_Q, build_coordinate_grids, motor_angles_to_Q,
                                       pixels_to_angles, q_magnitude, scattering_vector)
 
-geom = DetectorGeometry(energy_keV=17.0, pixel_size_um=6.5, distance_mm=850.0,
+geom = DetectorGeometry(energy_keV=17.0, pixel_size_um=6.5, distance_mm=850.0,  # the far-field camera at 17 keV: pixel size, distance, beam centre
                         beam_center=(1080, 1280), convention="id03")
 scan = bexa.demo("mosa")                 # synthetic chi x mu scan (6 x 16 points) at 17 keV
 ```
@@ -7890,6 +8395,7 @@ arrays): `two_theta = atan(dx / L)`, `delta = atan(dy / sqrt(dx^2 + L^2))` from 
 centre, plus the arm offsets. Needs `distance_mm`, `pixel_size_um` and a beam centre or shape.
 
 ```python
+# geom: the detector geometry; two pixels as scattering and azimuth angles
 tt, delta = pixels_to_angles([1280, 1780], [1080, 1080], geom)
 np.degrees(tt)                                  # [0.0, 0.2191]: 500 pixels = 3.25 mm at 850 mm
 yy, xx = np.mgrid[0:2160:8, 0:2560:8]
@@ -7904,6 +8410,7 @@ angles in degrees (`mu=`, `chi=`, `phi=`): `Q_sample = R^T Q_lab`, `R` the conve
 rotation, `k` from `geometry.energy_keV`. Components have the shape of the angle arrays.
 
 ```python
+# tt, delta: the angles of two pixels; their Q at a sample tilt, and the straight-through case
 Qx, Qy, Qz = angles_to_Q(tt, delta, geom, mu=0.1, chi=-0.2)   # (270, 320) each
 angles_to_Q(np.radians(20.0), 0.0, geom)                      # (2.9466, 0.0, -0.5196)
 ```
@@ -7914,6 +8421,7 @@ angles_to_Q(np.radians(20.0), 0.0, geom)                      # (2.9466, 0.0, -0
 Lab-frame `Q = k_f - k_i`, shape `(..., 3)`, in the units of `k0`, for angles in degrees.
 
 ```python
+# the scattering vector of a 20 degree beam in the default and the PAL conventions
 scattering_vector(20.0, 0.0, geom.k0)                  # [2.9466, 0.0, -0.5196]: id03, beam along z
 scattering_vector(20.0, 0.0, geom.k0, "pal_fourc")     # [-0.5196, 2.9466, 0.0]: beam along x
 ```
@@ -7924,6 +8432,7 @@ scattering_vector(20.0, 0.0, geom.k0, "pal_fourc")     # [-0.5196, 2.9466, 0.0]:
 `|Q| = 2 k0 sin(two_theta / 2)` for 2theta in degrees; numbers or arrays.
 
 ```python
+# the length of Q for two scattering angles
 q_magnitude([10.0, 20.0], geom.k0)       # [1.5017, 2.992] 1/Angstrom
 ```
 
@@ -7935,6 +8444,7 @@ the 3-D reciprocal-lattice-point view of a mosaicity scan: each motor keyword is
 degrees, the arrays broadcast, and `(Qx, Qy, Qz)` take their shape. One rotation per point.
 
 ```python
+# geom: the detector geometry; Q over a chi x mu grid at a fixed scattering angle
 chi, mu = np.meshgrid(np.linspace(-1, 1, 3), np.linspace(-0.5, 0.5, 5), indexing="ij")
 Qx, Qy, Qz = motor_angles_to_Q(20.0, geom, chi=chi, mu=mu)     # each (3, 5)
 np.sqrt(Qx**2 + Qy**2 + Qz**2).max()                           # 2.992: |Q| is set by 2theta
@@ -7955,6 +8465,7 @@ motor grid: the coordinate modes of v9's `plot_3d_rlp`, used by
   matrix); needs `crystal`. `hkl_center` only sets the Bragg angle, the indices are not shifted.
 
 ```python
+# scan: the demo chi x mu scan; the Q coordinates of every grid point
 two_theta = 2 * bragg_angle_deg(2.338, scan.energy_keV)          # Al 111 at 17 keV: 17.95 deg
 grids = build_coordinate_grids(scan.structure, scan.geometry, space="Q",
                                two_theta=two_theta)             # Qx, Qy, Qz, each (6, 16)
@@ -7975,7 +8486,7 @@ from bexa.crystal import (BravaisLattice, Crystal, LatticeParameters, centering_
                           d_spacing, detect_bravais)
 
 si = LatticeParameters.silicon()                 # cubic, a = 5.43102 Angstrom
-crystal = Crystal(si, centering="F", name="Si")
+crystal = Crystal(si, centering="F", name="Si")  # silicon as a Crystal
 ```
 
 #### `LatticeParameters`
@@ -7991,6 +8502,7 @@ Frozen dataclass of the cell: lengths in Angstrom, angles in degrees.
 - `as_dict()`: the six values by name, a form `create_diffractometer` also accepts.
 
 ```python
+# si: the silicon cell; a spacing and the volume; an orthorhombic cell's spacing
 si.d_spacing((1, 1, 1)), si.volume                              # (3.1356, 160.19)
 LatticeParameters.orthorhombic(3.4979, 6.3383, 15.4319).d_spacing((0, 4, 0))   # Td-WTe2: 1.5846
 ws2 = LatticeParameters.hexagonal(3.1532, 12.323)
@@ -8016,6 +8528,7 @@ triclinic cells `Crystal.d_spacing` differs from `LatticeParameters.d_spacing` f
 - `is_allowed(hkl)`: `centering_allowed(hkl, crystal.centering)`.
 
 ```python
+# crystal: silicon as a Crystal; a reciprocal lattice vector
 crystal                                   # Crystal(Si: a=5.4310, b=5.4310, c=5.4310, alpha=90, beta=90, gamma=90, F)
 crystal.Q_vector((1, 1, 1))               # [1.1569, 1.1569, 1.1569]
 h, k, l = crystal.hkl_from_Q(crystal.Q_vector((2, -1, 3)))     # 2.0, -1.0, 3.0
@@ -8031,6 +8544,7 @@ replaces the Bragg's-law cells of `Usefulthings`; in a terminal
 and the number of equivalents.
 
 ```python
+# crystal: silicon; the spacing of the 111 planes
 crystal.d_spacing((1, 1, 1))               # 3.1356 Angstrom
 ```
 
@@ -8041,6 +8555,7 @@ Bragg angle theta (not 2theta) in degrees at an energy in keV, from `lambda = 2 
 `ValueError` when the reflection is out of reach.
 
 ```python
+# crystal: silicon; the Bragg angle of 111 at 17 keV
 crystal.bragg_angle_deg((1, 1, 1), 17.0)         # 6.678 deg, so 2theta = 13.357 deg
 ```
 
@@ -8054,6 +8569,7 @@ return reflections with another d-spacing (hexagonal (1, 0, 2): 16 entries inste
 filter those with `LatticeParameters.d_spacing`. The solvers use this list for a family.
 
 ```python
+# crystal: silicon; the reflections equivalent to 111 by symmetry, and to 311
 crystal.equivalent_reflections((1, 1, 1))       # [(-1, -1, -1), (-1, -1, 1), ..., (1, 1, 1)]: 8
 len(crystal.equivalent_reflections((3, 1, 1)))   # 24
 ```
@@ -8067,6 +8583,7 @@ centering allows unless `allowed_only=False`. In a terminal,
 reachable ones with d and 2theta.
 
 ```python
+# crystal: silicon; every reflection up to index 2, allowed ones and all
 len(crystal.reflections(2)), len(crystal.reflections(2, allowed_only=False))   # (34, 124)
 ```
 
@@ -8076,6 +8593,7 @@ len(crystal.reflections(2)), len(crystal.reflections(2, allowed_only=False))   #
 d-spacing in Angstrom of a `LatticeParameters`, `1/d^2 = h G* h` (any cell; `inf` for 000).
 
 ```python
+# si: the silicon cell; the spacing of 220
 d_spacing(si, (2, 2, 0))                         # 1.9202
 ```
 
@@ -8088,6 +8606,7 @@ right angles cubic, tetragonal (a = b; the unique axis must be c) or orthorhombi
 90), triclinic. Pass `bravais=` to `Crystal` when the crystal is less symmetric than its cell.
 
 ```python
+# the Bravais lattice of a hexagonal cell and of a rhombohedral one
 detect_bravais(LatticeParameters.hexagonal(3.1532, 12.323))     # BravaisLattice.HEXAGONAL
 detect_bravais(LatticeParameters(5, 5, 5, 80, 80, 80)).value    # 'trigonal'
 ```
@@ -8100,7 +8619,9 @@ odd, A k+l even, B h+l even, C h+k even, R -h+k+l divisible by 3 (hexagonal axes
 screw extinctions are not applied (silicon's 200 passes); other letters raise `ValueError`.
 
 ```python
+# whether 111 and 100 are allowed in a face-centred lattice
 centering_allowed((1, 1, 1), "F"), centering_allowed((1, 0, 0), "F")    # (True, False)
+centering_allowed((1, 1, 1))                    # True
 ```
 
 #### `BravaisLattice`
@@ -8111,6 +8632,7 @@ String enum of the lattice systems (`CUBIC`, `TETRAGONAL`, `ORTHORHOMBIC`, `HEXA
 `BravaisLattice("cubic")`. Members equal their strings, so `bravais="cubic"` works everywhere.
 
 ```python
+# the lattice enum from a name, compared with a string
 BravaisLattice("hexagonal"), BravaisLattice.CUBIC == "cubic"    # (BravaisLattice.HEXAGONAL, True)
 ```
 
@@ -8126,7 +8648,7 @@ from pathlib import Path
 from bexa.crystal import Crystal
 from bexa.crystal.cif import CifInfo, crystal_from_cif, read_cif
 
-path = Path("Si.cif")
+path = Path("Si.cif")                           # a CIF written by the setup
 path.write_text("data_Si\n_cell_length_a 5.43102(8)\n_cell_length_b 5.43102(8)\n"
                 "_cell_length_c 5.43102(8)\n_cell_angle_alpha 90\n_cell_angle_beta 90\n"
                 "_cell_angle_gamma 90\n_symmetry_space_group_name_H-M 'F d -3 m'\n"
@@ -8143,6 +8665,7 @@ about missing symmetry operations). With `use_pymatgen=False`, without pymatgen 
 (a warning is logged), `read_cif` supplies the cell and `bravais` is guessed from it.
 
 ```python
+# path: a CIF of silicon; the Crystal it describes
 si = crystal_from_cif(path)                          # Crystal(Si: a=5.4310, ..., F) via pymatgen
 si.bravais, si.centering                             # (BravaisLattice.CUBIC, 'F')
 plain = crystal_from_cif(path, use_pymatgen=False)   # built-in parser: same cell and centering
@@ -8158,6 +8681,7 @@ It reads the whole file, so with several data blocks the last cell wins but the 
 kept: split such files first.
 
 ```python
+# path: a CIF of silicon; its lattice, space group and centering
 info = read_cif(path)
 info.lattice.a, info.space_group, info.centering    # (5.43102, 'F d -3 m', 'F')
 ```
@@ -8169,6 +8693,7 @@ Dataclass returned by `read_cif`: the `path`, the `LatticeParameters`, the symbo
 centering letter and `formula`, which the parser leaves at `None`.
 
 ```python
+# info: what read_cif found; a Crystal built from it by hand
 Crystal(info.lattice, centering=info.centering, name=info.path.stem)   # what use_pymatgen=False builds
 ```
 
@@ -8188,7 +8713,7 @@ from bexa.crystal.diffractometer import (FourCircleDiffractometer, MotorConfig, 
                                          create_diffractometer, format_solutions, orientation_matrix)
 
 # Motor_Solver_SACLA.py's case: diamond at 11.1 keV, (100) up, (011) horizontal
-diff = create_diffractometer(LatticeParameters.diamond(), 11.1, out_of_plane=(1, 0, 0),
+diff = create_diffractometer(LatticeParameters.diamond(), 11.1, out_of_plane=(1, 0, 0),  # a four-circle diffractometer for diamond at 11.1 keV
                              zone_axis=(0, 1, 1), bravais="cubic", convention="sacla",
                              eta_zero_offset=-180)
 for name, (low, high) in {"mu": (-45, -10), "two_theta": (20, 70), "eta": (20, 120)}.items():
@@ -8207,6 +8732,7 @@ from every eta. Replaces `Motor_Solver_SACLA.py` (`convention="sacla", eta_zero_
 `solve_for_peak_family`); `bexa crystal solve` is the terminal version.
 
 ```python
+# a four-circle diffractometer for a cubic crystal at 11 keV with a known orientation
 pal = create_diffractometer({"a": 3.56, "b": 3.56, "c": 3.56}, 11.0, (1, 1, 0), (1, -1, 0),
                             eta_zero_offset=-90)                 # pal_fourc
 pal.crystal.bravais, pal.motors["eta"].bounds()                  # (BravaisLattice.CUBIC, (-20.0, 20.0))
@@ -8236,6 +8762,7 @@ a `MotorConfig` per motor. Default limits (deg): mu -10 to 90, chi -5 to 95, phi
 - `accessible_reflections(max_hkl=5)`: reflections Bragg's law allows (centering not applied).
 
 ```python
+# diff: the diffractometer; its motors and their rest positions
 print(diff.describe_motors())         # mu: -45 to -10 deg (range) ... eta: 20 to 120 deg (range)
 diff.default_positions()              # {'mu': -27.5, 'chi': 0.0, 'phi': 0.0, 'omega': 35.5}
 diff.bragg_two_theta((2, 2, 0)), diff.bragg_two_theta((8, 8, 8))     # (52.575, None)
@@ -8253,6 +8780,7 @@ Solves every equivalent of `hkl` (only `hkl` with `use_equivalents=False`) and r
 `max_solutions`, which does not shorten the search. The main loop of `Motor_Solver_SACLA.py`.
 
 ```python
+# diff: the diffractometer; every way to reach a 220 reflection
 solutions = diff.solve_for_peak_family((2, 2, 0), max_solutions=4)    # 12 equivalents: about 15 s
 solutions[0]      # Solution(hkl=(-2, 0, 2), mu=-18.123, chi=0.001, ..., eta=82.521, d=1.2611 A, ...)
 ```
@@ -8266,6 +8794,7 @@ points, then a differential-evolution search only if none succeeds. Returns a `S
 the eta and two_theta limits, or `None` (with a `UserWarning` if Bragg's law cannot be met).
 
 ```python
+# diff: the diffractometer; the motor angles of one reflection
 sol = diff.solve_for_reflection((0, 2, 2))         # about a second
 sol.mu, sol.eta                                    # (-40.297, 24.765)
 diff.solve_for_reflection((2, 2, 0)) is None       # True: out of reach within these limits
@@ -8279,12 +8808,14 @@ rows. Given the diffractometer, motors moved more than `movement_threshold` degr
 default positions are marked `*`. An empty list gives "No solutions found.".
 
 ```python
+# solutions: the 220 solutions; as a text table
 print(format_solutions(solutions, diff))
 # Found 2 solution(s):
 #          hkl        mu       chi       phi     omega    2theta       eta      d(A)
 # ----------------------------------------------------------------------------------
 #     (-2,0,2)   -18.12*     0.00      0.00     35.50      52.57     82.52    1.2611
 #      (0,2,2)   -40.30*    -0.00     -0.00     35.50      52.57     24.77    1.2611
+format_solutions(solutions[:1], diff).splitlines()[0]  # 'Found 1 solution(s):'
 ```
 
 #### `Solution`
@@ -8298,6 +8829,7 @@ moved motor and 1e-6 per degree of travel) and the stack order for display.
 - `to_dict()`: `hkl`, the angles, `q_magnitude`, `d_spacing`, `energy_keV`, `residual`.
 
 ```python
+# sol: one solution; its angles, and a table of several
 sol.angles()                                        # {'mu': -40.297, 'chi': ..., 'eta': 24.765}
 table = pd.DataFrame([s.to_dict() for s in solutions])     # one row per solution
 ```
@@ -8318,6 +8850,7 @@ between `range_min` and `range_max` degrees; they differ only in the default pos
 - `describe()`: one line of text.
 
 ```python
+# a motor limited to a range; its bounds, rest position and the penalty outside
 mu = MotorConfig.ranged("mu", -45, -10)
 mu.bounds(), mu.default_position(), mu.penalty(-50.0)     # ((-45.0, -10.0), -27.5, 25.0)
 MotorConfig.fixed("omega", 35.5).describe()               # 'omega: fixed at 35.5 deg'
@@ -8332,6 +8865,7 @@ along the horizontal at zero angles (both as reciprocal vectors): `U @ crystal.Q
 the lab Q (beam x, horizontal y, vertical z). `ValueError` when the two are parallel.
 
 ```python
+# cubic: a cubic crystal; the matrix that puts two reflections along the beamline axes
 cubic = Crystal(LatticeParameters.cubic(3.56))
 U = orientation_matrix(cubic, (1, 1, 0), (1, -1, 0))
 U @ cubic.Q_vector((1, 1, 0)) / np.linalg.norm(cubic.Q_vector((1, 1, 0)))    # [0, 0, 1]: (110) up
@@ -8353,8 +8887,8 @@ from bexa.crystal import Crystal, LatticeParameters
 from bexa.crystal.zone_axis import (AngleFit, ZoneAxisCandidate, ZoneAxisSolver,
                                     normalize_zone_axis, reduce_indices, solve_zone_axis)
 
-observed = {"mu": -38.0, "chi": 0.0, "phi": 0.0, "omega": 0.0, "two_theta": 53.2, "eta": -67.5}
-solver = ZoneAxisSolver(Crystal(LatticeParameters.cubic(3.56), bravais="cubic"), 11.0,
+observed = {"mu": -38.0, "chi": 0.0, "phi": 0.0, "omega": 0.0, "two_theta": 53.2, "eta": -67.5}  # where a peak was seen: the motor angles
+solver = ZoneAxisSolver(Crystal(LatticeParameters.cubic(3.56), bravais="cubic"), 11.0,  # the solver for a cubic crystal
                         out_of_plane=(1, 1, 0), eta_zero_offset=-90)
 ```
 
@@ -8368,9 +8902,10 @@ the terminal version of the example below is
 `bexa crystal zone-axis --lattice cubic:3.56 --energy 11 --hkl -2 0 -2 --oop 1 1 0 --angles mu=-38,chi=0,phi=0,omega=0,two_theta=53.2,eta=-67.5 --eta-offset -90`.
 
 ```python
+# observed: the angles where a peak was seen; the zone axis that explains them
 results = solve_zone_axis(LatticeParameters.cubic(3.56), 11.0, (1, 1, 0), (-2, 0, -2), observed,
                           bravais="cubic", eta_zero_offset=-90, search_range=3, num_results=3)
-[(r.zone_axis, round(r.residual, 3)) for r in results]
+[(r.zone_axis, round(r.residual, 3)) for r in results]  # [(tuple of 3, 1.266), (tuple of 3, 1.266), (tuple of 3, 2.628)]
 # [((-1, 0, 0), 1.266), ((0, 1, 0), 1.266), ((0, 0, -1), 2.628)]
 ```
 
@@ -8388,6 +8923,7 @@ Attributes: `crystal`, `energy_keV`, `wavelength`, `k`, `out_of_plane`, `convent
 - `orientation_matrices(axes)`: `(N, 3, 3)` U matrices, as `orientation_matrix`, all at once.
 
 ```python
+# solver: the solver; a detector position as Q, and the candidate axes
 solver.detector_to_q_lab(53.2, -67.5)             # [-2.2352, -1.7082, -4.1239]
 axes = solver.candidate_axes(3)                   # (336, 3)
 solver.orientation_matrices(axes).shape           # (336, 3, 3)
@@ -8405,10 +8941,11 @@ With `angle_tolerances` (degrees per angle; 180 if missing, any two_theta), only
 fit clips angles to -180..180, so a `sacla` eta over 180 plus its tolerance raises `ValueError`.
 
 ```python
+# solver: the solver; tol: the tolerances; the axes that fit the observed angles
 tol = {"mu": 10.0, "chi": 10.0, "phi": 0.0, "omega": 10.0, "two_theta": 10.0, "eta": 10.0}
 found = solver.find_zone_axis((-2, 0, -2), -38.0, 0.0, 0.0, 0.0, 53.2, -67.5,
                               search_range=3, num_results=3, angle_tolerances=tol)
-[(c.zone_axis, c.matched_hkl) for c in found]
+[(c.zone_axis, c.matched_hkl) for c in found]   # [(tuple of 3, tuple of 3), (tuple of 3, tuple of 3), (tuple of 3, tuple of 3)]
 # [((-1, 0, 0), (0, -2, 2)), ((0, 1, 0), (0, -2, 2)), ((-1, 0, -1), (-2, 0, 2))]
 ```
 
@@ -8420,6 +8957,7 @@ detector for this zone axis: two_theta comes from Bragg's law and is only checke
 move in a bounded local optimisation. Returns an `AngleFit`, or `None` if there is none.
 
 ```python
+# solver: the solver; the angles refined for one axis against the observation
 fit = solver.refine_angles((-1, 0, -1), (-2, 0, 2), observed, tol)
 fit.angles["mu"], fit.differences["mu"]            # (-31.035, 6.965)
 ```
@@ -8433,6 +8971,7 @@ calculated, observed and difference values of each, `Q_lab` and `k_f` (or `valid
 `error` when the axis is parallel to the surface normal). The eta difference is not wrapped at 360.
 
 ```python
+# solver: the solver; fit: the refined angles; checked against the reflection
 check = solver.validate((-1, 0, -1), (-2, 0, 2), **fit.angles)
 check["valid"], check["two_theta_diff"] < 1e-6      # (True, True)
 ```
@@ -8446,6 +8985,7 @@ One result: `zone_axis` (reduced, sign kept), `residual` (1/Angstrom), `d_spacin
 is set.
 
 ```python
+# best: the first axis found; its indices, whether it fits, what was tested
 best = found[0]
 best.zone_axis, best.within_tolerance, best.details["candidates_tested"]    # ((-1, 0, 0), True, 336)
 ```
@@ -8458,7 +8998,8 @@ Result of `ZoneAxisSolver.refine_angles`: `angles` (degrees, two_theta from Brag
 wrapped at 360).
 
 ```python
-{name: round(value, 3) for name, value in best.fit.differences.items()}
+# best.fit: the refined angles of the best axis; how far each is from the observation
+{name: round(value, 3) for name, value in best.fit.differences.items()}  # {'mu': 9.998, 'chi': 0.809, 'phi': 0.0, 'omega': 8.027, 'two_theta': 0.001, 'eta': 4.317}
 # {'mu': 9.998, 'chi': 0.809, 'phi': 0.0, 'omega': 8.027, 'two_theta': 0.001, 'eta': 4.317}
 ```
 
@@ -8468,6 +9009,7 @@ wrapped at 360).
 A direction regardless of sign: reduced indices with the first non-zero one positive.
 
 ```python
+# zone-axis indices reduced and with their sign fixed
 normalize_zone_axis((-3, 3, 0)), normalize_zone_axis((0, -2, 4))    # ((1, -1, 0), (0, 1, -2))
 ```
 
@@ -8477,6 +9019,7 @@ normalize_zone_axis((-3, 3, 0)), normalize_zone_axis((0, -2, 4))    # ((1, -1, 0
 Indices divided by their greatest common divisor, sign kept.
 
 ```python
+# indices divided by their common factor
 reduce_indices((-3, 3, 0)), reduce_indices((2, 4, 6))       # ((-1, 1, 0), (1, 2, 3))
 ```
 
@@ -8498,9 +9041,9 @@ from bexa.crystal.diffractometer import create_diffractometer
 from bexa.crystal.omega_search import (DEFAULT_RANGES, OmegaCandidate, PeakHit,
                                        find_omega_offsets, format_candidates, peaks_at_omega)
 
-diff = create_diffractometer(LatticeParameters.diamond(), 11.1, (1, 1, 0), (0, 0, 1),
+diff = create_diffractometer(LatticeParameters.diamond(), 11.1, (1, 1, 0), (0, 0, 1),  # a four-circle diffractometer for diamond at 11.1 keV
                              bravais="cubic", convention="sacla", eta_zero_offset=-180)
-ranges = {"mu": (-45.0, -10.0), "eta": (35.0, 100.0), "two_theta": (20.0, 70.0)}
+ranges = {"mu": (-45.0, -10.0), "eta": (35.0, 100.0), "two_theta": (20.0, 70.0)}  # the motor limits
 ```
 
 #### `find_omega_offsets`
@@ -8516,6 +9059,7 @@ and `solver_solutions`. `[]` when the family's 2theta is outside the two_theta w
 `omega_finder.py`; the terminal version is `bexa crystal omega-search`.
 
 ```python
+# diff, ranges: the diffractometer and the motor limits; the omegas where two 311 peaks share a mu window
 candidates = find_omega_offsets(diff, (3, 1, 1), ranges, step=0.05, top_n=3)   # under 1 s
 best = candidates[0]
 best.omega, best.gap, best.first.hkl, best.second.hkl    # (-10.029, 6.674, (1, -3, -1), (1, -3, 1))
@@ -8529,11 +9073,13 @@ with mu and eta, eta difference, solver check) and a "Recommended:" line; "No ca
 found." for an empty list.
 
 ```python
+# candidates: the omegas found; as a text table
 print(format_candidates(candidates))
 #  #   offset    omega      dmu       reflA      muA    etaA       reflB      muB    etaB  d_eta     solver
 #  1  -10.029  -10.029   6.6745 (1, -3, -1)  -32.781  100.00  (1, -3, 1)  -26.106   58.59   41.4          -
 #  ... two more rows
 # Recommended: omega_offset = -10.029 (omega = -10.029), |delta mu| = 6.6745 deg, 2theta = 62.57
+format_candidates(candidates, omega_base=10.0).splitlines()[0]  # ' #   offset    omega      dmu       reflA      muA    eta...'
 ```
 
 #### `peaks_at_omega`
@@ -8544,8 +9090,10 @@ The equivalents of `family` on the Ewald sphere at one omega (chi = phi = 0) wit
 target for `FourCircleDiffractometer.solve_for_reflection`.
 
 ```python
-peaks_at_omega(diff, (3, 1, 1), best.omega, ranges)
+# diff: the diffractometer; the 311 peaks reachable at the best omega
+peaks_at_omega(diff, (3, 1, 1), best.omega, ranges)  # [PeakHit(hkl=(1, -3, -1), mu=-32.780872497209, eta=99.9999565356555), PeakHit(hkl=(1, -...
 # [PeakHit(hkl=(1, -3, -1), mu=-32.78..., eta=99.99...), PeakHit(hkl=(1, -3, 1), mu=-26.10..., eta=58.58...)]
+len(peaks_at_omega(diff, (3, 1, 1), best.omega))  # 4
 ```
 
 #### `OmegaCandidate`
@@ -8556,6 +9104,7 @@ Dataclass: `omega` and mu `gap` in degrees, the two `PeakHit`s, the family's `tw
 between the two peaks' eta, 0 to 180 deg.
 
 ```python
+# best: the best omega; its scattering angle, eta difference and the other peaks
 best.two_theta, best.eta_difference, best.extra     # (62.573, 41.413, {'omega_offset': -10.029})
 ```
 
@@ -8565,6 +9114,7 @@ best.two_theta, best.eta_difference, best.extra     # (62.573, 41.413, {'omega_o
 One equivalent on the Ewald sphere: `hkl` and the `mu` and `eta` (degrees) at which it is seen.
 
 ```python
+# best.first: the first of the two peaks at the best omega
 best.first                  # PeakHit(hkl=(1, -3, -1), mu=-32.78..., eta=99.99...)
 ```
 
@@ -8591,6 +9141,7 @@ cross product (fewer than two raise `ValueError`). As in the MATLAB, a cubic cel
 a rotation; for non-orthogonal cells the columns do not follow the given directions.
 
 ```python
+# surface: the sample surface and in-plane directions; the matrix from sample to grain frame
 surface = [[0, 1, 1], [0, -1, 1], [0, 1, 0]]   # columns x, y, z: (110) surface, y along [1 -1 1]
 M = sample_to_grain(LatticeParameters.silicon(), surface)
 M / 5.43102      # columns x = [-1 1 2]/sqrt(6), y = [1 -1 1]/sqrt(3), z = [1 1 0]/sqrt(2)
@@ -8603,8 +9154,10 @@ Direct-lattice vectors a, b, c as columns (Angstrom), a along x and b in the xy 
 `decimals` places.
 
 ```python
-lattice_vectors(LatticeParameters.hexagonal(3.1532, 12.323))
+# the real-space lattice vectors of a hexagonal cell
+lattice_vectors(LatticeParameters.hexagonal(3.1532, 12.323))  # array (3, 3) float64, -1.577..12.32
 # [[3.1532, -1.5766, 0.0], [0.0, 2.7308, 0.0], [0.0, 0.0, 12.323]]
+lattice_vectors(LatticeParameters.cubic(3.56), decimals=3)  # array (3, 3) float64, 0..3.56
 ```
 
 Constants:
@@ -8631,6 +9184,7 @@ array in, a numpy float or array out. Also importable as
 `bexa.optics.conversions.energy_to_wavelength`.
 
 ```python
+# the wavelength of a 17 keV beam, and of three energies at once
 units.energy_to_wavelength(17.0)                          # 0.72932
 units.energy_to_wavelength(np.array([8.0, 17.0, 30.0]))   # array([1.5498, 0.72932, 0.41328])
 ```
@@ -8642,6 +9196,7 @@ Photon energy in keV for a wavelength in Angstrom, a number or an array. Also im
 `bexa.optics.conversions.wavelength_to_energy`.
 
 ```python
+# the energy of the copper K-alpha line
 units.wavelength_to_energy(1.5406)       # 8.0478 keV (Cu K-alpha1)
 ```
 
@@ -8652,6 +9207,7 @@ Wavevector magnitude `k = 2 pi / lambda` in 1/Angstrom for one energy in keV, as
 array raises TypeError). Also importable as `bexa.optics.conversions.wavevector`.
 
 ```python
+# the wavevector of a 17 keV beam
 units.wavevector(17.0)                   # 8.6151 1/Angstrom
 ```
 
@@ -8664,6 +9220,7 @@ spacing of a reflection hkl comes from `bexa.crystal.Crystal.d_spacing` or
 `bexa crystal dspacing`. Also importable as `bexa.optics.conversions.bragg_angle_deg`.
 
 ```python
+# the Bragg angle of silicon 111 at 17 keV
 units.bragg_angle_deg(3.1356, 17.0)      # 6.6784 deg: Si(111) at 17 keV
 ```
 
@@ -8674,6 +9231,7 @@ Lattice spacing in Angstrom from a Bragg angle theta in degrees (half of 2theta)
 in keV. For a measured 2theta use `bexa.optics.conversions.d_spacing_from_two_theta`.
 
 ```python
+# the spacing behind a Bragg angle of 6.6784 degrees at 17 keV
 units.d_spacing_from_angle(6.6784, 17.0)     # 3.1356 Angstrom
 ```
 
@@ -8686,6 +9244,7 @@ The ID03 reader converts the channel-cut angle `ccmth` with it. Also importable 
 `bexa.optics.conversions.mono_angle_to_energy`.
 
 ```python
+# the energy an Si111 and an Si311 monochromator pass at 6.7 degrees
 units.mono_angle_to_energy(6.7), units.mono_angle_to_energy(6.7, "Si311")   # (16.945, 32.448) keV
 units.mono_angle_to_energy(np.array([6.0, 6.7, 7.5]))  # array([18.914, 16.945, 15.147])
 ```
@@ -8698,6 +9257,7 @@ only. ValueError if unreachable, KeyError for a name missing from `MONO_D_SPACIN
 Also importable as `bexa.optics.conversions.energy_to_mono_angle`.
 
 ```python
+# the monochromator angle for 17 keV, Si111 and Si311
 units.energy_to_mono_angle(17.0), units.energy_to_mono_angle(17.0, "Si311")   # (6.6784, 12.867) deg
 ```
 
@@ -8710,6 +9270,7 @@ Replaces the pulse-energy-to-photons cell of `Usefulthings`;
 as `bexa.optics.conversions.photons_from_pulse_energy`.
 
 ```python
+# the photons in a 5 uJ pulse at 16 keV
 units.photons_from_pulse_energy(5e-6, 16000)     # 1.95e9 photons: 5 uJ at 16 keV
 ```
 
@@ -8720,6 +9281,7 @@ Full width at half maximum of a Gaussian of standard deviation `sigma` (2.3548 s
 unit); a number or an array.
 
 ```python
+# the FWHM of a Gaussian of sigma 0.01
 units.sigma_to_fwhm(0.01)                # 0.023548
 ```
 
@@ -8730,6 +9292,7 @@ Standard deviation of a Gaussian with full width at half maximum `fwhm`, same un
 or an array.
 
 ```python
+# the sigma of a Gaussian of FWHM 0.05
 units.fwhm_to_sigma(0.05)                # 0.021233
 ```
 
@@ -8767,6 +9330,7 @@ that can reach it. Give the energy or the wavelength (the energy wins if both ar
 neither raises ValueError). `bexa optics convert --energy 17` (or `--wavelength 0.73`) prints it.
 
 ```python
+# everything about a 17 keV beam: wavelength, monochromator angles
 s = conversions.summary(energy_keV=17.0)
 s["wavelength_A"], s["theta_Si111_deg"], s["theta_Si311_deg"]   # (0.72932, 6.6784, 12.867)
 conversions.summary(wavelength_A=1.0)["energy_keV"]             # 12.398
@@ -8780,6 +9344,7 @@ Lattice spacing in Angstrom of a reflection seen at the scattering angle `two_th
 `Usefulthings`.
 
 ```python
+# the spacing behind a 2theta of 26.03 degrees at 19.2 keV, and of two angles
 conversions.d_spacing_from_two_theta(26.03, 19.2)                   # 1.4337 Angstrom
 conversions.d_spacing_from_two_theta(np.array([20.0, 30.0]), 19.2)  # array([1.8594, 1.2475])
 ```
@@ -8791,6 +9356,7 @@ Scattering angle 2theta in degrees of a spacing in Angstrom at `energy_keV`, twi
 `bragg_angle_deg`. Scalars only; raises ValueError if `lambda > 2d`.
 
 ```python
+# the 2theta of silicon 111 at 17 keV
 conversions.two_theta_from_d_spacing(3.1356, 17.0)     # 13.357 deg
 ```
 
@@ -8823,6 +9389,7 @@ attenuation cell of `Usefulthings`. The command
 1/e length for a range of energies.
 
 ```python
+# the transmission of 500 um of silicon at 17 keV, and of a kapton window at two energies
 attenuation.transmission("Si", "500um", 17.0)                    # 0.434
 attenuation.transmission("kapton", 25, np.array([8.0, 17.0]))    # array([0.978, 0.997])
 attenuation.transmission("Fe2O3", "10um", 10.0, density=5.24)    # 0.530
@@ -8834,7 +9401,9 @@ attenuation.transmission("Fe2O3", "10um", 10.0, density=5.24)    # 0.530
 Attenuation length in um, the thickness that transmits 1/e (`1 / mu`).
 
 ```python
+# the attenuation length of WTe2 at two energies
 attenuation.attenuation_length_um("WTe2", [8.0, 17.0])   # array([4.642, 16.82]) um
+attenuation.attenuation_length_um("Fe2O3", 17.0, density=5.24)  # 66.591
 ```
 
 #### `linear_attenuation_1_cm`
@@ -8843,7 +9412,9 @@ attenuation.attenuation_length_um("WTe2", [8.0, 17.0])   # array([4.642, 16.82])
 Linear attenuation coefficient mu in 1/cm, the mass attenuation coefficient times the density.
 
 ```python
+# the linear attenuation of silicon at 17 keV
 attenuation.linear_attenuation_1_cm("Si", 17.0)          # 16.68 1/cm
+attenuation.linear_attenuation_1_cm("Si", np.array([8.0, 17.0]))  # array([150.66, 16.682])
 ```
 
 #### `mass_attenuation_cm2_g`
@@ -8853,6 +9424,7 @@ Mass attenuation coefficient mu/rho in cm2/g. It does not depend on the density,
 without a tabulated density still needs `density=` to be accepted.
 
 ```python
+# the mass attenuation of silicon at three energies
 attenuation.mass_attenuation_cm2_g("Si", [8.0, 17.0, 30.0])   # array([64.69, 7.1625, 1.4365])
 ```
 
@@ -8864,6 +9436,7 @@ attenuation.mass_attenuation_cm2_g("Si", [8.0, 17.0, 30.0])   # array([64.69, 7.
 given, then in xraydb's materials and element densities. Anything else raises ValueError.
 
 ```python
+# a scintillator by name, and a compound with its density given
 attenuation.resolve_material("LuAG")                  # ('Lu3Al5O12', 6.73)
 attenuation.resolve_material("Fe2O3", density=5.24)   # ('Fe2O3', 5.24)
 ```
@@ -8874,6 +9447,7 @@ attenuation.resolve_material("Fe2O3", density=5.24)   # ('Fe2O3', 5.24)
 Tabulated density in g/cm3, the second item of `resolve_material(material)`.
 
 ```python
+# the density of silicon by name
 attenuation.material_density("silicon")      # 2.329
 ```
 
@@ -8884,6 +9458,7 @@ A thickness in um from a number (taken as um) or a string with an optional unit:
 (or the micro sign), `mm`, `cm`, `m`; spaces are allowed. Raises ValueError otherwise.
 
 ```python
+# thicknesses written with units, in micrometres
 attenuation.parse_length_um("0.3mm"), attenuation.parse_length_um("25 um")   # (300.0, 25.0)
 ```
 
@@ -8922,6 +9497,7 @@ MeV to eV; elements that fail are logged and skipped. Needs the network, `reques
 `beautifulsoup4`. Replaces `Database_Extraction.py`.
 
 ```python
+# the NIST XCOM tables downloaded once (uses the network: shown, not run)
 xcom_path, density_path = nist.fetch_nist_tables("nist_tables")    # once, downloads
 ```
 
@@ -8932,6 +9508,7 @@ Reads the two files in `folder` into `(tables, densities)`: `tables[symbol]` is 
 array of energy (eV) and mu/rho (cm2/g), `densities[symbol]` a density in g/cm3.
 
 ```python
+# nist_tables: the folder of the tables; the table of silicon and its density
 tables, densities = nist.load_nist_tables("nist_tables")
 tables["Si"].shape, densities["Si"]          # ((n, 2), 2.33)
 ```
@@ -8944,6 +9521,7 @@ linearly in log(energy) and log(mu/rho) from one element's table; outside the ta
 values are returned.
 
 ```python
+# tables: the NIST tables; the mass attenuation of silicon at 17 keV, and its transmission
 mu_rho = nist.nist_mass_attenuation(tables["Si"], 17.0)
 mu_rho, np.exp(-mu_rho * densities["Si"] * 500e-4)       # (7.17 cm2/g, 0.434 through 500 um of Si)
 ```
@@ -8992,6 +9570,7 @@ multiplied, squared for the two pairs and weighted by the Gaussian divergence
   energies, so a 20 x 50 map takes about 20 s; the example below takes well under a second.
 
 ```python
+# dth: the angle grid; the efficiency of a magnifier over magnifications and bandwidths
 grid, info = bm.efficiency([5.0, 20.0], [0.2, 0.5, 0.8], n_E=5, dth=dth)
 grid.round(2)            # [[55.15, 74.51, 3.79], [0.15, 0.05, 0.08]] percent
 info["dphi_mono"]        # 1.5 arcsec: the refraction shift of the S0 peak
@@ -9007,6 +9586,7 @@ defaults. `bexa optics magnifier --mag 20` runs it with 25 splits, 11 energies a
 and also prints the two magnifications and miscuts.
 
 ```python
+# the best split of a magnification of 5 over several crystals
 bm.optimal_split(5.0, n_splits=5, n_E=3, dth=dth)     # (0.5, 74.51, 2.93)
 ```
 
@@ -9022,6 +9602,7 @@ surface), `dtheta`, `dtheta_exit`, `b` (asymmetry factor), `FWHM_inc`, `FWHM_exi
 `R_peak`.
 
 ```python
+# dth: the angle grid; the rocking curve of a symmetric crystal
 curve = bm.rocking_curve(0.0, dth)                   # symmetric Si 220 at 9251 eV
 curve["R_peak"], curve["FWHM_inc"]                   # (0.992, 4.6)
 curve = bm.rocking_curve(18.0, dth)
@@ -9035,6 +9616,7 @@ curve["FWHM_inc"], curve["FWHM_exit"], 1 / abs(curve["b"])   # (17.8, 1.22, 14.6
 surface) instead of offsets; the same dict.
 
 ```python
+# angles: absolute Bragg angles; the rocking curve on them
 angles = np.linspace(20.40, 20.46, 601)
 curve = bm.rocking_curve_absolute(0.0, angles)
 angles[np.argmax(curve["R_inc"])]          # 20.4259 deg: theta_B 20.4255 plus refraction
@@ -9047,7 +9629,9 @@ Magnification `sin(theta_B + alpha) / sin(theta_B - alpha)` for a miscut in radi
 arrays.
 
 ```python
+# the magnification of an 18 degree miscut
 bm.mag_from_miscut(np.radians(18.0))       # 14.69
+bm.mag_from_miscut(np.radians(18.0), E_eV=8000.0)  # 6.5946
 ```
 
 #### `miscut_from_mag`
@@ -9057,7 +9641,9 @@ Miscut in radians that gives the magnification `mag`, the inverse of `mag_from_m
 or arrays.
 
 ```python
+# the miscuts for three magnifications
 np.degrees(bm.miscut_from_mag([5, 10, 20]))     # array([13.94, 16.95, 18.62]) deg
+np.degrees(bm.miscut_from_mag(10, hkl=(1, 1, 1)))  # 10.148
 ```
 
 #### `mag_split`
@@ -9067,6 +9653,7 @@ Magnifications `(M1, M2) = (total_mag**s, total_mag**(1 - s))` of S1 and S2 for 
 `s` from 0 to 1.
 
 ```python
+# a magnification of 20 split over two crystals of bandwidth 0.3
 bm.mag_split(20.0, 0.3)                    # (2.456, 8.142)
 ```
 
@@ -9076,7 +9663,9 @@ bm.mag_split(20.0, 0.3)                    # (2.456, 8.142)
 Miscuts in degrees of S1 and S2 for a total magnification and split ratio.
 
 ```python
+# the miscuts of that split
 bm.miscuts_from_split(20.0, 0.3)           # (8.918, 16.221) deg
+bm.miscuts_from_split(20.0, 0.5)                # (13.295, 13.295)
 ```
 
 #### `track_phase_space`
@@ -9088,6 +9677,7 @@ for the second pair (the other direction, from the source again). Each crystal m
 size by its magnification and divides the divergence by it, so the product stays constant.
 
 ```python
+# the beam size and divergence through a magnifier of 20 at 0.5 bandwidth
 for stage, size_um, div_urad, product in bm.track_phase_space(20.0, 0.5):
     print(f"{stage:16s} {size_um:7.1f} um {div_urad:6.3f} urad")   # after S2: 700.0 um, 0.075 urad
 ```
@@ -9100,6 +9690,7 @@ complex susceptibilities `chi_0` and `chi_h`, and `Gamma`, from xraydb's f0 and 
 f'' with a Debye-Waller factor. Cached (64 entries), so `hkl` must be a tuple.
 
 ```python
+# the silicon 220 parameters at 9251 eV
 p = bm.crystal_params(9251.0, (2, 2, 0))
 np.degrees(p["theta_B"]), p["d"]           # (20.4255, 1.9202)
 ```
@@ -9113,6 +9704,7 @@ polarisation factor `C` (1 for sigma, `cos(2 theta_B)` for pi). Returns `(R, R_e
 curve against incidence offsets and resampled onto exit offsets.
 
 ```python
+# p: the silicon parameters; the reflectivity of an 18 degree miscut over dth
 p = bm.crystal_params(9251.0)
 R, R_exit = bm.reflectivity(np.radians(18.0), dth, p["theta_B"], p["chi_0"], p["chi_h"],
                             p["lam"], p["d"], 1.0)
@@ -9126,6 +9718,7 @@ Complex geometric structure factor of the diamond lattice (fcc times the two-ato
 220, `4 - 4j` for 111, zero for forbidden reflections such as 200 and 222.
 
 ```python
+# the structure factors of silicon 220 and 111
 abs(bm.si_structure_factor(2, 2, 0)), abs(bm.si_structure_factor(1, 1, 1))   # (8.0, 5.657)
 ```
 
@@ -9139,6 +9732,7 @@ sum to 1. Use an odd `n_E` of at least 3 so that the middle point, where `effici
 aligns the crystals, is `E0`.
 
 ```python
+# an energy grid of five points around 9251 eV with flat weights
 E, w = bm.energy_grid(9251.0, 0.5, n_E=5, spectrum="flat")
 E, w      # [9250.75, 9250.875, 9251.0, 9251.125, 9251.25], [0.125, 0.25, 0.25, 0.25, 0.125]
 ```
@@ -9150,6 +9744,7 @@ Gaussian of standard deviation `sigma_arcsec` centred on `center` (arcsec), with
 the grid `dth`: the divergence weight in `efficiency`.
 
 ```python
+# dth: the angle grid; a Gaussian of 1.5 urad on it, normalised
 G = bm.gaussian_profile(dth, 1.5 * bm.URAD_TO_ARCSEC)     # 1.5 urad = 0.309 arcsec
 G.sum() * (dth[1] - dth[0])                               # 1.0
 ```
@@ -9160,6 +9755,7 @@ G.sum() * (dth[1] - dth[0])                               # 1.0
 The offsets used when `dth=None`: -100 to 100 arcsec in 8001 steps of 0.025 arcsec.
 
 ```python
+# the angle grid the magnifier functions use by default
 bm.default_angle_grid().shape              # (8001,)
 ```
 
@@ -9185,7 +9781,7 @@ import bexa
 from bexa.core.structure import Structure
 
 scan = bexa.demo("mosa")                # synthetic chi x mu scan, 6 x 16 frames of 64 x 80 pixels
-st = scan.structure
+st = scan.structure                             # the structure of the demo chi x mu scan
 ```
 
 #### `Structure`
@@ -9233,6 +9829,7 @@ internal cache. Members:
   pooled. Other grids raise `ValueError`.
 
 ```python
+# st: the structure of the demo chi x mu scan; its grid, a frame's place, the frames missing
 st.dims, st.shape                               # ('chi', 'mu', 'y', 'x'), (6, 16, 64, 80)
 st.frame_index[2, 5], st.n_missing              # 37 (chi index 2, mu index 5), 0
 st.planned_frames, sorted(st.motor_names)[:4]   # 96, ['ccmth', 'chi', 'ffx', 'ffz']
@@ -9250,6 +9847,7 @@ smaller than the grid, the last points are `MISSING`, as for an interrupted or r
 `kwargs` set the other fields (`scan_type`, `units`, `energy_keV`, `title`).
 
 ```python
+# a structure from a regular grid of two motors and a frame count
 s = Structure.from_grid(("chi", "mu"), {"chi": np.arange(3.0), "mu": np.linspace(-1, 1, 5)},
                         frame_shape=(2160, 2560), n_frames=12)
 s.frame_index.tolist()                  # [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, -1, -1, -1]]
@@ -9266,6 +9864,7 @@ least often between frames unless `order` lists the dims; a position recorded tw
 first frame. The readbacks go to `per_frame`, `scan_type` to `fscan<N>d`.
 
 ```python
+# a structure found from per-frame readbacks of two motors (a snake scan)
 chi = np.repeat([0.0, 0.1], 4)                       # slow motor
 mu = np.r_[np.arange(4.0), np.arange(4.0)[::-1]]     # fast motor in snake order
 s = Structure.from_per_frame({"mu": mu, "chi": chi}, frame_shape=(64, 80))
@@ -9281,6 +9880,7 @@ True when two label arrays split the items into the same groups: two motors whos
 dim. `varying` and the BLISS engine use it.
 
 ```python
+# whether two readbacks step together (one dim) or not
 from bexa.core.structure import _group_values, same_partition
 same_partition(_group_values(mu, None)[1], _group_values(mu * 2 + 1, None)[1])   # True: the same steps
 same_partition(_group_values(mu, None)[1], _group_values(chi, None)[1])          # False
@@ -9314,6 +9914,7 @@ xarray objects (attrs kept); anything else comes back unchanged. Results of `sca
 scan verbs are already on the host: use it on what `bexa.analysis` returns for GPU input.
 
 ```python
+# vol: the demo mu scan on the GPU (if any); smoothed there and brought back
 from bexa.analysis import rocking
 vol = backend.to_device(scan.read().values, "cuda")        # (chi, mu, y, x) on the GPU
 com = rocking.motor_com(vol, scan.coords["mu"], axis=1)    # cupy array (chi, y, x)
@@ -9329,6 +9930,7 @@ com = bexa.to_host(com)                                    # numpy array
 default of `scan.reduce` and the scan verbs, ignores it.
 
 ```python
+# the device auto picks here, and the default
 backend.resolve_device("auto")          # 'cuda' where cupy finds a GPU, else 'cpu'
 backend.resolve_device(None)            # what BEXA_DEVICE says, 'auto' when it is not set
 ```
@@ -9340,7 +9942,9 @@ numpy or cupy for a device name (resolved by `resolve_device`) or for an existin
 usual start of device-agnostic code is `xp = array_module(frames)`.
 
 ```python
+# numpy or cupy, for the device auto picks
 xp = backend.array_module("auto")       # cupy where a GPU answers, else numpy
+backend.array_module("cpu").__name__            # 'numpy'
 ```
 
 #### `to_device`
@@ -9350,6 +9954,7 @@ The array on `device`: cupy for `"cuda"` (and for `"auto"` on a GPU machine), nu
 `"cpu"`; no copy when it is already there.
 
 ```python
+# an array moved to the GPU (a copy stays numpy without cupy) and back
 gpu = backend.to_device(np.ones((10, 64, 80), np.float32), "cuda")   # cupy array
 host = backend.to_device(gpu, "cpu")                                  # numpy array
 ```
@@ -9368,6 +9973,7 @@ accounting the parent and the other workers fill. `scan.read`, previews, `bexa.s
 in-memory cache level follow from it.
 
 ```python
+# the memory one step may use on the CPU, and a fraction of the GPU
 backend.memory_budget("cpu") / 1e9              # GB: 0.8 of what this process can still use
 backend.memory_budget("cuda", fraction=0.2)     # also at most 0.2 of the free GPU memory
 ```
@@ -9382,6 +9988,7 @@ budget, so a result that cannot fit stops the call instead of the kernel. `scan.
 `Preview`, the in-memory `bexa.stack` and `bexa.load` call it before allocating.
 
 ```python
+# a small array passes; a petabyte raises BudgetError
 backend.check_fits(10**6, "a small array")                       # the budget in bytes: it fits
 try:
     backend.check_fits(10**15, "reading 10 TB", hint="add an ROI")
@@ -9403,6 +10010,7 @@ on the CPU), batches of 16, 47 and 160 frames run at the same speed, and peak me
 4.5 batches plus the results.
 
 ```python
+# how many 2160 x 2560 frames fit a batch under a budget of 8 GiB
 backend.choose_batch_frames(frame_bytes=2160 * 2560 * 4, budget=8 * 1024**3)   # 12 float32 PCO frames: 256 MiB
 backend.choose_batch_frames(frame_bytes=2160 * 2560 * 4, budget=8 * 1024**3, max_bytes=2 * 1024**3)   # 97: the budget alone
 ```
@@ -9415,6 +10023,7 @@ A dict of what this process may use: `cpu_count`, `cpu_source`, `cpu_count_machi
 `gpu_total_gb`, `gpu_free_gb`. `bexa version` prints it.
 
 ```python
+# what devices this machine has
 backend.device_info()   # {'cpu_count': 16, 'cpu_source': 'machine', ..., 'cuda': True, 'gpu_name': 'NVIDIA GeForce RTX 4090', ...}
 ```
 
@@ -9424,6 +10033,7 @@ backend.device_info()   # {'cpu_count': 16, 'cpu_source': 'machine', ..., 'cuda'
 True when cupy imports and a CUDA device answers; checked once per process.
 
 ```python
+# whether cupy is installed and a GPU answers
 backend.cupy_available()                # True on a GPU machine: device="auto" then means the GPU
 ```
 
@@ -9433,6 +10043,7 @@ backend.cupy_available()                # True on a GPU machine: device="auto" t
 `"cuda"` for a cupy array, `"cpu"` for anything else.
 
 ```python
+# gpu, host: the same array on the GPU and on the CPU; where each lives
 backend.device_of(gpu), backend.device_of(host)          # ('cuda', 'cpu')
 ```
 
@@ -9442,6 +10053,7 @@ backend.device_of(gpu), backend.device_of(host)          # ('cuda', 'cpu')
 True for a cupy ndarray; it checks the type's module, so it never imports cupy.
 
 ```python
+# gpu, host: the same array on the GPU and on the CPU
 backend.is_cupy_array(gpu), backend.is_cupy_array(host)  # (True, False)
 ```
 
@@ -9451,6 +10063,7 @@ backend.is_cupy_array(gpu), backend.is_cupy_array(host)  # (True, False)
 `scipy.ndimage` for numpy, `cupyx.scipy.ndimage` for cupy; `xp` is the module or an array.
 
 ```python
+# gpu: an array on the GPU; the ndimage of its device, used to smooth it
 smooth = backend.ndimage_module(gpu).gaussian_filter(gpu, sigma=(0, 2, 2))   # on the GPU
 ```
 
@@ -9463,6 +10076,7 @@ GIL. The streaming engine reads frames as stored and converts them here (or on t
 reading thread only reads. An array that already has the dtype is returned as it is.
 
 ```python
+# raw: uint16 frames; cast to float32 in threads
 raw = np.random.default_rng(0).integers(0, 60000, (24, 512, 512), dtype=np.uint16)
 backend.cast_frames(raw, np.float32).dtype          # float32, equal to raw.astype(np.float32)
 backend.cast_frames(raw, np.uint16) is raw          # True
@@ -9480,6 +10094,7 @@ about five times faster than one. A single image, an integer array or a cupy arr
 `bexa.analysis.rocking.motor_com` go through it.
 
 ```python
+# frames: eight frames; each smoothed with a Gaussian of 3 pixels, in threads
 frames = np.random.default_rng(0).random((8, 64, 80), dtype=np.float32)
 smooth = backend.gaussian_frames(frames, 3.0)                 # (8, 64, 80), smoothed in threads
 backend.gaussian_frames(frames, 0) is frames                  # True
@@ -9493,6 +10108,7 @@ anything was allocated. A `MemoryError` for callers (`except MemoryError` catche
 an out-of-memory condition, so `reduce` does not retry with smaller batches on it.
 
 ```python
+# the error check_fits raises for a petabyte volume
 try:
     backend.check_fits(10**15, "a petabyte volume")
 except backend.BudgetError as exc:
@@ -9507,6 +10123,7 @@ errors. `reduce` uses it to halve the batch and retry, then to fall back to the 
 a `BudgetError`, whose refusal would not change with smaller batches.
 
 ```python
+# whether an exception is the GPU running out of memory
 try:
     vol = scan.read(device="cuda")
 except Exception as exc:
@@ -9522,8 +10139,9 @@ Returns the blocks cached by cupy's memory pools (device and pinned host) to the
 nothing without cupy or a GPU.
 
 ```python
+# gpu, smooth: arrays on the GPU; dropped, then the pool freed
 del gpu, smooth
-backend.free_device_memory()
+backend.free_device_memory()                     # the cupy pool gives its blocks back; nothing without cupy
 ```
 
 Constants:
@@ -9555,6 +10173,7 @@ readable cgroup inside a SLURM job (`SLURM_JOB_ID` set), the allocation from
 `"SLURM allocation"`). `root` and `proc_cgroup` point at a fake cgroup tree in tests.
 
 ```python
+# the memory of this job: available and total, and where the numbers come from
 mem = resources.memory_info()
 print(f"{mem.available / 1e9:.1f} of {mem.total / 1e9:.1f} GB from the {mem.source}")
 # 26.0 of 68.6 GB from the machine            (in a SLURM job: ... from the cgroup v2)
@@ -9568,6 +10187,7 @@ print(f"{mem.available / 1e9:.1f} of {mem.total / 1e9:.1f} GB from the {mem.sour
 when that is smaller.
 
 ```python
+# the CPUs this job may use (its cgroup or affinity)
 resources.usable_cpus()                 # (16, 'machine') on the lab workstation
 ```
 
@@ -9584,6 +10204,7 @@ clean file data the kernel reclaims before killing anything, which a pass over a
 of frames fills the job's accounting with.
 
 ```python
+# the memory limit of the cgroup this job runs in, or None
 resources.cgroup_memory()               # None on Windows and macOS, or on Linux without a limit
 # in a SLURM job with --mem=64G using 5 GB: (68719476736, 5368709120, 'cgroup v2')
 ```
@@ -9596,7 +10217,8 @@ bytes of its limit, and the `source` of that limit (`"machine"`, `"cgroup v2"`, 
 `"SLURM allocation"`).
 
 ```python
-mem.available, mem.total, mem.source
+# mem: the memory info; its fields
+mem.available, mem.total, mem.source            # (28645289984, 68572536832, 'machine')
 ```
 
 Constants:
@@ -9622,6 +10244,7 @@ This is `bexa.settings()`: prints `describe()` and returns `settings()`. The com
 equivalent is `bexa settings`.
 
 ```python
+# what bexa uses right now: device, memory, cache, profile
 s = bexa.settings()     # device: cuda (requested auto, from default), GPU NVIDIA GeForce RTX 4090, 16 CPU cores (from machine)
                         # memory: budget 20.7 GB = fraction 0.8 (from default) of 25.9 GB available and 24.2 GB free on the GPU
 ```
@@ -9638,8 +10261,9 @@ load, `search_path`, `profile_dir_env`, `available`). The device shown resolves 
 which calls keeping `device="auto"` do not read (see `resolve_device`).
 
 ```python
+# s: the settings as a dict; the memory budget, the cache folder, the profiles found
 s = settings()
-s["memory"]["budget_gb"], s["cache"]["dir"], s["profile"]["available"]
+s["memory"]["budget_gb"], s["cache"]["dir"], s["profile"]["available"]  # (19.31, 'C:\\Users\\sport\\AppData\\Local\\Temp\\claude\\x--Dresselhaus-Lab-Code-Genera...
 ```
 
 #### `describe`
@@ -9649,7 +10273,8 @@ s["memory"]["budget_gb"], s["cache"]["dir"], s["profile"]["available"]
 memory budget, memory limit, cache, profile, profile search path, profiles available, log level.
 
 ```python
-print(describe())
+# the settings as text
+print(describe())                                # device, memory budget, cache folder and profile, one per line
 ```
 
 ### bexa.core.cache: the result cache
@@ -9695,6 +10320,7 @@ Members (and attributes `root`, `memory_bytes`):
   sub-folder; returns the number of files deleted (`bexa cache clear`).
 
 ```python
+# cache: a cache folder; the key of a result of the demo scan
 cache = Cache("processed/bexa_cache")
 key = Cache.key(scan.files, {"op": "sum"})
 cache.put(key, total)                        # processed/bexa_cache/<2 characters>/<key>.h5
@@ -9712,7 +10338,9 @@ else `<processed_root>/bexa_cache` when writable, else `~/.cache/bexa`. Made on 
 without a profile, that is `BEXA_CACHE_DIR` or `~/.cache/bexa`.
 
 ```python
+# the cache bexa opens by default; its folder
 default_cache().root                         # BEXA_CACHE_DIR when set, else ~/.cache/bexa
+default_cache("processed").root.name            # 'cache'
 ```
 
 #### `default_memory_bytes`
@@ -9725,6 +10353,7 @@ session can spare: 16 GiB in a 64 GB session, 32 GiB on a 400 GB node, 1 GB on a
 being an LRU it never holds more than that whatever the dataset.
 
 ```python
+# how much of a cache stays in memory by default
 default_memory_bytes() <= 32 * 1024**3       # True
 Cache("processed/bexa_cache").memory_bytes == default_memory_bytes()   # True
 ```
@@ -9736,7 +10365,8 @@ Dataclass for one file of the cache: `key`, `path`, `size_bytes`, and `created`,
 modification time in seconds since the epoch.
 
 ```python
-cache.put(key, total)
+# cache: a cache folder with one result stored; its entries
+cache.put(key, total)                           # Path('.../2b41a6715f91507432c1a4a4ecce075c44484256.h5')
 for entry in cache.entries():
     print(entry.key[:8], f"{entry.size_bytes / 1e3:.0f} kB", entry.path)
 ```
@@ -9770,7 +10400,9 @@ ds = bexa.demo("alignment")                  # a dataset of four quick scans
 runs in the calling thread. Exceptions propagate.
 
 ```python
+# ds: the demo z-stack dataset; every scan summed in threads
 sums = thread_map(lambda n: ds.scan(n).sum(device="cpu"), ds.scans)   # one summed image per scan
+len(thread_map(len, [[1], [2, 3]], workers=2))  # 2
 ```
 
 #### `Prefetcher`
@@ -9782,6 +10414,7 @@ the producer is re-raised in the loop, and `close()` stops the producer early. T
 engine reads its batches through one, `bexa.core.reductions.prefetch_depth` batches deep.
 
 ```python
+# ds: the demo z-stack dataset; the batches of scan 1 read ahead in a thread
 total = 0.0
 for batch in Prefetcher(ds.scan(1).batches(batch_frames=4)):   # the next 4 frames load meanwhile
     total += float(batch.frames.sum())
@@ -9794,6 +10427,7 @@ Worker count from `bexa.core.resources.usable_cpus` (a SLURM job's allocation, n
 for `kind="io"` the usable cores capped at 8, for any other kind all usable cores but one.
 
 ```python
+# how many workers an I/O-bound and a CPU-bound job get
 default_workers("io"), default_workers("cpu")   # (8, 15) on a 16-core workstation
 ```
 
@@ -9811,9 +10445,10 @@ keeps variables already set, so set `OMP_NUM_THREADS=1` and the others before st
 be sure.
 
 ```python
+# a pool of processes (under a __main__ guard, for spawn)
 import math
 if __name__ == "__main__":
-    with process_pool(workers=4, env={"BEXA_THREADS": "2"}) as pool:
+    with process_pool(workers=4, env={"BEXA_THREADS": "2"}) as pool:  # the workers start here, after the pins
         roots = list(pool.map(math.sqrt, range(8)))
 ```
 
@@ -9825,7 +10460,9 @@ Sets `OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS` and `NUMEXPR_N
 imported.
 
 ```python
+# one BLAS thread per process, before the pool starts
 pin_blas_threads(1)                          # first thing in a worker script
+pin_blas_threads(2)
 ```
 
 #### `compute_threads`
@@ -9838,6 +10475,7 @@ usable cores of the job capped at 8, beyond which the gain flattens.
 so that the workers share the cores.
 
 ```python
+# how many threads the accumulators use (BEXA_THREADS)
 compute_threads()                            # 8 on a 16-core workstation; what BEXA_THREADS says when it is set
 ```
 
@@ -9849,6 +10487,7 @@ shared by every frame-parallel numpy job (`gaussian_frames`), so that the thread
 started again for every batch.
 
 ```python
+# the shared thread pool of the process; a map over it
 pool = compute_pool()
 list(pool.map(abs, [-1, -2, -3]))            # [1, 2, 3]
 compute_pool() is pool                       # True: the same pool on every call
@@ -9883,6 +10522,7 @@ with zone), `python`, `source_files` (JSON of `file_records`), `parameters` (JSO
 `None` skipped. All values are plain strings or numbers, as HDF5 attributes need.
 
 ```python
+# scan: the demo chi x mu scan; the attrs a result of it carries
 attrs = provenance.build_attrs(scan.files, {"sigma": 3.0, "roi": np.array([700, 1100])}, device="cpu")
 attrs["parameters"]                          # '{"roi":[700,1100],"sigma":3.0}'
 ```
@@ -9893,6 +10533,7 @@ attrs["parameters"]                          # '{"roi":[700,1100],"sigma":3.0}'
 The `parameters` of provenance attrs as a dict (they are stored as JSON text); `{}` when absent.
 
 ```python
+# res: the COM maps of the demo scan; the parameters stored in their attrs
 provenance.parameters_of(res.attrs)["plan"]["window"]   # [0, 64, 0, 80]: y0, y1, x0, x1 in pixels
 ```
 
@@ -9903,7 +10544,9 @@ Adds the keywords (except `None` values) to `obj.attrs` of a DataArray or Datase
 returns `obj`.
 
 ```python
+# res: the COM maps of the demo scan; a note added to the attrs of one map
 com = provenance.attach(res["com_mu"], operator="DL", note="first look")
+com.attrs["operator"], com.attrs["note"]        # ('DL', 'first look')
 ```
 
 #### `fingerprint`
@@ -9915,6 +10558,7 @@ a file is rewritten or a parameter changes. `Cache.key` uses it; the reductions 
 as it is.
 
 ```python
+# scan: the demo chi x mu scan; the hash of its files and parameters (a cache key)
 provenance.fingerprint(scan.files, {"sigma": 3.0}) == provenance.fingerprint(scan.files, {"sigma": 2.0})  # False
 provenance.fingerprint(scan.source.cache_records(), {"op": "sum"})      # the key a cached sum of this scan gets
 ```
@@ -9928,7 +10572,8 @@ that way when a part of it identifies the data better than its size and modifica
 (`BaseSource.cache_records`).
 
 ```python
-provenance.file_records(["missing.h5", {"path": "master.h5", "entry": "7.1"}])
+# what the attrs record about input files, missing ones included
+provenance.file_records(["missing.h5", {"path": "master.h5", "entry": "7.1"}])  # [{'path': 'missing.h5', 'size': -1, 'mtime': 0.0}, {'path': 'master.h5', 'entry': '7.1'}]
 # [{'path': 'missing.h5', 'size': -1, 'mtime': 0.0}, {'path': 'master.h5', 'entry': '7.1'}]
 ```
 
@@ -9940,6 +10585,7 @@ Timer for one run: `start()` returns the started object; `stop(frames=None)` ret
 Attributes `device`, `t0`, `elapsed_s`. `reduce` makes its timing attrs with it.
 
 ```python
+# scan: the demo chi x mu scan; the time and memory of reading it
 stats = provenance.RunStats(device="cpu").start()
 vol = scan.read()
 stats.stop(frames=vol.shape[0])              # {'elapsed_s': ..., 'peak_rss_mb': ..., 'device': 'cpu', 'frames': 25, 'frames_per_s': ...}
@@ -9951,7 +10597,8 @@ stats.stop(frames=vol.shape[0])              # {'elapsed_s': ..., 'peak_rss_mb':
 Peak resident memory of this process so far, in MB (1e6 bytes).
 
 ```python
-provenance.peak_rss_mb()
+# the peak memory of this process so far
+provenance.peak_rss_mb()                        # 725.98
 ```
 
 #### `git_hash`
@@ -9962,7 +10609,9 @@ Short hash of the checked-out commit at `root` (default: the bexa repository), f
 process and the answer is kept: every cache write and every saved file records it.
 
 ```python
+# the commit of the bexa checkout, or None
 provenance.git_hash()                        # a short hash such as '546f5f7'
+provenance.git_hash(root="nowhere")
 ```
 
 #### `to_json`
@@ -9972,7 +10621,8 @@ Compact JSON with sorted keys, converting numpy values, paths, sets, dates, slic
 models through `json_default`.
 
 ```python
-provenance.to_json({"roi": np.array([700, 1100]), "sigma": np.float32(3.0), "rows": slice(0, 10)})
+# numpy values, arrays and slices made JSON-able
+provenance.to_json({"roi": np.array([700, 1100]), "sigma": np.float32(3.0), "rows": slice(0, 10)})  # '{"roi":[700,1100],"rows":[0,10,null],"sigma":3.0}'
 # '{"roi":[700,1100],"rows":[0,10,null],"sigma":3.0}'
 ```
 
@@ -9984,6 +10634,7 @@ path to text, set to sorted list, date to ISO text, slice to `[start, stop, step
 model to `model_dump()`, anything else to `str(obj)`.
 
 ```python
+# the same, as the default of json.dumps
 import json
 json.dumps({"n": np.int64(7)}, default=provenance.json_default)   # '{"n": 7}'
 ```
@@ -10019,8 +10670,9 @@ messages. Members:
 - `name in registry`, `len(registry)`, `iter(registry)` (sorted): without loading the built-ins.
 
 ```python
+# a registry of your own: detectors by name
 detectors = Registry("detector")
-detectors.add("pco_ff", {"shape": (2160, 2560)})
+detectors.add("pco_ff", {"shape": (2160, 2560)})  # {'shape': (2160, 2560)}
 detectors.register("eiger4m")({"shape": (2162, 2068)})     # the decorator, called directly
 detectors.names(), "pco_ff" in detectors, len(detectors)    # (['eiger4m', 'pco_ff'], True, 2)
 detectors.get("eiger4m")                                    # {'shape': (2162, 2068)}
@@ -10033,6 +10685,7 @@ Decorator: registers a `bexa.io.base.Source` implementation in `engines`. A form
 name as `engine:` then opens with it (`bexa.open`, `open_source`).
 
 ```python
+# an engine of your own, registered under a layout name
 @register_engine("my_layout")
 class MyEngine(engines.get("hdf5_stack")):   # change what differs in your layout
     pass
@@ -10046,6 +10699,7 @@ Decorator: registers an `Accumulator` class in `accumulators`. The built-ins are
 `argmax_motor`, `frame_stats` and `histogram`.
 
 ```python
+# an accumulator of your own, registered under a name
 @register_accumulator("sum_squares")
 class SumSquares(bexa.acc.Sum):              # its result "sum" holds the sum of squared frames
     def update(self, frames, frame_ids):
@@ -10060,10 +10714,11 @@ Decorator: registers a plotting function in `plots` for lookup by name. No built
 registered in this version.
 
 ```python
+# a plot function of your own, registered for bexa.plot
 @register_plot()
 def com_with_contours(da, ax=None):
     return da.plot(ax=ax)
-plots.get("com_with_contours")
+plots.get("com_with_contours")                  # function
 ```
 
 #### `load_builtins`
@@ -10074,6 +10729,7 @@ accumulators; an engine whose optional dependency is missing (`extra_data`) is s
 before `len()` or `in` on a registry.
 
 ```python
+# every built-in engine and accumulator registered; the engine names
 load_builtins()
 engines.names()   # array_cube, generic, hdf5_points, hdf5_stack, smalldata, spec_h5 (and my_layout from above)
 ```
@@ -10118,6 +10774,7 @@ unknown name raises `FileNotFoundError` listing the profiles and folders; bad co
 pydantic's `ValidationError`.
 
 ```python
+# the example ESRF profile shipped with bexa; its format and a sample's dataset
 prof = load_profile("example_esrf_id03")                    # configs/beamtimes/example_esrf_id03.yaml
 prof.format, prof.sample("WS2G_100").dataset                # ('esrf_id03_bliss_2026', 'WS2G_100/WS2G_100_DFXM')
 nf = load_profile("example_esrf_id03", detector="pco_nf")   # a field replaced for this session
@@ -10132,6 +10789,7 @@ prof = load_profile()                                       # the profile named 
 `bexa profile list` prints them.
 
 ```python
+# every profile bexa can find
 sorted(list_profiles())                     # ['example_esrf_id03', 'example_pal_xfel', ...]
 ```
 
@@ -10143,6 +10801,7 @@ Folders searched for profiles, in order: those of `BEXA_PROFILE_DIR` (separated 
 existing folders only, each once.
 
 ```python
+# where profiles are looked for, in order
 profile_dirs()                              # [..., Path('<repository>/configs/beamtimes')]
 ```
 
@@ -10154,8 +10813,9 @@ Writes `profile_skeleton(...)` to `path` as YAML (folders created) and returns t
 `bexa profile new` calls it, by default for `configs/beamtimes/<name>.yaml` of the repository.
 
 ```python
+# a profile for a new beamtime written as YAML (shown, not run)
 write_profile_skeleton("configs/beamtimes/hc6293.yaml", "hc6293", "esrf_id03_bliss_2026",
-                       root="/data/visitor/hc6293/id03/20260119/RAW_DATA")
+                       root="/data/visitor/hc6293/id03/20260119/RAW_DATA")  # Path('.../hc6293.yaml')
 ```
 
 #### `profile_skeleton`
@@ -10167,8 +10827,10 @@ The skeleton as a dict: `name`, `format`, `root` (or `TODO`), `processed_root: T
 empty `rois` and `format_overrides`.
 
 ```python
+# the text of a profile skeleton for a PAL-XFEL beamtime
 from bexa.config.loader import profile_skeleton
 body = profile_skeleton("ue_250913_FXS", "pal_xfel_points_2025_09")
+body["name"], sorted(body)[:3]                  # ('ue_250913_FXS', ['defaults', 'detector', 'format'])
 ```
 
 #### `env_settings`
@@ -10179,6 +10841,7 @@ The settings given by environment variables, only those set: `device` (`BEXA_DEV
 `profile` (`BEXA_PROFILE`). For scripts; the library reads each variable where it needs it.
 
 ```python
+# the BEXA_ environment variables that are set
 env_settings()                              # {'memory_fraction': 0.3} with only BEXA_MEMORY_FRACTION=0.3 set
 ```
 
@@ -10227,7 +10890,7 @@ from bexa.config import (
     AutoProcessSettings, BeamtimeProfile, DarkReference, Defaults, Geometry, Sample, load_profile,
 )
 
-prof = load_profile("example_esrf_id03")
+prof = load_profile("example_esrf_id03")        # the example ESRF profile shipped with bexa
 ```
 
 #### `BeamtimeProfile`
@@ -10259,9 +10922,10 @@ Methods: `sample(name)` returns the `Sample` or raises a `KeyError` listing the 
 opened as `data_root() / sample.dataset`.
 
 ```python
+# prof: the example ESRF profile; its detector, regions and a sample's reflection
 prof.detector, prof.rois["grain"]            # ('pco_ff', {'y': [700, 1500], 'x': [800, 1800]})
 prof.sample("WS2G_100").hkl_center           # (0, 0, 6)
-prof.data_root() / prof.sample("WS2G_100").dataset
+prof.data_root() / prof.sample("WS2G_100").dataset  # Path('.../WS2G_100_DFXM')
 grain = bexa.ROI.from_dict(prof.rois["grain"])
 p = BeamtimeProfile(format="esrf_id03_bliss_2026", root="/data/visitor/hc6293/id03/20260119/RAW_DATA",
                     samples={"WS2G_100": "WS2G_100/WS2G_100_DFXM"})
@@ -10276,7 +10940,9 @@ warns when it cannot); `hkl_center`, the reflection `[h, k, l]` the scans are ce
 `detector` when it differs from the profile's; `notes`, free text.
 
 ```python
-Sample(dataset="WS2G_100/WS2G_100_DFXM", cif="cifs/WS2.cif", hkl_center=(0, 0, 6))
+# one sample of a profile: its dataset, CIF and reflection
+Sample(dataset="WS2G_100/WS2G_100_DFXM", cif="cifs/WS2.cif", hkl_center=(0, 0, 6))  # Sample
+Sample(dataset="D2/D2_dfxm").cif
 ```
 
 #### `Geometry`
@@ -10291,7 +10957,9 @@ scalebars). `beam_center`: `(y, x)` pixel of the direct beam. `two_theta_offset_
 convention (`id03`, `pal_fourc`, `sacla`) instead of the spec's.
 
 ```python
-Geometry(energy_keV=17.0, effective_pixel_nm=235, beam_center=(1080, 1280))
+# the geometry block of a profile
+Geometry(energy_keV=17.0, effective_pixel_nm=235, beam_center=(1080, 1280))  # Geometry
+Geometry(energy_keV=17.0).effective_pixel_nm
 ```
 
 #### `Defaults`
@@ -10303,6 +10971,7 @@ validated and stored, but no bexa function applies them: pass `downsample=` and 
 calls and set `BEXA_MEMORY_FRACTION`.
 
 ```python
+# prof: the example ESRF profile; its default downsample
 prof.defaults.downsample                     # [1, 1, 4, 4]
 ```
 
@@ -10314,7 +10983,9 @@ Where the darks of a detector were recorded (`darks: {<detector>: ...}`): `datas
 `bexa.analysis.preprocess.subtract_dark`.
 
 ```python
-DarkReference(dataset="WS2G_100/WS2G_100_darks", scan=1)
+# the dark reference block of a profile
+DarkReference(dataset="WS2G_100/WS2G_100_darks", scan=1)  # DarkReference(dataset='WS2G_100/WS2G_100_darks', scan=1)
+DarkReference(dataset="WS2G_100/WS2G_100_darks").scan  # 1
 ```
 
 #### `AutoProcessSettings`
@@ -10326,6 +10997,7 @@ runs that failed twice (default `Skip_dict.csv`); `outputs`, the figure folder (
 `outputs`). `interval_s` is stored but not read; `bexa auto --interval` sets the polling interval.
 
 ```python
+# the watcher block of the example PAL-XFEL profile
 load_profile("example_pal_xfel").auto_process.roi_table   # 'ROI_dict.csv'
 ```
 
@@ -10346,6 +11018,7 @@ The cache folder: `BEXA_CACHE_DIR` when set, else `<processed_root>/bexa_cache` 
 (or its parent, before it exists) is writable, else `user_cache_dir()`. Nothing is created.
 
 ```python
+# where the cache goes by default, and under a PROCESSED_DATA folder
 cache_root()                                 # BEXA_CACHE_DIR, else ~/.cache/bexa
 cache_root("/data/visitor/hc6293/id03/20260119/PROCESSED_DATA/bexa")   # without BEXA_CACHE_DIR: .../bexa/bexa_cache
 ```
@@ -10359,6 +11032,7 @@ wins when it exists, then the first alias whose mapped path exists, else the ori
 `Path`.
 
 ```python
+# aliases: a beamline path mapped to a local mount; a path rewritten
 aliases = {"/data/visitor/hc6293/id03/20260119": "X:/Beamtimes/hc6293"}
 apply_aliases("/data/visitor/hc6293/id03/20260119/RAW_DATA", aliases)   # X:/Beamtimes/hc6293/RAW_DATA once copied there
 ```
@@ -10370,7 +11044,8 @@ The checkout folder holding `bexa/` and `configs/`, resolved (a mapped Windows d
 UNC path).
 
 ```python
-repo_root()
+# the folder of the bexa checkout
+repo_root()                                     # Path('.../Experiment-Toolbox')
 ```
 
 #### `package_configs`
@@ -10379,7 +11054,8 @@ repo_root()
 `repo_root() / "configs"`, with the `beamtimes/` profiles and `formats/` specs of the code.
 
 ```python
-sorted(p.name for p in (package_configs() / "beamtimes").glob("*.yaml"))
+# the configs folder of the package; the example profiles in it
+sorted(p.name for p in (package_configs() / "beamtimes").glob("*.yaml"))  # ['example_esrf_id03.yaml', 'example_pal_xfel.yaml']
 ```
 
 #### `user_cache_dir`
@@ -10388,7 +11064,8 @@ sorted(p.name for p in (package_configs() / "beamtimes").glob("*.yaml"))
 `~/.cache/bexa`, the cache without `BEXA_CACHE_DIR` or a writable `processed_root`.
 
 ```python
-user_cache_dir()
+# the per-user cache folder
+user_cache_dir()                                # Path('.../bexa')
 ```
 
 #### `ensure_dir`
@@ -10397,7 +11074,9 @@ user_cache_dir()
 Creates the folder with its parents if needed and returns it as a `Path`.
 
 ```python
+# a results folder created if missing
 out = ensure_dir("results/scan7")
+out.is_dir(), out.name                          # (True, 'scan7')
 ```
 
 #### `is_writable`
@@ -10406,6 +11085,7 @@ out = ensure_dir("results/scan7")
 True when `path` (or, if it does not exist, its parent) exists and this user may write there.
 
 ```python
+# out: the results folder; whether it, and a folder not yet made, can be written
 is_writable(out), is_writable(out / "new_folder")   # (True, True)
 ```
 
@@ -10434,6 +11114,7 @@ Sets the level of the `bexa` logger and its children (`"DEBUG"`, `"INFO"`, `"WAR
 a bexa module, resets it to `BEXA_LOG_LEVEL` (INFO when unset), so set that variable too.
 
 ```python
+# the log level from the environment, then set by hand
 os.environ["BEXA_LOG_LEVEL"] = "DEBUG"       # survives modules loaded later
 set_level("DEBUG")                           # takes effect now
 ```
@@ -10446,6 +11127,7 @@ or number; `None` reads `BEXA_LOG_LEVEL`, else INFO), writing to `stream` (defau
 Once configured, calls only change the level unless `force=True` rebuilds the handler.
 
 ```python
+# buffer: a text stream; bexa's messages sent to it
 buffer = io.StringIO()
 configure("INFO", stream=buffer, force=True)     # bexa messages go to the buffer
 get_logger("bexa.io.formats").info("hello")      # buffer: '<time> INFO    bexa.io.formats: hello'
@@ -10459,6 +11141,7 @@ The `bexa` logger (`None` or `"bexa"`) or a child; other names get the `bexa.` p
 own messages follow bexa's level and handler. It calls `configure()` (see `set_level`).
 
 ```python
+# a logger of your own under bexa's root
 log = get_logger("my_analysis")              # logger 'bexa.my_analysis'
 log.info("reduced %d scans", 12)             # <time> INFO    bexa.my_analysis: reduced 12 scans
 ```
@@ -10470,6 +11153,7 @@ A generator over `iterable` with a `tqdm.auto` progress bar (a widget in noteboo
 stderr, removed when done); plain iteration with `enabled=False` or without tqdm.
 
 ```python
+# a progress bar over twelve scans (tqdm when installed)
 for number in progress(range(1, 13), desc="scans"):
     pass                                     # one step per scan
 ```
@@ -10480,6 +11164,7 @@ for number in progress(range(1, 13), desc="scans"):
 True inside IPython, Jupyter or a VS Code interactive window (as `bexa.notebook.in_ipython`).
 
 ```python
+# whether this runs under IPython
 in_ipython()                                 # False in a plain script
 ```
 
@@ -10489,6 +11174,7 @@ in_ipython()                                 # False in a plain script
 True inside a Jupyter kernel (where ipywidgets can show), as `bexa.notebook.in_kernel`.
 
 ```python
+# whether this runs in a Jupyter kernel
 in_kernel()                                  # False in a plain script
 ```
 
@@ -10499,6 +11185,7 @@ True in IPython or when stderr is a terminal; `reduce` then shows a progress bar
 200 frames or more.
 
 ```python
+# whether someone is watching (a kernel or a terminal)
 interactive_session()                        # False in a batch job writing to a log file
 ```
 
@@ -10527,6 +11214,7 @@ command-line flag `bexa --profile <command>` writes `bexa-<command>.prof` and `.
 current folder.
 
 ```python
+# scan: the demo chi x mu scan; where the time of a COM pass goes
 with bexa.profile("profiles/com_run.prof", top=10):
     scan.com(axes=("chi", "mu"), sigma=3.0)
 # writes profiles/com_run.prof and the summary profiles/com_run.txt
@@ -10546,6 +11234,7 @@ signatures; other text, the sections whose title contains it, ignoring case (`"p
 imported from elsewhere and, in modules without `__all__`, private names.
 
 ```python
+# the API listing, every module or one
 import bexa
 bexa.help()                                  # the everyday names
 bexa.help("plots")                           # Plots: auto, images, curves, maps, volumes, interactive, napari

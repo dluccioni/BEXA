@@ -18,7 +18,14 @@ import xarray as xr
 from bexa.core.stacks import shared_limits
 from bexa.viz.style import DEFAULT, as_array, stack_mode
 
-__all__ = ["SliderPanel", "format_value", "in_notebook", "log_block", "static_backend"]
+__all__ = [
+    "SliderPanel",
+    "format_value",
+    "in_notebook",
+    "log_block",
+    "plain_layout",
+    "static_backend",
+]
 
 
 def log_block(block: np.ndarray) -> np.ndarray:
@@ -39,6 +46,20 @@ def static_backend() -> bool:
 
     backend = matplotlib.get_backend().lower()
     return "inline" in backend or backend in ("agg", "pdf", "svg", "ps", "cairo")
+
+
+def plain_layout(fig: Any) -> Any:
+    """Keep the hand-placed axes of ``fig`` (sliders, colourbars) where they are, for good.
+
+    A figure made with ``layout="none"`` holds no layout engine, and matplotlib
+    then installs the one ``rcParams`` asks for (constrained layout under the
+    screen theme) after a ``savefig``, which cannot lay out slider axes. A
+    placeholder engine is an engine, so it stays. Returns the figure.
+    """
+    from matplotlib.layout_engine import PlaceHolderLayoutEngine
+
+    fig.set_layout_engine(PlaceHolderLayoutEngine(adjust_compatible=True, colorbar_gridspec=True))
+    return fig
 
 
 def format_value(value: Any) -> str:

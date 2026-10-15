@@ -19,7 +19,14 @@ import xarray as xr
 from bexa.core.roi import ROI
 from bexa.core.stacks import brightest, shared_limits, total_volume
 from bexa.viz import style
-from bexa.viz.sliders import SliderPanel, format_value, in_notebook, log_block, static_backend
+from bexa.viz.sliders import (
+    SliderPanel,
+    format_value,
+    in_notebook,
+    log_block,
+    plain_layout,
+    static_backend,
+)
 from bexa.viz.style import DEFAULT, as_array
 
 __all__ = [
@@ -86,6 +93,7 @@ class Browser(_SliderPanel):
         # No automatic layout: the slider axes are placed by hand below the image.
         figsize = style.figure_size("browse", figsize) or (6, 5)
         self.fig, self.ax = plt.subplots(figsize=figsize, layout="none")
+        plain_layout(self.fig)
         frame = self._frame()
         vmin, vmax = self._frame_limits(frame)
         self.im = self.ax.imshow(frame, cmap=style.colormap("browse", cmap), vmin=vmin, vmax=vmax)
@@ -193,6 +201,7 @@ class VolumeBrowser(_SliderPanel):
         if view == "projections":
             figsize = style.figure_size("volume", figsize, 1, 3, panel=(4, 4))
             self.fig, self.axes = plt.subplots(1, 3, figsize=figsize, layout="none")
+            plain_layout(self.fig)
             z, y, x = self.volume_dims
             panels = [(y, x, z), (z, x, y), (z, y, x)]  # (rows, columns, reduced dim)
             for ax, image, (rows, cols, reduced) in zip(
@@ -208,7 +217,7 @@ class VolumeBrowser(_SliderPanel):
             self.fig.subplots_adjust(wspace=0.35)
         else:
             figsize = style.figure_size("volume", figsize) or (7, 7)
-            self.fig = plt.figure(figsize=figsize, layout="none")
+            self.fig = plain_layout(plt.figure(figsize=figsize, layout="none"))
             self.ax = self.fig.add_subplot(1, 1, 1, projection="3d")
             self._draw_isosurface()
         self.title = self.fig.suptitle(self._title())
