@@ -34,7 +34,7 @@ lists the everyday jobs with the function that does each.
 - [Find a function by task](#find-a-function-by-task)
 - [Function reference](#function-reference)
   - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.status](#bexacorestatus-the-state-of-a-scan) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.scan_table](#bexacorescan_table-the-rows-of-a-datasets-table) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
-  - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.spec_tiff](#bexaioenginesspec_tiff-aps-7-id-spec-sessions-with-a-tiff-per-point) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
+  - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.survey](#bexaiosurvey-every-dataset-under-a-folder) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.spec_tiff](#bexaioenginesspec_tiff-aps-7-id-spec-sessions-with-a-tiff-per-point) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
   - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis)
   - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.sliders](#bexavizsliders-what-the-slider-browsers-share) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers) · [bexa.notebook.picker](#bexanotebookpicker-choosing-scans-in-a-notebook) · [bexa.notebook.picker_widgets](#bexanotebookpicker_widgets-the-widget-views-of-the-picker)
   - Pipelines: [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set) · [bexa.pipelines.xfel_cube](#bexapipelinesxfel_cube-pal-xfel-point-files-to-a-laser-onoff-cube) · [bexa.pipelines.cube_report](#bexapipelinescube_report-figures-and-gifs-of-one-cube) · [bexa.pipelines.auto_process](#bexapipelinesauto_process-the-beamtime-watcher) · [bexa.pipelines.benchmark](#bexapipelinesbenchmark-timings-and-baselines)
@@ -211,7 +211,9 @@ The first lines say which format spec matched (`esrf_id03_bliss_2026` for the cu
 and then describe the scan: type (`fscan1d`, `fscan2d`, ...), dims, motor ranges, energy, fixed
 positioners such as `samz`, frame shape, stored dtype and the size of the stack. If no spec
 matches (a new layout), `python -m bexa profile sniff PATH -o configs/formats/<name>.yaml`
-drafts one; see `docs/formats.md`.
+drafts one; see `docs/formats.md`. With `--recursive` and the `RAW_DATA` folder as PATH it
+walks the whole beamtime instead, says which spec recognises every dataset and drafts one
+spec per layout it does not know.
 
 In Python the same information comes from a `Scan` handle, which reads only metadata until you
 ask for frames:
@@ -614,6 +616,7 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | read a plain `.npy`, tiff or HDF5 stack | `bexa.open("file.h5::/entry/data")`, `bexa.io.generic.load_array` |  |
 | read a PAL-XFEL run, an LCLS cube or smalldata, EuXFEL | `bexa.open(path)`, `bexa.io.cube.load_lcls_cube`, `SmalldataSource`, `ExtraDataSource` |  |
 | support a new file layout | `bexa profile sniff`, `bexa.io.formats.draft_spec`, `bexa.io.formats.write_draft` |  |
+| check every dataset of a beamtime at once, and draft specs for the layouts bexa does not know | `bexa profile sniff --recursive`, `bexa.io.survey.survey`, `bexa.io.survey.write_drafts` |  |
 | try the API without beamtime data | `bexa.demo`, `bexa.testing.synthetic.make_esrf_scan` | §3 |
 
 **Reducing scans**
@@ -2702,21 +2705,37 @@ profile list` prints it.
 sorted(formats.list_specs())[:3]                 # ['bexa_cube', 'bexa_cube_legacy', 'esrf_bliss_base']
 ```
 
+#### `all_specs`
+`bexa.io.formats.all_specs()`
+
+Every spec of `list_specs`, loaded, as a list of `FormatSpec`; a spec that fails to load is logged
+as a warning and left out, so one broken file never stops sniffing. `match_spec` and
+`bexa.io.survey.survey` use it when no specs are given.
+
+```python
+# every loadable spec, by name and engine
+{s.name: s.engine for s in formats.all_specs()}["aps_7id_spec_2025"]  # 'spec_tiff'
+```
+
 #### `match_spec`
-`bexa.io.formats.match_spec(path, specs=None)`
+`bexa.io.formats.match_spec(path, specs=None, quick=False, listing=None)`
 
 Scores specs (default: all of `list_specs`) against a file or folder and returns `(score,
 FormatSpec)` pairs, best first. The score is the fraction of fingerprint checks passed: master
 files and their groups (`master_glob`, `master_paths`), `scanNNNN` folders (`scan_dir_glob`),
-folder and file names (`dir_globs`, `file_globs`), HDF5 paths and attributes (`h5_paths`,
-`h5_attrs`). Ties go to the longer fingerprint, then the later name (the newest dated spec).
-Abstract specs, specs without a fingerprint and specs that fail to load (warning) are skipped.
+folder and file names (`dir_globs`, `file_globs`), a text file and its opening lines (`text_glob`,
+`text_tags`), HDF5 paths and attributes (`h5_paths`, `h5_attrs`). Ties go to the longer
+fingerprint, then the later name (the newest dated spec). Abstract specs, specs without a
+fingerprint and specs that fail to load (warning) are skipped. `quick=True` opens no HDF5 file:
+only the file-system part of each fingerprint counts, and a spec with nothing else to check is
+left out. `listing`, a `FolderListing`, keeps the folder listings between calls, as a survey of a
+tree does.
 
 ```python
 # esrf: a synthetic ESRF dataset; every spec scored against it
 [(score, s.name) for score, s in formats.match_spec(esrf.dataset_dir)[:3]]  # [(1.0, 'esrf_id03_bliss_2026'), (1.0, 'esrf_id03_bliss_2025'), (1.0, 'esrf_id03_bliss_2...
-# [(1.0, 'esrf_id03_bliss_2026'), (1.0, 'esrf_id03_bliss_2025'), (1.0, 'esrf_id03_bliss_2024')]
 formats.match_spec(esrf.dataset_dir, [spec])[0][0]  # 1.0
+formats.match_spec(esrf.dataset_dir, quick=True)[0][0]   # 1.0: the master and the scan folders are there; no HDF5 file opened
 ```
 
 #### `best_spec`
@@ -2729,6 +2748,23 @@ without a full match, raises `ValueError` naming the three closest specs.
 # esrf, pal: synthetic ESRF and PAL-XFEL data; the spec whose fingerprint matches
 formats.best_spec(esrf.scan_folder).name         # 'esrf_id03_bliss_2026' (through its dataset folder)
 formats.best_spec(pal.measurement_dir).name      # 'pal_xfel_points_2025_09'
+```
+
+#### `FolderListing`
+`bexa.io.formats.FolderListing()`
+
+The entries of folders, each folder listed once and kept. `entries(folder)` gives `{name: (is a
+folder, is a link)}`, empty for a folder that cannot be read; `glob(folder, pattern,
+folders=None)` the sorted paths whose names match `pattern`, `folders=True` or `False` keeping
+one kind. Matching a spec against a folder looks at its names, and at its parents', several
+times, and on a network share every listing costs tens of milliseconds: `match_spec` makes one
+per call, and a survey of a tree shares one for every folder it visits.
+
+```python
+# esrf: a synthetic ESRF dataset; its scan folders from one listing, reused by match_spec
+listing = formats.FolderListing()
+[p.name for p in listing.glob(esrf.dataset_dir, "scan*", folders=True)]  # ['scan0001']
+formats.match_spec(esrf.dataset_dir, listing=listing)[0][0]  # 1.0
 ```
 
 #### `FormatSpec`
@@ -2829,6 +2865,131 @@ Constants:
 
 - `FORMAT_DIR_ENV`: `"BEXA_FORMAT_DIR"`, the environment variable naming extra spec folders.
 - `SPEC_SUFFIXES`: `(".yaml", ".yml")`, the suffixes of spec files.
+
+### bexa.io.survey: every dataset under a folder
+
+One walk over a data tree (a `RAW_DATA` folder, a copy on the lab share, a folder of beamline
+examples) that says what recognises each dataset in it: the folders a format spec recognises as
+a whole (a BLISS dataset, a SPEC session, a PAL-XFEL run) and the data files a spec recognises
+one by one (one HDF5 file per scan, saved cubes). A recognised folder is not entered, the scan
+folders of a known layout are skipped, and of the files that share a naming pattern only the
+first is opened, so a tree of hundreds of datasets takes seconds. Data no spec recognises is
+reported with the spec that came closest, and `write_drafts` drafts one spec per unknown HDF5
+layout, not one per dataset. `bexa profile sniff PATH -o DRAFTS --recursive` runs all of it from
+the shell, and the scan picker lists its dataset folders with the same walk.
+
+```python
+import tempfile
+from pathlib import Path
+import h5py
+import numpy as np
+from bexa.io.survey import describe_survey, survey, survey_table, write_drafts
+from bexa.testing import make_aps_session, make_esrf_scan, make_pal_run
+
+tree = Path(tempfile.mkdtemp())                  # a data tree holding several beamlines' data
+esrf = make_esrf_scan(tree / "RAW_DATA" / "sample5", "beamtime", n_files=1)   # an ESRF dataset, three levels down
+aps = make_aps_session(tree / "aps")             # an APS 7-ID SPEC session with its TIFFs
+pal = make_pal_run(tree / "pal_run", run=1)      # a PAL-XFEL run, September 2025 layout
+unknown = tree / "custom" / "scan_data.h5"       # an HDF5 layout no spec knows
+unknown.parent.mkdir()
+with h5py.File(unknown, "w") as f:               # frames and a motor under entry/
+    f["entry/data/frames"] = np.zeros((5, 32, 32), np.uint16)
+    f["entry/motors/theta"] = np.linspace(0, 1, 5)
+```
+
+#### `survey`
+`bexa.io.survey.survey(root, depth=4, quick=False, specs=None)`
+
+Every dataset under `root`, up to `depth` folder levels down, as a list of `SurveyEntry` in the
+order of the walk (folders sorted by name). At every folder the specs are matched against the
+folder as a whole first (`bexa.io.formats.match_spec`); a folder recognised is reported and not
+entered. Otherwise its data files are grouped by naming pattern (`p0012.h5` and `p0013.h5` are
+`p#.h5`) and the first file of each HDF5 group is matched on its own, and the walk goes on into
+its subfolders. Hidden folders, `bexa_cache`, `__pycache__`, the scan folders of a known layout
+(`scanNNNN`) and linked folders are skipped. `quick=True` opens no HDF5 file: a folder is
+recognised from the file-system part of the fingerprints alone (a master file beside scan
+folders, the opening lines of a SPEC file) and data files are not checked; the scan picker lists
+folders this way. `specs` limits the specs tried. A file given as `root` is checked alone; a
+missing root raises `FileNotFoundError`.
+
+```python
+# tree: the data tree of the setup; what recognises each dataset in it
+entries = survey(tree)
+[e.spec for e in entries if e.recognised]        # ['esrf_id03_bliss_2026', 'aps_7id_spec_2025', 'pal_xfel_points_2025_09']
+[(e.path.name, e.closest) for e in entries if not e.recognised]  # [('scan_data.h5', 'esrf_id03_bliss_F2026')]
+[e.path.name for e in survey(tree, quick=True)]  # ['beamtime', 'aps', 'pal_run']
+[e.path.name for e in survey(tree, depth=1)]    # ['aps', 'scan_data.h5', 'pal_run']
+```
+
+#### `SurveyEntry`
+`bexa.io.survey.SurveyEntry(path, kind, recognised, spec=None, engine=None, score=0.0, closest=None, count=1, pattern=None, opens_as_dataset=False)`
+
+A dataset `survey` found, or data no spec recognises. `path` is a dataset folder
+(`kind="folder"`) or the first of the data files sharing one naming pattern (`kind="files"`,
+`count` of them, `pattern` their name with digits as `#`). `spec` and `engine` say what
+recognised it; a quick survey names the spec only when one alone fits, so the dated ESRF specs
+give the engine only. `closest` names the spec that came nearest for unrecognised data, with its
+`score`, the fraction of the fingerprint that fitted. `opens_as_dataset` is True for a folder of
+numbered scans, the kind `bexa.open_dataset` and the scan picker open.
+
+```python
+# entries: the survey of the tree; the ESRF dataset and the unknown file
+first = entries[0]
+first.kind, first.spec, first.engine, first.opens_as_dataset  # ('folder', 'esrf_id03_bliss_2026', 'hdf5_stack', True)
+custom = [e for e in entries if not e.recognised][0]
+custom.kind, custom.count, custom.pattern, custom.closest, custom.score  # ('files', 1, 'scan_data.h5', 'esrf_id03_bliss_F2026', 0.33333)
+```
+
+#### `describe_survey`
+`bexa.io.survey.describe_survey(entries, root=None)`
+
+The entries as text, paths relative to `root` when given: what is recognised and by which spec
+(or which engine, for a quick survey), which folders open with `open_dataset` and the scan picker,
+and what is not recognised with the closest spec. A group of files shows as
+`folder/pattern (N files)`. `bexa profile sniff --recursive` prints it.
+
+```python
+# entries: the survey of the tree; printed as the command line shows it
+text = describe_survey(entries, tree)
+print(text)                                      # '3 recognised under ...', a line per dataset and its spec, then '1 not recognised:'
+```
+
+#### `survey_table`
+`bexa.io.survey.survey_table(entries, root=None)`
+
+The entries as a `pandas.DataFrame`, one row per entry and one column per field of
+`SurveyEntry`, the paths relative to `root` when given: handy for sorting and filtering a large
+tree in a notebook.
+
+```python
+# entries: the survey of the tree; as a table
+table = survey_table(entries, tree)
+table["path"].tolist()                           # ['RAW_DATA/sample5/beamtime', 'aps', 'custom/scan_data.h5', 'pal_run']
+```
+
+#### `write_drafts`
+`bexa.io.survey.write_drafts(entries, out_dir)`
+
+Drafts one format spec per HDF5 layout that no spec recognises and returns `{draft path: [data
+paths it covers]}`. The unrecognised HDF5 data is grouped by layout (the names of its top-level
+groups and of its 3-D datasets, digits ignored); each group gets one draft, made by
+`bexa.io.formats.draft_spec` from the folder of its first entry and written to
+`<out_dir>/TODO_<folder>.yaml` with the covered paths under `seen_in`. A draft of that name from
+an earlier run is replaced. Data in other formats (TIFF, NumPy, SPEC) gets no draft: drafting
+reads HDF5 only. Fill in the `TODO` entries as for `bexa.io.formats.write_draft`.
+
+```python
+# entries: the survey of the tree; one draft for the unknown layout
+drafts = write_drafts(entries, tree / "drafts")
+[(path.name, len(covered)) for path, covered in drafts.items()]  # [('TODO_custom.yaml', 1)]
+```
+
+Constants:
+
+- `HDF5_SUFFIXES`: `(".h5", ".hdf5", ".nxs", ".nx")`, the files matched one by one.
+- `DATA_SUFFIXES`: those plus `.spec`, `.tif`, `.tiff`, `.npy`, `.npz`, `.edf`, `.cbf`: the files
+  a survey reports when nothing recognises them.
+- `SKIPPED_FOLDERS`: `bexa_cache` and `__pycache__`.
 
 ### bexa.io.base: the `Source` protocol and `BaseSource`
 
@@ -6961,12 +7122,13 @@ picker = ScanPicker(root=folder.parent, folders=[folder], filters={"type": "fsca
 #### `list_datasets`
 `bexa.notebook.picker.list_datasets(root, depth=2, format=None)`
 
-The dataset folders under `root`: every folder holding a master `.h5` file beside `scanNNNN`
-folders, walked `depth` levels down (`RAW_DATA` -> sample -> dataset at the ESRF) with
-`os.scandir` and no HDF5 file opened. `format="auto"` keeps only the folders a format spec
-recognises (`bexa.io.formats.best_spec`), a spec name those matching that spec. Hidden folders,
-`bexa_cache` and `__pycache__` are skipped; a dataset folder given as `root` comes back alone;
-a missing root raises `FileNotFoundError`.
+The dataset folders of numbered scans under `root`, `depth` levels down (`RAW_DATA`, sample,
+dataset at the ESRF), of any layout whose folders hold numbered scans: an ESRF BLISS dataset (a
+master `.h5` file beside `scanNNNN` folders) or an APS 7-ID SPEC session. It is a quick
+`bexa.io.survey.survey`: no HDF5 file is opened, the file-system part of the fingerprints decides.
+`format="auto"` sniffs every folder fully, a spec name keeps the folders that spec recognises.
+Hidden folders, `bexa_cache` and `__pycache__` are skipped, a recognised folder is not entered;
+a dataset folder given as `root` comes back alone; a missing root raises `FileNotFoundError`.
 
 ```python
 # folder: the demo z-stack dataset; the dataset folders under it and under its parent
@@ -6976,7 +7138,7 @@ list_datasets(folder.parent, format="auto")      # the same, each checked agains
 ```
 
 #### `ScanPicker`
-`bexa.notebook.picker.ScanPicker(root=None, folders=None, scans=None, filters=None, *, view="list", cache=True, cache_reductions=None, interactive=None, state_file=None, status="finished", page_size=50, motors=None, stack_axis=None, **open_kwargs)`
+`bexa.notebook.picker.ScanPicker(root=None, folders=None, scans=None, filters=None, *, view="list", cache=True, cache_reductions=None, interactive=None, state_file=None, status="finished", page_size=50, depth=2, motors=None, stack_axis=None, **open_kwargs)`
 
 The scans of a beamtime to analyse. `root` is a `RAW_DATA` folder whose datasets are listed
 (`None` lists the given `folders` only); `folders` the dataset folder(s) opened at first as one
@@ -6991,7 +7153,8 @@ kernel with ipywidgets, `False` never, `True` without a kernel (tests); `state_f
 selection, the pressed motors, the stack axis and the filters across kernel restarts as long
 as the code defaults are unchanged (edited code wins); `motors` and `stack_axis` are the
 code-level override of the buttons; `cache`, `cache_reductions` and `open_kwargs` go to
-`bexa.open_dataset`. Members:
+`bexa.open_dataset`. `depth` is how many folder levels below `root` the datasets are looked
+for (`list_datasets`; 2 is `RAW_DATA`, sample, dataset). Members:
 
 - `dataset`, `folders`, `root`, `datasets` (the folders listed under `root`), `rows` (the full
   table), `candidates` (the ids listed), `selectable` (those that may be selected), `ids` (the
@@ -11611,12 +11774,22 @@ motor candidates, guesses the engine (`hdf5_stack` for BLISS `N.1` entries, `spe
 description, energy source, detector and convention. Parent folders are created, an existing
 file is replaced. Fill in the TODOs and move the file to `configs/formats/` (`docs/formats.md`).
 
-- `PATH` (argument, required, must exist): a file or folder of the unknown layout.
-- `-o` / `--out PATH` (required): the draft to write.
-- `--name TEXT`: spec name; default `TODO_<last part of PATH>`.
+With `--recursive` it walks the whole tree under PATH instead (`bexa.io.survey.survey`):
+it prints which spec recognises every dataset it finds, and which data nothing recognises with
+the closest spec, then writes one draft per unknown HDF5 layout into the folder OUT
+(`bexa.io.survey.write_drafts`), named `TODO_<folder>.yaml` with the paths it covers under
+`seen_in`. Datasets of a known layout need no draft: one spec covers them all.
+
+- `PATH` (argument, required, must exist): a file or folder of the unknown layout; with
+  `--recursive`, the top of the tree to walk.
+- `-o` / `--out PATH` (required): the draft to write; with `--recursive`, the folder of drafts.
+- `--name TEXT`: spec name; default `TODO_<last part of PATH>`. Not used with `--recursive`.
+- `-r` / `--recursive`: walk PATH and report every dataset, drafting one spec per unknown layout.
+- `--depth INTEGER` (default 4): with `--recursive`, how many folder levels below PATH to walk.
 
 ```bash
 bexa profile sniff /data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM -o configs/formats/esrf_id03_bliss_2027.yaml --name esrf_id03_bliss_2027
+bexa profile sniff /data/visitor/ma7352/id03/20260928/RAW_DATA -o drafts --recursive
 ```
 
 ### bexa cache: the result cache

@@ -173,7 +173,7 @@ class PickerWidgets:
         from pathlib import Path
 
         m.root = Path(self.root_text.value)
-        m.datasets = list_datasets(m.root)
+        m.datasets = list_datasets(m.root, depth=m.depth)
         self._fill_datasets()
 
     def _open(self) -> None:

@@ -160,6 +160,17 @@ def list_specs() -> dict[str, Path]:
     return found
 
 
+def all_specs() -> list[FormatSpec]:
+    """Every spec of :func:`list_specs` that loads; a broken one is logged and left out."""
+    specs: list[FormatSpec] = []
+    for name in list_specs():
+        try:
+            specs.append(load_spec(name))
+        except Exception as exc:  # one broken spec must not disable sniffing
+            log.warning("skipping format spec %s: %s", name, exc)
+    return specs
+
+
 def _read_yaml(path: Path) -> dict[str, Any]:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
@@ -202,30 +213,35 @@ def load_spec(
 
 
 # ----------------------------------------------------------------- matching
-def _h5_has(path: Path, item: str) -> bool:
+# the fingerprint items that open HDF5 files; a quick match leaves them out
+CONTENT_ITEMS = ("master_paths", "h5_paths", "h5_attrs")
+
+
+def _scan_numbers(f: Any, limit: int = 3) -> list[int]:
+    """The first scan numbers of an open BLISS master, from its top-level keys ``"7.1"``."""
+    numbers: list[int] = []
+    for key in f:
+        m = re.fullmatch(r"(\d+)\.1", key)
+        if m:
+            numbers.append(int(m.group(1)))
+    return sorted(numbers)[:limit]
+
+
+def _h5_holds(path: Path, templates: Iterable[str], scans: bool = False) -> bool:
+    """True when an HDF5 file holds every path of ``templates``, opened once.
+
+    With ``scans``, the ``{scan}`` field is filled with each of the first scan
+    numbers of the master in turn, and one scan holding every path is enough.
+    """
     from bexa.io.h5files import open_h5
 
+    templates = list(templates)
     try:
         with open_h5(path, retry=False) as f:
-            return item in f
+            numbers = (_scan_numbers(f) or [1]) if scans else [1]
+            return any(all(safe_format(t, scan=n) in f for t in templates) for n in numbers)
     except OSError:
         return False
-
-
-def _h5_scan_numbers(path: Path, limit: int = 3) -> list[int]:
-    """Scan numbers from BLISS-style top-level keys ``"7.1"``."""
-    from bexa.io.h5files import open_h5
-
-    numbers: list[int] = []
-    try:
-        with open_h5(path, retry=False) as f:
-            for key in f:
-                m = re.fullmatch(r"(\d+)\.1", key)
-                if m:
-                    numbers.append(int(m.group(1)))
-    except OSError:
-        return []
-    return sorted(numbers)[:limit]
 
 
 def _text_has_tags(path: Path, tags: Iterable[str], limit: int = 65536) -> bool:
@@ -239,8 +255,44 @@ def _text_has_tags(path: Path, tags: Iterable[str], limit: int = 65536) -> bool:
     return all(any(line.startswith(tag) for line in lines) for tag in tags)
 
 
-def _dir_and_parents(path: Path, levels: int = 3) -> list[Path]:
-    folder = path if path.is_dir() else path.parent
+class FolderListing:
+    """The entries of folders, each folder listed once; one survey of a tree shares one.
+
+    Matching a spec against a folder looks at its names (and at its parents'
+    for ``dir_globs``) several times; on a network share every listing costs
+    tens of milliseconds, so the listings are kept.
+    """
+
+    def __init__(self) -> None:
+        self._folders: dict[Path, dict[str, tuple[bool, bool]]] = {}
+
+    def entries(self, folder: Path) -> dict[str, tuple[bool, bool]]:
+        """``{name: (is a folder, is a link)}`` of ``folder``; an unreadable folder is empty."""
+        found = self._folders.get(folder)
+        if found is None:
+            found = {}
+            try:
+                with os.scandir(folder) as listing:
+                    for entry in listing:
+                        try:
+                            found[entry.name] = (entry.is_dir(), entry.is_symlink())
+                        except OSError:
+                            found[entry.name] = (False, False)
+            except OSError:
+                pass
+            self._folders[folder] = found
+        return found
+
+    def glob(self, folder: Path, pattern: str, folders: bool | None = None) -> list[Path]:
+        """The sorted entries of ``folder`` matching ``pattern``; ``folders`` keeps one kind."""
+        return [
+            folder / name
+            for name, (is_dir, _) in sorted(self.entries(folder).items())
+            if fnmatch.fnmatch(name, pattern) and (folders is None or is_dir == folders)
+        ]
+
+
+def _dir_and_parents(folder: Path, levels: int = 3) -> list[Path]:
     out = [folder]
     for _ in range(levels):
         if folder.parent == folder:
@@ -250,83 +302,67 @@ def _dir_and_parents(path: Path, levels: int = 3) -> list[Path]:
     return out
 
 
-def _fingerprint_checks(spec: FormatSpec, path: Path) -> list[bool]:
-    """One boolean per fingerprint item."""
+def _fingerprint_checks(
+    spec: FormatSpec, path: Path, is_dir: bool, listing: FolderListing, quick: bool = False
+) -> list[bool]:
+    """One boolean per fingerprint item; ``quick`` leaves out the items that open HDF5 files."""
     fp = spec.fingerprint
     results: list[bool] = []
-    if path.is_dir() and fnmatch.fnmatch(path.name, fp.get("scan_dir_glob", "")):
+    if is_dir and fnmatch.fnmatch(path.name, fp.get("scan_dir_glob", "")):
         path = path.parent  # a scanNNNN folder is recognised through its dataset folder
-    is_dir = path.is_dir()
+    folder = path if is_dir else path.parent
 
     masters: list[Path] = []
     if "master_glob" in fp:
         if is_dir:
-            masters = sorted(p for p in path.glob(fp["master_glob"]) if p.is_file())
+            masters = listing.glob(path, fp["master_glob"], folders=False)
         elif path.suffix in _H5_SUFFIXES:
             masters = [path]
         results.append(bool(masters))
     elif not is_dir and path.suffix in _H5_SUFFIXES:
         masters = [path]
 
-    if "master_paths" in fp:
-        ok = False
-        for master in masters[:3]:
-            scans = _h5_scan_numbers(master) or [1]
-            for scan in scans:
-                items = [safe_format(t, scan=scan) for t in fp["master_paths"]]
-                if all(_h5_has(master, item) for item in items):
-                    ok = True
-                    break
-            if ok:
-                break
-        results.append(ok)
+    if "master_paths" in fp and not quick:
+        results.append(any(_h5_holds(m, fp["master_paths"], scans=True) for m in masters[:3]))
 
-    if "scan_dir_glob" in fp and is_dir:
-        results.append(any(p.is_dir() for p in path.glob(fp["scan_dir_glob"])))
-    elif "scan_dir_glob" in fp:
-        results.append(any(p.is_dir() for p in path.parent.glob(fp["scan_dir_glob"])))
+    if "scan_dir_glob" in fp:
+        results.append(bool(listing.glob(folder, fp["scan_dir_glob"], folders=True)))
 
     if "dir_globs" in fp:
         found = False
-        for folder in _dir_and_parents(path):
-            names = [p.name for p in folder.iterdir()] if folder.exists() else []
+        for place in _dir_and_parents(folder):
+            names = list(listing.entries(place))
             if all(any(fnmatch.fnmatch(n, g) for n in names) for g in fp["dir_globs"]):
                 found = True
                 break
         results.append(found)
 
     if "file_globs" in fp:
-        folder = path if is_dir else path.parent
-        results.append(all(any(folder.glob(g)) for g in fp["file_globs"]))
+        results.append(all(listing.glob(folder, g) for g in fp["file_globs"]))
 
     texts: list[Path] = []  # a text file (a SPEC session) given itself or inside the folder
     if "text_glob" in fp:
         if is_dir:
-            texts = sorted(p for p in path.glob(fp["text_glob"]) if p.is_file())
+            texts = listing.glob(path, fp["text_glob"], folders=False)
         elif fnmatch.fnmatch(path.name, fp["text_glob"]):
             texts = [path]
         elif path.is_file():  # a frame next to the text file
-            texts = sorted(p for p in path.parent.glob(fp["text_glob"]) if p.is_file())
+            texts = listing.glob(folder, fp["text_glob"], folders=False)
         results.append(bool(texts))
     if "text_tags" in fp:
         results.append(any(_text_has_tags(t, fp["text_tags"]) for t in texts[:3]))
 
-    if "h5_paths" in fp:
-        target = path if not is_dir else None
-        if target is None:
-            candidates = sorted(p for p in path.glob("*.h5"))[:3]
-        else:
-            candidates = [target]
-        results.append(any(all(_h5_has(c, item) for item in fp["h5_paths"]) for c in candidates))
+    if "h5_paths" in fp and not quick:
+        candidates = listing.glob(path, "*.h5", folders=False)[:3] if is_dir else [path]
+        results.append(any(_h5_holds(c, fp["h5_paths"]) for c in candidates))
 
-    if "h5_attrs" in fp:
-        target = path if not is_dir else None
+    if "h5_attrs" in fp and not quick:
         ok = False
-        if target is not None and target.suffix in _H5_SUFFIXES:
+        if not is_dir and path.suffix in _H5_SUFFIXES:
             from bexa.io.h5files import open_h5
 
             try:
-                with open_h5(target, retry=False) as f:
+                with open_h5(path, retry=False) as f:
                     ok = all(
                         safe_format(group, scan=1) in f
                         and all(a in f[safe_format(group, scan=1)].attrs for a in attrs)
@@ -344,28 +380,32 @@ def _specificity(fingerprint: dict[str, Any]) -> int:
 
 
 def match_spec(
-    path: str | Path, specs: Iterable[FormatSpec] | None = None
+    path: str | Path,
+    specs: Iterable[FormatSpec] | None = None,
+    quick: bool = False,
+    listing: FolderListing | None = None,
 ) -> list[tuple[float, FormatSpec]]:
     """Score every spec against ``path``; best first.
 
     Returns ``(score, spec)`` pairs where ``score`` is the fraction of fingerprint
     checks that passed. Specs without a fingerprint and abstract specs (bases for
     ``extends``) are never matched. Ties go to the more detailed fingerprint, then
-    to the newest name (dated specs sort by year).
+    to the newest name (dated specs sort by year). ``quick`` opens no HDF5 file:
+    only the file-system part of each fingerprint counts (file and folder
+    names, the opening lines of a text file), and a spec with nothing else to
+    check is left out. ``listing`` keeps the folder listings between calls (a
+    survey of a tree passes one, so every folder is listed once).
     """
     path = Path(path)
     if specs is None:
-        specs = []
-        for name in list_specs():
-            try:
-                specs.append(load_spec(name))
-            except Exception as exc:  # one broken spec must not disable sniffing
-                log.warning("skipping format spec %s: %s", name, exc)
+        specs = all_specs()
+    listing = listing if listing is not None else FolderListing()
+    is_dir = path.is_dir()
     scored: list[tuple[float, int, FormatSpec]] = []
     for spec in specs:
         if spec.abstract:
             continue
-        checks = _fingerprint_checks(spec, path)
+        checks = _fingerprint_checks(spec, path, is_dir, listing, quick=quick)
         if not checks:
             continue
         scored.append((sum(checks) / len(checks), _specificity(spec.fingerprint), spec))

@@ -99,6 +99,9 @@ class BaseSource(ABC):
     """Base class with the boring parts of :class:`Source` filled in."""
 
     name: str = "base"
+    # True for a layout whose dataset folders hold numbered scans that
+    # bexa.open_dataset lists (the scan picker opens those folders)
+    dataset_layout: bool = False
 
     def __init__(self, spec: FormatSpec | None = None) -> None:
         self.spec = spec

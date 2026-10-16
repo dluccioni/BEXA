@@ -315,6 +315,7 @@ class SpecTiffSource(BaseSource):
     """
 
     name = "spec_tiff"
+    dataset_layout = True
     spec: FormatSpec
 
     def __init__(

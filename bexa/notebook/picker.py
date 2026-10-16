@@ -15,7 +15,6 @@ import hashlib
 import io
 import json
 import os
-import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -33,8 +32,6 @@ log = get_logger(__name__)
 
 __all__ = ["STATUS_SHOWN", "VIEWS", "ScanPicker", "list_datasets", "pick_scans"]
 
-SCAN_FOLDER = re.compile(r"scan\d+")
-SKIPPED_FOLDERS = {"bexa_cache", "__pycache__"}
 VIEWS = ("list", "table", "gallery")
 # the "show" filter of the bars: which statuses are listed
 STATUS_SHOWN: dict[str, tuple[str, ...] | None] = {
@@ -44,61 +41,29 @@ STATUS_SHOWN: dict[str, tuple[str, ...] | None] = {
 }
 
 
-def _is_dataset(folder: Path) -> bool:
-    """A folder holding an HDF5 master beside ``scanNNNN`` folders."""
-    try:
-        entries = list(os.scandir(folder))
-    except OSError:
-        return False
-    has_master = any(e.is_file() and e.name.endswith(".h5") for e in entries)
-    has_scans = any(e.is_dir() and SCAN_FOLDER.fullmatch(e.name) for e in entries)
-    return has_master and has_scans
-
-
 def list_datasets(root: str | Path, depth: int = 2, format: str | None = None) -> list[Path]:
-    """Dataset folders under ``root``: a master ``.h5`` beside ``scanNNNN`` folders.
+    """Dataset folders of numbered scans under ``root``, up to ``depth`` levels down.
 
-    Walks ``depth`` levels (``RAW_DATA`` -> sample -> dataset) with ``os.scandir``
-    and opens no HDF5 file unless ``format`` asks: ``"auto"`` keeps the folders
-    a format spec recognises (:func:`bexa.io.formats.best_spec`), a spec name
-    those matching that spec. Hidden folders, ``bexa_cache`` and ``__pycache__``
-    are skipped. A dataset folder given as ``root`` is returned alone; a missing
-    root raises ``FileNotFoundError``.
+    A folder is listed when a format spec whose folders hold numbered scans
+    recognises it: a BLISS master beside ``scanNNNN`` folders, a SPEC session
+    file (see :func:`bexa.io.survey.survey`). By default no HDF5 file is opened
+    and the file-system part of the fingerprints decides; ``format="auto"``
+    sniffs every folder fully, a spec name keeps the folders that spec
+    recognises. Hidden folders, ``bexa_cache`` and ``__pycache__`` are skipped,
+    a recognised folder is not entered, a dataset folder given as ``root`` is
+    returned alone, and a missing root raises ``FileNotFoundError``.
     """
+    from bexa.io.formats import load_spec
+    from bexa.io.survey import survey
+
     root = Path(root)
     if not root.is_dir():
         raise FileNotFoundError(f"no folder {root}")
-    found: list[Path] = []
-    if _is_dataset(root):
-        found.append(root)
+    if format is None or format == "auto":
+        entries = survey(root, depth=depth, quick=format is None)
     else:
-        _walk(root, 1, depth, found)
-    if format is None:
-        return found
-    from bexa.io.formats import best_spec, load_spec, match_spec
-
-    if format == "auto":
-        return [f for f in found if best_spec(f) is not None]
-    spec = load_spec(format)
-    return [f for f in found if any(score >= 1.0 for score, _ in match_spec(f, [spec]))]
-
-
-def _walk(folder: Path, level: int, depth: int, found: list[Path]) -> None:
-    try:
-        entries = sorted(
-            (e for e in os.scandir(folder) if e.is_dir() and not e.name.startswith(".")),
-            key=lambda e: e.name,
-        )
-    except OSError:
-        return
-    for entry in entries:
-        if entry.name in SKIPPED_FOLDERS:
-            continue
-        path = Path(entry.path)
-        if _is_dataset(path):
-            found.append(path)
-        elif level < depth:
-            _walk(path, level + 1, depth, found)
+        entries = survey(root, depth=depth, specs=[load_spec(format)])
+    return [e.path for e in entries if e.kind == "folder" and e.opens_as_dataset]
 
 
 def _stable(value: Any) -> Any:
@@ -154,6 +119,9 @@ class ScanPicker:
         unreadable are listed greyed and never selected.
     page_size
         Rows per page of the table and gallery views.
+    depth
+        How many folder levels below ``root`` the datasets are looked for
+        (:func:`list_datasets`): 2 is ``RAW_DATA``, sample, dataset.
     motors, stack_axis
         The motors to extract and the stack axis chosen in code instead of with
         the buttons (``None``: the defaults bexa detects).
@@ -173,6 +141,7 @@ class ScanPicker:
         state_file: str | Path | None = None,
         status: Any = "finished",
         page_size: int = 50,
+        depth: int = 2,
         motors: Sequence[str] | None = None,
         stack_axis: str | None = None,
         **open_kwargs: Any,
@@ -183,7 +152,12 @@ class ScanPicker:
             raise ValueError(f"view must be one of {VIEWS}, not {view!r}")
         given = [folders] if isinstance(folders, (str, Path)) else list(folders or [])
         self.root = Path(root) if root is not None else _common_root([Path(f) for f in given])
-        self.datasets = list_datasets(self.root) if root is not None else [Path(f) for f in given]
+        self.depth = int(depth)
+        self.datasets = (
+            list_datasets(self.root, depth=self.depth)
+            if root is not None
+            else [Path(f) for f in given]
+        )
         if not given:
             if not self.datasets:
                 raise ValueError(f"no dataset folder under {self.root}")

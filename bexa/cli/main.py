@@ -165,14 +165,34 @@ def profile_new(
 @profile_app.command("sniff")
 def profile_sniff(
     path: Path = typer.Argument(..., exists=True, help="A file or folder of an unknown layout."),
-    out: Path = typer.Option(..., "-o", "--out", help="Where to write the draft format spec."),
+    out: Path = typer.Option(
+        ..., "-o", "--out", help="The draft spec file; with --recursive, the folder of drafts."
+    ),
     name: str | None = typer.Option(None, help="Spec name (default derived from the path)."),
+    recursive: bool = typer.Option(
+        False,
+        "--recursive",
+        "-r",
+        help="Walk PATH: name the spec of every dataset, draft one spec per unknown layout.",
+    ),
+    depth: int = typer.Option(4, help="With --recursive: folder levels below PATH to walk."),
 ) -> None:
     """Draft a format spec from the files found at PATH (fill in the TODO entries)."""
-    from bexa.io.formats import write_draft
+    if not recursive:
+        from bexa.io.formats import write_draft
 
-    written = write_draft(path, out, name=name)
-    typer.echo(f"draft spec written to {written}")
+        written = write_draft(path, out, name=name)
+        typer.echo(f"draft spec written to {written}")
+        return
+    from bexa.io.survey import describe_survey, survey, write_drafts
+
+    entries = survey(path, depth=depth)
+    typer.echo(describe_survey(entries, path))
+    drafts = write_drafts(entries, out)
+    for draft, covered in drafts.items():
+        typer.echo(f"draft spec written to {draft} for {len(covered)} unrecognised data paths")
+    if not drafts:
+        typer.echo("no draft written: every HDF5 layout found is recognised")
 
 
 # --------------------------------------------------------------------- cache

@@ -93,6 +93,7 @@ class Hdf5StackSource(BaseSource):
     """
 
     name = "hdf5_stack"
+    dataset_layout = True
     spec: FormatSpec
 
     def __init__(
