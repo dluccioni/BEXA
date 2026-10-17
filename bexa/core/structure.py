@@ -183,6 +183,40 @@ class Structure:
             _grid_of_frame=None,
         )
 
+    def layer(self, dim: str, index: int) -> Structure:
+        """The grid at one point of the motor dim ``dim``: the dim leaves, its value stays.
+
+        The value becomes a fixed positioner in :attr:`scalars`, or the energy
+        when ``dim`` is the energy, so a layer is told apart from the others the
+        way scans are. The frame ids keep their numbering (the source reads the
+        same frames), and a layer is not the plan any more.
+        """
+        if dim not in self.motor_dims:
+            raise ValueError(f"{dim!r} is not a motor dim; the dims are {self.motor_dims}")
+        axis = self.motor_dims.index(dim)
+        size = self.motor_shape[axis]
+        if not -size <= int(index) < size:
+            raise IndexError(f"{dim} has {size} points; there is no point {index}")
+        index = int(index) % size
+        value = float(self.coords[dim][index])
+        frame_index = np.take(self.frame_index, index, axis=axis)
+        dims = tuple(d for d in self.motor_dims if d != dim)
+        scalars = dict(self.scalars)
+        if dim != ENERGY_DIM:
+            scalars[dim] = value
+        return replace(
+            self,
+            motor_dims=dims,
+            motor_shape=tuple(frame_index.shape),
+            coords={d: self.coords[d] for d in dims},
+            frame_index=frame_index,
+            scalars=scalars,
+            energy_keV=value if dim == ENERGY_DIM else self.energy_keV,
+            planned_shape=None,
+            planned_frames=None,
+            _grid_of_frame=None,
+        )
+
     def with_frame_shape(self, frame_shape: Sequence[int]) -> Structure:
         return replace(self, frame_shape=_pair(frame_shape), _grid_of_frame=None)
 

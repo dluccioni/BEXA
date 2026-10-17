@@ -283,12 +283,13 @@ class PickerWidgets:
             button.observe(lambda ch, n=name: self._motor_toggled(n, ch["new"]), names="value")
             buttons.append(button)
         self.motor_row.children = buttons or [ipw.HTML("<i>select a scan first</i>")]
-        between = m._between_scans()
         axis = m.stack_axis
         self.stack_dropdown = ipw.Dropdown(
-            options=["none", *between],
+            options=["none", *m.stack_candidates()],
             value=axis or "none",
             description="stack axis",
+            tooltip="any extracted motor: one that moves within the scans splits each scan "
+            "into its layers along it",
             layout=ipw.Layout(width="200px"),
         )
         self.stack_dropdown.observe(lambda ch: m.set_stack_axis(ch["new"]), names="value")

@@ -229,54 +229,84 @@ class ScanPicker(ScanListing):
         pressed = self._pressed("stack")
         return sorted(pressed, key=lambda m: (m not in order, order.index(m) if m in order else 0))
 
+    def _layered(self) -> str | None:
+        """The stack axis when it moves within the scans (they are split into its layers)."""
+        axis = self.stack_axis
+        return axis if axis is not None and axis in self._pressed("scan") else None
+
     @property
     def scans(self) -> list[Scan]:
-        """The selected scans of every folder, read with the pressed motors as their dims."""
+        """The selected scans of every folder, read with the pressed motors as their dims.
+
+        When the stack axis moves within the scans, every scan is split into its
+        layers along it (:meth:`bexa.core.scan.Scan.layers`), one per point.
+        """
         within = self._pressed("scan")
-        key = (tuple(self.selection), tuple(within))
+        layered = self._layered()
+        key = (tuple(self.selection), tuple(within), layered)
         if self._scans is None or self._scans[0] != key:
             candidates = self.motor_candidates()
-            defaults = [m for m in within if not candidates[m].default] or [
+            changed = [m for m in within if not candidates[m].default] or [
                 m
                 for m, c in candidates.items()
                 if c.where == "scan" and c.default and m not in within
             ]
+            # the stack axis first: of motors that step together, the first named is the dim
+            motors = [layered, *(m for m in within if m != layered)] if layered else within
             opened = []
             for scan in self._base_scans():
-                if defaults and set(within) != set(scan.dims[:-2]):  # other motors than bexa's
-                    scan = scan.with_dims(within)
-                opened.append(scan)
+                dims = set(scan.dims[:-2])
+                if (changed and set(within) != dims) or (layered and layered not in dims):
+                    scan = scan.with_dims(motors)  # other motors than bexa's
+                opened.extend(scan.layers(layered) if layered else [scan])
             self._scans = (key, opened)
         return self._scans[1]
 
     @property
     def dims(self) -> list[str]:
-        """The pressed motors that move within a scan, in loop order (the dims of the maps)."""
+        """The pressed motors that move within a scan but the stack axis, in loop order.
+
+        These are the dims of the maps.
+        """
         scans = self.scans
-        return [str(d) for d in scans[0].dims[:-2]] if scans else self._pressed("scan")
+        if scans:
+            return [str(d) for d in scans[0].dims[:-2]]
+        return [m for m in self._pressed("scan") if m != self._layered()]
+
+    def stack_candidates(self) -> list[str]:
+        """The pressed motors the scans can be stacked on: those that differ between the
+        scans (the leading one first), then those that move within them."""
+        return [*self._between_scans(), *self._pressed("scan")]
 
     @property
     def stack_axis(self) -> str | None:
-        """The one motor the scans are stacked on (``uz`` for a z-stack), or ``None``."""
-        between = self._between_scans()
-        if self.stack_choice in between:
+        """The one motor the scans are stacked on (``uz`` for a z-stack), or ``None``.
+
+        By default the leading motor that differs between the scans; any pressed
+        motor when chosen (:meth:`set_stack_axis`).
+        """
+        if self.stack_choice in self.stack_candidates():
             return self.stack_choice
         if self.stack_choice == "none":
             return None
+        between = self._between_scans()
         return between[0] if between else None
 
     def set_stack_axis(self, name: str | None, notify: bool = True) -> None:
-        """Set the stack axis: a pressed motor, "none" or None for none, "default" for bexa's."""
+        """Set the stack axis: any pressed motor, "none" or None for none, "default" for bexa's.
+
+        A motor that moves within the scans splits every scan into its layers
+        along it, which then stack the way separate scans do.
+        """
         if name is None or name == "none":
             self.stack_choice = "none"
         elif name == "default":
             self.stack_choice = None
         else:
-            between = self._between_scans()
-            if name not in between:
+            candidates = self.stack_candidates()
+            if name not in candidates:
                 raise ValueError(
-                    f"{name!r} is not a pressed motor that differs between the scans; "
-                    f"choose from {between} or press it first"
+                    f"{name!r} is not a pressed motor; choose from {candidates} or press it first"
                 )
             self.stack_choice = str(name)
         if notify:
@@ -309,6 +339,8 @@ class ScanPicker(ScanListing):
         scan_axes = " x ".join(f"{m} ({candidates[m].n_values})" for m in self.scan_axes)
         axis = self.stack_axis
         stack = f"{axis} ({candidates[axis].n_values})" if axis else "none"
+        if self._layered():
+            stack += ", each scan split into its layers"
         return f"scan axes: {scan_axes or 'frames only'}; stack axis: {stack}"
 
     # ---------------------------------------------------------------- thumbnails

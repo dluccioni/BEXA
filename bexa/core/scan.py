@@ -26,6 +26,7 @@ from bexa.core.status import ScanStatus
 from bexa.core.structure import Structure
 from bexa.io.base import Source
 from bexa.io.formats import FormatSpec, best_spec, load_spec, match_spec
+from bexa.io.layer import LayerSource
 from bexa.io.multi import MultiScanSource
 
 log = get_logger(__name__)
@@ -133,8 +134,47 @@ class Scan:
         so the scan reopens the same way in a worker, and into the cache keys.
         """
         chosen = [str(m) for m in motors]
-        opened = Scan(
-            self.source.with_motors(chosen),
+        opened = self._around(self.source.with_motors(chosen))
+        _ = opened.structure  # built now: a wrong motor name fails here, not later
+        if self.recipe is not None:
+            opened.recipe = {**self.recipe, "motors": chosen}
+        return opened
+
+    def layer(self, dim: str, index: int) -> Scan:
+        """The frames at one point of the motor dim ``dim``, as a scan of their own.
+
+        The dim leaves the grid and its value becomes a fixed positioner of the
+        layer (the energy when ``dim`` is the energy), so layers stack the way
+        scans do; see :meth:`layers`. The frames are read through this scan.
+        The layer goes into the recipe, so a worker reopens it, and into the
+        cache keys, so no two layers share a result.
+        """
+        layered = self._around(LayerSource(self.source, dim, index))
+        if self.recipe is not None:
+            earlier = list(self.recipe.get("layer") or [])
+            layered.recipe = {**self.recipe, "layer": [*earlier, (str(dim), int(index))]}
+        return layered
+
+    def layers(self, dim: str) -> list[Scan]:
+        """The scan split along the motor dim ``dim``: one :meth:`layer` per point, in grid order.
+
+        ``bexa.stack(scan.layers("uz"), accumulators, dim="uz")`` stacks the maps
+        of a z-scan (``uz x chi x mu``) by height, as for a z-stack of separate
+        scans. A motor range of an ROI on ``dim`` does not reach the layers:
+        choose among the layers instead.
+        """
+        structure = self.structure
+        if dim not in structure.motor_dims:
+            raise ValueError(
+                f"{dim!r} is not a motor dim of {self.name}; its dims: {structure.motor_dims}"
+            )
+        size = structure.motor_shape[structure.motor_dims.index(dim)]
+        return [self.layer(dim, i) for i in range(size)]
+
+    def _around(self, source: Source) -> Scan:
+        """A scan with this one's spec, geometry, crystal, cache and ROI, reading ``source``."""
+        derived = Scan(
+            source,
             self.spec,
             geometry=self.geometry,
             crystal=self.crystal,
@@ -144,11 +184,8 @@ class Scan:
             cache_reductions=self.cache_reductions,
             hkl_center=self.hkl_center,
         )
-        opened.roi = self.roi
-        _ = opened.structure  # built now: a wrong motor name fails here, not later
-        if self.recipe is not None:
-            opened.recipe = {**self.recipe, "motors": chosen}
-        return opened
+        derived.roi = self.roi
+        return derived
 
     def info(self) -> str:
         """Human summary: files, structure, ROI, memory estimates."""
@@ -506,6 +543,7 @@ def open(
     cache: Cache | str | Path | bool | None = True,
     cache_reductions: bool | None = None,
     motors: Sequence[str] | None = None,
+    layer: tuple[str, int] | Sequence[tuple[str, int]] | None = None,
     **kwargs: Any,
 ) -> Scan:
     """Open a scan from a path, or from a beamtime profile and a sample name.
@@ -538,6 +576,10 @@ def open(
     motors
         Per-frame channels to use as the dims instead of the ones the scan
         declares (see :meth:`Scan.with_dims`); layouts with numbered scans only.
+    layer
+        ``(dim, index)``, or a list of them: one layer of the scan, its frames
+        at that point of a motor dim (see :meth:`Scan.layer`). The recipe of a
+        layer says so, which is how a worker reopens it.
     """
     if motors is not None:
         kwargs["motors"] = [str(m) for m in motors]
@@ -546,7 +588,7 @@ def open(
             raise ValueError("give either a path or a profile, not both")
         if energy_keV is not None:
             kwargs["energy_keV"] = energy_keV
-        return open_profile(
+        profiled = open_profile(
             profile,
             sample=sample,
             scan=scan,
@@ -556,6 +598,7 @@ def open(
             cache=None if cache is True else cache,
             **kwargs,
         )
+        return _layered(profiled, layer)
     if format is None and "::" in str(path):  # file.h5::/dataset shortcut
         format = "generic_stack"
     spec = _resolve_spec(Path(str(path).split("::")[0]), format, overrides)
@@ -585,7 +628,17 @@ def open(
         "overrides": overrides,
         **kwargs,
     }
-    return opened
+    return _layered(opened, layer)
+
+
+def _layered(scan: Scan, layer: Any) -> Scan:
+    """``scan``, or its layer when ``layer`` names one: ``(dim, index)`` or a list of them."""
+    if layer is None:
+        return scan
+    steps = [layer] if len(layer) == 2 and isinstance(layer[0], str) else list(layer)
+    for dim, index in steps:
+        scan = scan.layer(str(dim), int(index))
+    return scan
 
 
 def _resolve_cache(cache: Cache | str | Path | bool | None, default_root: Path) -> Cache | None:
