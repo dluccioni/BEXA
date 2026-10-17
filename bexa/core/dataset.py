@@ -256,6 +256,16 @@ class Dataset:
         """The dataset folders, in the order their scans are numbered."""
         return list(self.paths)
 
+    def origin(self, scan_id: int) -> tuple[Path, int]:
+        """The dataset folder and the scan number behind an id: ``(folder, number)``."""
+        if self._ids is None:
+            _ = self.scans  # lists the folders once
+        key = self._where.get(int(scan_id))
+        if key is None:
+            raise ValueError(f"scan {scan_id} is not in the dataset; available: {self.scans}")
+        k, number = key
+        return self._folders[k].path, number
+
     def refresh(self, everything: bool = False) -> Dataset:
         """Look at the folders again: new scans appear, unfinished ones are read anew.
 

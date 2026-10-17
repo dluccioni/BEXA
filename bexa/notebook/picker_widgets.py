@@ -3,18 +3,23 @@
 Shared bars (the root and the datasets under it, the type / motors / status
 filters, the selection buttons, the status line), then the scan list in one of
 three views (``"list"``: one line per scan; ``"table"``: a checkbox per row with
-sortable columns; ``"gallery"``: thumbnails), then the motor buttons and the
-roles row. Every change goes through the picker, which calls back here.
+sortable columns; ``"gallery"``: thumbnails), then the selection panel (the
+selected scans of every folder, :mod:`bexa.notebook.selection_panel`), then the
+motor buttons and the roles row. Every change goes through the picker, which
+calls back here.
 """
 
 from __future__ import annotations
 
+import html
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from bexa.notebook.picker import STATUS_SHOWN, VIEWS, ScanPicker
+from bexa.notebook.picker import STATUS_SHOWN, VIEWS, ScanPicker, list_datasets
+from bexa.notebook.selection_panel import SelectionPanel
 
 __all__ = ["PickerWidgets"]
 
@@ -60,7 +65,10 @@ class PickerWidgets:
             description="datasets", layout=ipw.Layout(width="70%"), rows=2
         )
         self.open_button = ipw.Button(
-            description="Open", button_style="primary", layout=ipw.Layout(width="100px")
+            description="Open",
+            button_style="primary",
+            tooltip="list the scans of the highlighted folders; the selection stays",
+            layout=ipw.Layout(width="100px"),
         )
         self.open_button.on_click(lambda _b: self._open())
         self._fill_datasets()
@@ -93,9 +101,21 @@ class PickerWidgets:
             widget.observe(lambda _ch: self._filters_changed(), names="value")
         self.view_dd.observe(lambda ch: self._set_view(ch["new"]), names="value")
         filter_bar = ipw.HBox([self.type_dd, self.motors_text, self.status_dd, self.view_dd])
-        self.all_button = ipw.Button(description="All shown", layout=ipw.Layout(width="100px"))
-        self.none_button = ipw.Button(description="None", layout=ipw.Layout(width="80px"))
-        self.invert_button = ipw.Button(description="Invert", layout=ipw.Layout(width="80px"))
+        self.all_button = ipw.Button(
+            description="All shown",
+            tooltip="select every scan listed (the other folders' scans stay selected)",
+            layout=ipw.Layout(width="100px"),
+        )
+        self.none_button = ipw.Button(
+            description="None shown",
+            tooltip="unselect the scans listed (Clear all, below, empties every folder)",
+            layout=ipw.Layout(width="100px"),
+        )
+        self.invert_button = ipw.Button(
+            description="Invert",
+            tooltip="invert the selection of the scans listed",
+            layout=ipw.Layout(width="80px"),
+        )
         self.reset_button = ipw.Button(
             description="Reset", icon="undo", layout=ipw.Layout(width="90px")
         )
@@ -103,7 +123,7 @@ class PickerWidgets:
             description="Refresh", icon="sync", layout=ipw.Layout(width="100px")
         )
         self.all_button.on_click(lambda _b: m.select_all())
-        self.none_button.on_click(lambda _b: m.clear())
+        self.none_button.on_click(lambda _b: m.select([]))
         self.invert_button.on_click(
             lambda _b: m.select([i for i in m.selectable if i not in m.ids])
         )
@@ -143,8 +163,18 @@ class PickerWidgets:
             ],
             layout=ipw.Layout(border_top="1px solid #e0e0e0", padding="6px 0", margin="6px 0"),
         )
+        self.panels = [SelectionPanel(picker)]  # the one below the list, then extra views
         self.box = ipw.VBox(
-            [ipw.HTML(CSS), folder_bar, filter_bar, buttons, self.body, motor_box, ipw.HTML(HINT)]
+            [
+                ipw.HTML(CSS),
+                folder_bar,
+                filter_bar,
+                buttons,
+                self.body,
+                self.panels[0].box,
+                motor_box,
+                ipw.HTML(HINT),
+            ]
         )
         self.box.add_class("bexa-mono")
         picker.observe(lambda _p: self.refresh())
@@ -156,9 +186,12 @@ class PickerWidgets:
         options = []
         for path in m.datasets:
             try:
-                label = str(path.relative_to(m.root))
+                label = path.relative_to(m.root).as_posix()
             except ValueError:
                 label = str(path)
+            picked = len(m.selected_in(path))
+            if picked:
+                label += f"  ({picked} selected)"
             options.append((label, str(path)))
         self.folder_select.options = options
         self.folder_select.rows = min(4, max(2, len(options)))
@@ -167,18 +200,35 @@ class PickerWidgets:
         )
 
     def _rescan(self) -> None:
-        from bexa.notebook.picker import list_datasets
-
         m = self.picker
-        from pathlib import Path
-
-        m.root = Path(self.root_text.value)
-        m.datasets = list_datasets(m.root, depth=m.depth)
+        root = Path(self.root_text.value)
+        try:
+            m.datasets = list_datasets(root, depth=m.depth)
+        except OSError as exc:
+            self._say(str(exc))
+            return
+        m.root = root
         self._fill_datasets()
+        if not m.datasets:
+            self._say(f"no dataset folder under {root} (depth {m.depth})")
 
     def _open(self) -> None:
-        if self.folder_select.value:
+        if not self.folder_select.value:
+            return
+        try:
             self.picker.set_folders(list(self.folder_select.value))
+        except ValueError as exc:
+            self._say(str(exc))
+
+    def _say(self, message: str) -> None:
+        """A problem in the status line, in red, until the next change."""
+        self.status.value = f"<span style='color:#b71c1c'>&nbsp;&nbsp;{html.escape(message)}</span>"
+
+    def selection_view(self) -> Any:
+        """Another live selection panel, for a cell of its own."""
+        panel = SelectionPanel(self.picker)
+        self.panels.append(panel)
+        return panel.box
 
     def _filters_changed(self) -> None:
         if self._syncing:
@@ -209,6 +259,8 @@ class PickerWidgets:
         self.status.value = f"<b>&nbsp;&nbsp;{m.status_text()}</b>"
         self._build_motors()
         self._build_body()
+        for panel in self.panels:
+            panel.refresh()
 
     def _build_motors(self) -> None:
         """One toggle button per motor that moves; the defaults pressed, any of them changeable."""
@@ -290,8 +342,10 @@ class PickerWidgets:
 
     def _toggle(self, scan_id: int, selected: bool) -> None:
         m = self.picker
-        ids = [i for i in m.ids if i != scan_id] + ([scan_id] if selected else [])
-        m.select(sorted(ids))
+        if selected:
+            m.select([*m.ids, scan_id])
+        else:
+            m.remove([scan_id])
 
     def _list(self) -> Any:
         import ipywidgets as ipw
@@ -387,7 +441,7 @@ class PickerWidgets:
         height = size * 60 // 72
         for _, row in rows.iterrows():
             scan_id = int(row["id"])
-            png = m._thumbnails.get(scan_id)
+            png = m._thumbnails.get(m._key_of[scan_id])
             if png is not None:
                 picture: Any = ipw.Image(value=png, format="png", width=size, height=height)
             else:

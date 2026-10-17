@@ -1,92 +1,50 @@
-"""Choosing scans in a notebook: the datasets under a root, the scans of one, the motors to read.
+"""Choosing scans in a notebook: the datasets under a root, the scans of any of them, the motors.
 
 :class:`ScanPicker` holds what the notebook's data cell used to spell out by hand
 (``FOLDERS``, ``SCANS``, ``FILTERS``, the stack axes): the dataset folders under a
-``RAW_DATA`` root, the scans listed and selected, the motors to extract and
-which of them is the stack axis. In a Jupyter kernel with ipywidgets it shows
-as a widget (:mod:`bexa.notebook.picker_widgets`); anywhere else as a table,
-and the same methods drive it from code.
+``RAW_DATA`` root, the scans listed and selected (:mod:`bexa.notebook.listing`;
+the selection may span folders), the motors to extract and which of them is the
+stack axis. In a Jupyter kernel with ipywidgets it shows as a widget with a
+panel of the selection (:mod:`bexa.notebook.picker_widgets`); anywhere else as
+a table, and the same methods drive it from code.
 """
 
 from __future__ import annotations
 
-import contextlib
-import hashlib
 import io
-import json
-import os
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
-from bexa._log import get_logger, in_kernel, progress
-from bexa.core.dataset import Dataset, varying
+from bexa._log import get_logger, in_kernel
+from bexa.core import scan_table
+from bexa.core.dataset import varying
 from bexa.core.scan import Scan
-from bexa.core.scan_table import FIXED_COLUMNS, LEAD_COLUMNS, MotorCandidate
-from bexa.core.status import ScanNotReadyError, ScanStatus, status_filter
+from bexa.core.scan_table import MotorCandidate
+from bexa.core.status import ScanNotReadyError
+from bexa.notebook.listing import STATUS_SHOWN, ScanListing, list_datasets
+from bexa.notebook.picker_state import PickerState, defaults_key
+from bexa.notebook.selection import folder_path
 
 log = get_logger(__name__)
 
 __all__ = ["STATUS_SHOWN", "VIEWS", "ScanPicker", "list_datasets", "pick_scans"]
 
 VIEWS = ("list", "table", "gallery")
-# the "show" filter of the bars: which statuses are listed
-STATUS_SHOWN: dict[str, tuple[str, ...] | None] = {
-    "any": None,
-    "finished": ("complete", "aborted"),
-    "complete": ("complete",),
-}
 
 
-def list_datasets(root: str | Path, depth: int = 2, format: str | None = None) -> list[Path]:
-    """Dataset folders of numbered scans under ``root``, up to ``depth`` levels down.
-
-    A folder is listed when a format spec whose folders hold numbered scans
-    recognises it: a BLISS master beside ``scanNNNN`` folders, a SPEC session
-    file (see :func:`bexa.io.survey.survey`). By default no HDF5 file is opened
-    and the file-system part of the fingerprints decides; ``format="auto"``
-    sniffs every folder fully, a spec name keeps the folders that spec
-    recognises. Hidden folders, ``bexa_cache`` and ``__pycache__`` are skipped,
-    a recognised folder is not entered, a dataset folder given as ``root`` is
-    returned alone, and a missing root raises ``FileNotFoundError``.
-    """
-    from bexa.io.formats import load_spec
-    from bexa.io.survey import survey
-
-    root = Path(root)
-    if not root.is_dir():
-        raise FileNotFoundError(f"no folder {root}")
-    if format is None or format == "auto":
-        entries = survey(root, depth=depth, quick=format is None)
-    else:
-        entries = survey(root, depth=depth, specs=[load_spec(format)])
-    return [e.path for e in entries if e.kind == "folder" and e.opens_as_dataset]
-
-
-def _stable(value: Any) -> Any:
-    """A JSON-able stand-in for a code default; a lambda counts by its code, not its address."""
-    if callable(value):
-        code = getattr(value, "__code__", None)
-        if code is not None:
-            return ["callable", code.co_code.hex(), repr(code.co_consts), repr(code.co_names)]
-        return ["callable", repr(value)]
-    if isinstance(value, Mapping):
-        return {str(k): _stable(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_stable(v) for v in value]
-    return repr(value)
-
-
-def _common_root(folders: Sequence[Path]) -> Path:
-    root = Path(os.path.commonpath([str(f.resolve()) for f in folders]))
-    return root.parent if root in [f.resolve() for f in folders] else root
-
-
-class ScanPicker:
+class ScanPicker(ScanListing):
     """The scans of a beamtime to analyse: which folders, which scans, which motors.
+
+    The scans of the folders listed are shown (several folders: one list with
+    running ids). The selection holds the scans chosen in any folder: listing
+    another folder keeps them and choosing there adds to them. :attr:`ids` are
+    the selected scans among those listed, :attr:`selection` every selected
+    scan as ``(folder, scan number)``, and :attr:`scans` opens them all with
+    the pressed motors as their dims.
 
     Parameters
     ----------
@@ -94,8 +52,8 @@ class ScanPicker:
         A ``RAW_DATA`` folder whose datasets are listed (:func:`list_datasets`);
         ``None`` lists the given ``folders`` only.
     folders
-        The dataset folder(s) opened at first, as one :class:`bexa.core.dataset.Dataset`
-        with running ids; ``None`` opens the first dataset under ``root``.
+        The dataset folder(s) listed at first, as one :class:`bexa.core.dataset.Dataset`
+        with running ids; ``None`` lists the first dataset under ``root``.
     scans, filters
         The scans selected at first, as :meth:`bexa.core.dataset.Dataset.select_numbers`
         takes them (``None``: every scan that passes ``filters``), and the
@@ -146,49 +104,30 @@ class ScanPicker:
         stack_axis: str | None = None,
         **open_kwargs: Any,
     ) -> None:
-        if root is None and folders is None:
-            raise ValueError("give root= (a RAW_DATA folder) or folders= (dataset folders)")
         if view not in VIEWS:
             raise ValueError(f"view must be one of {VIEWS}, not {view!r}")
-        given = [folders] if isinstance(folders, (str, Path)) else list(folders or [])
-        self.root = Path(root) if root is not None else _common_root([Path(f) for f in given])
-        self.depth = int(depth)
-        self.datasets = (
-            list_datasets(self.root, depth=self.depth)
-            if root is not None
-            else [Path(f) for f in given]
-        )
-        if not given:
-            if not self.datasets:
-                raise ValueError(f"no dataset folder under {self.root}")
-            given = [self.datasets[0]]
-            log.info("no folders given: opening %s", given[0])
-        self.code_folders = [Path(f) for f in given]
-        self.code_scans = scans
-        self.code_filters = dict(filters or {})
         self.view = view
         self.page_size = int(page_size)
         self.state_file = Path(state_file) if state_file else None
-        self._status = status
-        self.selectable_statuses = status_filter(status)
-        self._open_options: dict[str, Any] = {
-            "cache": cache,
-            "cache_reductions": cache_reductions,
-            **open_kwargs,
-        }
-        self.ui: dict[str, str] = {"type": "any", "motors": "", "status": "any"}
         self.chosen_motors: set[str] | None = None
         self.stack_choice: str | None = None  # None: the default; "none": no stack axis; a name
-        self._listeners: list[Callable[[ScanPicker], None]] = []
         self.widgets: Any = None  # the PickerWidgets when shown with ipywidgets
-        self._thumbnails: dict[int, bytes] = {}
-        self._candidates: tuple[tuple[int, ...], dict[str, MotorCandidate]] | None = None
-        self._between: tuple[tuple[int, ...], list[str]] | None = None
+        self._thumbnails: dict[tuple[Path, int], bytes] = {}
+        self._candidates: tuple[Any, dict[str, MotorCandidate]] | None = None
+        self._between: tuple[Any, list[str]] | None = None
+        self._base: tuple[Any, list[Scan]] | None = None
         self._scans: tuple[Any, list[Scan]] | None = None
-        self.dataset: Dataset = None  # type: ignore[assignment]  (set by _open)
-        self.ids: list[int] = []
-        self._open(self.code_folders)
-        self._select_defaults()
+        super().__init__(
+            root,
+            folders,
+            scans,
+            filters,
+            status=status,
+            depth=depth,
+            cache=cache,
+            cache_reductions=cache_reductions,
+            **open_kwargs,
+        )
         if motors is not None:
             self.set_motors(motors, notify=False)
         if stack_axis is not None:
@@ -207,145 +146,41 @@ class ScanPicker:
 
             self.widgets = PickerWidgets(self)
 
-    # ------------------------------------------------------------------ opening
-    def _open(self, folders: Sequence[Path]) -> None:
-        if self.dataset is not None:
-            self.dataset.close()
-        self.folders = [Path(f) for f in folders]
-        self.dataset = Dataset(self.folders, **self._open_options)
-        self._list()
-
-    def _list(self) -> None:
-        """Open every scan (with a progress bar), build the tables and the listing."""
-        ds = self.dataset
-        for scan_id in progress(ds.scans, desc="opening scans", enabled=len(ds.scans) > 8):
-            with contextlib.suppress(ScanNotReadyError):
-                ds.scan(scan_id)
-        self.rows = ds.table()
-        compact = ds.table(compact=True)
-        self.varying_columns = [
-            str(c) for c in compact.columns if c not in LEAD_COLUMNS and c not in FIXED_COLUMNS
-        ]
-        self.listed_by_code = ds.select_numbers(None, status="any", **self.code_filters)
-        self._invalidate()
-
     def _invalidate(self) -> None:
-        self._candidates = self._between = self._scans = None
-
-    def _select_defaults(self) -> None:
-        """The code-level selection: ``scans`` through the filters, or every selectable scan."""
-        if self.code_scans is None:
-            wanted = self.selectable
-        else:
-            wanted = self.dataset.select_numbers(  # status="any": the picker itself leaves the
-                self.code_scans,
-                status="any",
-                **self.code_filters,  # unfinished scans out, quietly
-            )
-        allowed = set(self.selectable)
-        self.ids = [int(i) for i in wanted if int(i) in allowed]
+        self._candidates = self._between = self._base = self._scans = None
 
     def _changed(self) -> None:
         self._invalidate()
         self.save_state()
-        for callback in self._listeners:
-            callback(self)
-
-    # ------------------------------------------------------------------ listing
-    @property
-    def candidates(self) -> list[int]:
-        """The ids listed: the code-level filters, then the type, motors and status of the bars."""
-        rows = self.rows.set_index("id")
-        shown = STATUS_SHOWN[self.ui["status"]]
-        kind, motors = self.ui["type"], self.ui["motors"].strip()
-        keep = []
-        for scan_id in self.listed_by_code:
-            row = rows.loc[scan_id]
-            if kind != "any" and str(row["type"]) != kind:
-                continue
-            if motors and str(row["motors"]) != motors:
-                continue
-            if shown is not None and str(row["status"]) not in shown:
-                continue
-            keep.append(int(scan_id))
-        return keep
-
-    @property
-    def selectable(self) -> list[int]:
-        """The listed ids whose status allows them to be selected (finished scans by default)."""
-        allowed = self.selectable_statuses
-        if allowed is None:
-            return self.candidates
-        status = self.rows.set_index("id")["status"]
-        return [i for i in self.candidates if ScanStatus(str(status.loc[i])) in allowed]
-
-    def set_filters(self, **ui: str) -> None:
-        """Narrow the listing: ``type="fscan3d"``, ``motors="chi x mu"``, ``status="finished"``."""
-        unknown = sorted(set(ui) - set(self.ui))
-        if unknown:
-            raise ValueError(f"unknown filters {unknown}; the bars filter by {sorted(self.ui)}")
-        if "status" in ui and ui["status"] not in STATUS_SHOWN:
-            raise ValueError(f"status must be one of {sorted(STATUS_SHOWN)}")
-        self.ui.update({k: str(v) for k, v in ui.items()})
-        allowed = set(self.selectable)
-        self.ids = [i for i in self.ids if i in allowed]
-        self._changed()
-
-    def set_folders(self, folders: str | Path | Sequence[str | Path]) -> None:
-        """Open other dataset folder(s); the code-level selection applies again to them."""
-        given = [folders] if isinstance(folders, (str, Path)) else list(folders)
-        self._open([Path(f) for f in given])
-        self._thumbnails.clear()
-        self._select_defaults()
-        self._changed()
-
-    def refresh(self) -> None:
-        """Look at the folders again (scans finished or started since); the selection stays."""
-        self.dataset.refresh()
-        self._list()
-        allowed = set(self.selectable)
-        self.ids = [i for i in self.ids if i in allowed]
-        self._changed()
+        super()._changed()
 
     def reset(self) -> None:
-        """Back to the code defaults: the folders, the selection, the motors and the filters."""
-        self.ui = {"type": "any", "motors": "", "status": "any"}
+        """Back to the code defaults: the folders, the selection, the motors and the filters.
+
+        The scans selected in other folders are dropped.
+        """
         self.chosen_motors = None
         self.stack_choice = None
-        if self.folders != self.code_folders:
-            self._open(self.code_folders)
-        self._select_defaults()
-        self._changed()
-
-    # ---------------------------------------------------------------- selection
-    def select(self, ids: Iterable[int]) -> None:
-        """Select these ids (listed and selectable ones; the others are reported and dropped)."""
-        wanted = [int(i) for i in ids]
-        allowed = set(self.selectable)
-        dropped = [i for i in wanted if i not in allowed]
-        if dropped:
-            log.warning("scans %s are not listed or not selectable: left out", dropped)
-        self.ids = [i for i in wanted if i in allowed]
-        self._changed()
-
-    def select_all(self) -> None:
-        """Select every listed scan that can be selected."""
-        self.select(self.selectable)
-
-    def clear(self) -> None:
-        """Select nothing."""
-        self.select([])
-
-    def observe(self, callback: Callable[[ScanPicker], None]) -> None:
-        """Call ``callback(picker)`` after every change of the selection, motors or filters."""
-        self._listeners.append(callback)
+        super().reset()
 
     # ------------------------------------------------------------------- motors
+    def _base_scans(self) -> list[Scan]:
+        """The selected scans as bexa opens them (its own dims), in :attr:`selection` order."""
+        key = tuple(self.selection)
+        if self._base is None or self._base[0] != key:
+            self._base = (key, [self._selection.scan(k) for k in key])
+        return self._base[1]
+
     def motor_candidates(self) -> dict[str, MotorCandidate]:
         """Every motor that moves within the selected scans or differs between them."""
-        key = tuple(self.ids)
+        key = tuple(self.selection)
         if self._candidates is None or self._candidates[0] != key:
-            found = self.dataset.motor_candidates(self.ids, status="any") if self.ids else {}
+            scans = self._base_scans()
+            found: dict[str, MotorCandidate] = {}
+            if scans:
+                rows = pd.DataFrame([self._selection.row(k) for k in key])
+                defaults = list(varying(scans)) if len(scans) > 1 else []
+                found = scan_table.motor_candidates(scans[0], rows, defaults)
             self._candidates = (key, found)
         return self._candidates[1]
 
@@ -362,7 +197,7 @@ class ScanPicker:
         chosen = {str(n) for n in names}
         candidates = self.motor_candidates()
         unknown = sorted(chosen - set(candidates))
-        if unknown and self.ids:
+        if unknown and self.selection:
             raise ValueError(
                 f"no motor {unknown} in the selected scans; choose from {list(candidates)}"
             )
@@ -386,19 +221,19 @@ class ScanPicker:
 
     def _between_scans(self) -> list[str]:
         """The pressed motors that differ between the scans, the leading one first."""
-        key = tuple(self.ids)
+        key = tuple(self.selection)
         if self._between is None or self._between[0] != key:
-            order = list(self.dataset.varying(self.ids, status="any")) if len(self.ids) > 1 else []
-            self._between = (key, order)
+            scans = self._base_scans()
+            self._between = (key, list(varying(scans)) if len(scans) > 1 else [])
         order = self._between[1]
         pressed = self._pressed("stack")
         return sorted(pressed, key=lambda m: (m not in order, order.index(m) if m in order else 0))
 
     @property
     def scans(self) -> list[Scan]:
-        """The selected scans, read with the pressed motors as the dims of their grids."""
+        """The selected scans of every folder, read with the pressed motors as their dims."""
         within = self._pressed("scan")
-        key = (tuple(self.ids), tuple(within))
+        key = (tuple(self.selection), tuple(within))
         if self._scans is None or self._scans[0] != key:
             candidates = self.motor_candidates()
             defaults = [m for m in within if not candidates[m].default] or [
@@ -407,8 +242,7 @@ class ScanPicker:
                 if c.where == "scan" and c.default and m not in within
             ]
             opened = []
-            for scan_id in self.ids:
-                scan = self.dataset.scan(scan_id)
+            for scan in self._base_scans():
                 if defaults and set(within) != set(scan.dims[:-2]):  # other motors than bexa's
                     scan = scan.with_dims(within)
                 opened.append(scan)
@@ -477,43 +311,7 @@ class ScanPicker:
         stack = f"{axis} ({candidates[axis].n_values})" if axis else "none"
         return f"scan axes: {scan_axes or 'frames only'}; stack axis: {stack}"
 
-    # -------------------------------------------------------------------- output
-    @property
-    def table(self) -> pd.DataFrame:
-        """The compact table rows of the selected scans."""
-        compact = self.dataset.table(compact=True)
-        return compact[compact["id"].isin(self.ids)].reset_index(drop=True)
-
-    def status_text(self) -> str:
-        """``"14 of 20 scans selected"``."""
-        return f"{len(self.ids)} of {len(self.candidates)} scans selected"
-
-    def summary_line(self, row: Mapping[str, Any]) -> str:
-        """One line of the list view: id, dataset, status, type, motors, shape, positioners."""
-        parts = [f"{int(row['id']):>3}"]
-        if "dataset" in row:
-            parts.append(f"{row['dataset']!s:<12}")
-        parts += [
-            f"{row['status']!s:<9}",
-            f"{row['type']!s:<8}",
-            f"{row['motors']!s:<20}",
-            f"{row['shape']!s:<12}",
-        ]
-        for column in self.varying_columns:
-            value = row.get(column)
-            if isinstance(value, (int, float, np.floating)) and pd.notna(value):
-                parts.append(
-                    f"{value:.4g} keV" if column == "energy_keV" else f"{column} {value:.4g}"
-                )
-        frames = row.get("frames")
-        if frames is not None and pd.notna(frames):
-            parts.append(f"{int(frames)} frames")
-        return "  ".join(parts)
-
-    def rows_of(self, ids: Iterable[int]) -> pd.DataFrame:
-        """The full table rows of these ids, in this order."""
-        return self.rows.set_index("id").loc[list(ids)].reset_index()
-
+    # ---------------------------------------------------------------- thumbnails
     def thumbnails(
         self, size: int = 128, images: Mapping[int, Any] | None = None
     ) -> dict[int, bytes]:
@@ -526,7 +324,8 @@ class ScanPicker:
         import matplotlib.image
 
         for scan_id in self.candidates:
-            if scan_id in self._thumbnails:
+            key = self._key_of[scan_id]
+            if key in self._thumbnails:
                 continue
             if images is not None and scan_id in images:
                 total = np.asarray(images[scan_id], dtype=float)
@@ -544,77 +343,72 @@ class ScanPicker:
             picture = np.clip((np.nan_to_num(total, nan=lo) - lo) / max(hi - lo, 1e-9), 0, 1)
             buffer = io.BytesIO()
             matplotlib.image.imsave(buffer, picture, cmap="magma", format="png")
-            self._thumbnails[scan_id] = buffer.getvalue()
+            self._thumbnails[key] = buffer.getvalue()
         if self.widgets is not None:
             self.widgets.refresh()
-        return dict(self._thumbnails)
+        return {
+            i: self._thumbnails[self._key_of[i]]
+            for i in self.candidates
+            if self._key_of[i] in self._thumbnails
+        }
 
     # --------------------------------------------------------------------- state
     def _defaults_key(self) -> str:
-        parts = {
-            "root": str(self.root),
-            "folders": [str(f) for f in self.code_folders],
-            "scans": _stable(self.code_scans),
-            "filters": _stable(self.code_filters),
-            "status": repr(self._status),
-        }
-        return hashlib.sha1(json.dumps(parts, sort_keys=True).encode()).hexdigest()[:16]
-
-    def _keys(self) -> dict[tuple[str, int], int]:
-        """``{(dataset folder name, scan number): id}``: what survives a kernel restart."""
-        several = "dataset" in self.rows.columns
-        return {
-            (str(row["dataset"]) if several else self.folders[0].name, int(row["scan"])): int(
-                row["id"]
-            )
-            for _, row in self.rows.iterrows()
-        }
+        return defaults_key(
+            self.root, self.code_folders, self.code_scans, self.code_filters, self._status
+        )
 
     def save_state(self) -> Path | None:
-        """Write the selection, motors, stack axis and filters to ``state_file`` (when set)."""
+        """Write the folders, the selection, motors, stack axis and filters to ``state_file``."""
         if self.state_file is None:
             return None
-        ids = {v: k for k, v in self._keys().items()}
-        state = {
-            "defaults": self._defaults_key(),
-            "root": str(self.root),
-            "folders": [str(f) for f in self.folders],
-            "selected": [list(ids[i]) for i in self.ids if i in ids],
-            "ui": dict(self.ui),
-            "motors": sorted(self.chosen_motors) if self.chosen_motors is not None else None,
-            "stack_axis": self.stack_choice,
-            "view": self.view,
-        }
-        self.state_file.parent.mkdir(parents=True, exist_ok=True)
-        self.state_file.write_text(json.dumps(state, indent=1), encoding="utf-8")
-        return self.state_file
+        return PickerState(
+            defaults=self._defaults_key(),
+            root=str(self.root),
+            folders=[str(f) for f in self.folders],
+            selected=[[str(folder), number] for folder, number in self.selection],
+            ui=dict(self.ui),
+            motors=sorted(self.chosen_motors) if self.chosen_motors is not None else None,
+            stack_axis=self.stack_choice,
+            view=self.view,
+        ).write(self.state_file)
 
     def _restore_state(self) -> None:
-        if self.state_file is None or not self.state_file.is_file():
+        """Take the choices of the state file when it was saved under these code defaults."""
+        if self.state_file is None:
             return
-        try:
-            state = json.loads(self.state_file.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            log.warning("picker state %s ignored: %s", self.state_file, exc)
+        state = PickerState.read(self.state_file, self._defaults_key())
+        if state is None:
             return
-        if state.get("defaults") != self._defaults_key():
-            log.info("picker state %s ignored: the code defaults changed", self.state_file)
-            return
-        folders = [Path(f) for f in state.get("folders", [])]
-        if folders and not all(f.is_dir() for f in folders):
-            log.warning("picker state %s ignored: a folder is gone", self.state_file)
-            return
-        if folders and folders != self.folders:
-            self._open(folders)
-        keys = self._keys()
-        self.ui.update({k: str(v) for k, v in state.get("ui", {}).items() if k in self.ui})
-        self.chosen_motors = (
-            set(state["motors"]) if state.get("motors") is not None else self.chosen_motors
-        )
-        self.stack_choice = state.get("stack_axis", self.stack_choice)
-        wanted = [keys[(n, int(s))] for n, s in state.get("selected", []) if (n, int(s)) in keys]
-        allowed = set(self.selectable)
-        self.ids = [i for i in wanted if i in allowed]
+        folders = [Path(f) for f in state.folders]
+        if folders and all(f.is_dir() for f in folders):
+            try:
+                self._open(folders)
+            except ValueError as exc:
+                log.warning("picker state %s: %s; the code folders listed", self.state_file, exc)
+        elif folders:
+            log.warning(
+                "picker state %s: a folder is gone; the code folders listed", self.state_file
+            )
+        self.ui.update({k: str(v) for k, v in state.ui.items() if k in self.ui})
+        self._listed = None
+        if state.motors is not None:
+            self.chosen_motors = set(state.motors)
+        self.stack_choice = state.stack_axis
+        keys = []
+        for folder, number in state.selected:
+            path = Path(folder)
+            if not path.is_absolute():  # saved before the selection spanned folders: a name
+                path = next((f for f in self.folders if f.name == folder), path)
+            keys.append((folder_path(path), int(number)))
+        kept = {key for key in keys if self._selection.allowed(key)}
+        if len(kept) < len(keys):
+            log.warning(
+                "picker state %s: %d selected scans are gone or cannot be selected: left out",
+                self.state_file,
+                len(keys) - len(kept),
+            )
+        self._selection.keys = kept
         self._invalidate()
         log.info("picker state restored from %s: %s", self.state_file, self.status_text())
 
@@ -627,6 +421,16 @@ class ScanPicker:
 
     def _ipython_display_(self) -> None:
         self.show()
+
+    def selection_view(self) -> Any:
+        """Another live view of the selection panel, for a cell of its own.
+
+        In JupyterLab, "Create New View for Cell Output" on that cell gives it a
+        window of its own. Without widgets: the table of the selection.
+        """
+        if self.widgets is None:
+            return self.table
+        return self.widgets.selection_view()
 
     def __repr__(self) -> str:
         where = ", ".join(str(f) for f in self.folders)
@@ -645,12 +449,15 @@ class ScanPicker:
             rows.insert(
                 2, "status", self.rows.set_index("id").loc[self.candidates, "status"].values
             )
-        drop = [c for c in rows.columns if c in ("title", "ranges", "missing")]
-        return caption + rows.drop(columns=drop).to_html(index=False)
-
-    def close(self) -> None:
-        """Close the dataset's files."""
-        self.dataset.close()
+        drop = ("title", "ranges", "missing")
+        html = caption + rows.drop(columns=[c for c in rows.columns if c in drop]).to_html(
+            index=False
+        )
+        if len(self.selection) > len(self.ids):  # scans selected in other folders too
+            table = self.table
+            table = table.drop(columns=[c for c in table.columns if c in drop])
+            html += f"<br><b>selection</b>: {self.selection_text()}" + table.to_html(index=False)
+        return html
 
 
 def pick_scans(
