@@ -82,7 +82,9 @@ class ScanPicker(ScanListing):
         (:func:`list_datasets`): 2 is ``RAW_DATA``, sample, dataset.
     motors, stack_axis
         The motors to extract and the stack axis chosen in code instead of with
-        the buttons (``None``: the defaults bexa detects).
+        the buttons (``None``: the defaults bexa detects). Like the buttons, the
+        motors are kept as presses and releases relative to the defaults, so
+        another selection starts from its own defaults with them on top.
     """
 
     def __init__(
@@ -109,7 +111,9 @@ class ScanPicker(ScanListing):
         self.view = view
         self.page_size = int(page_size)
         self.state_file = Path(state_file) if state_file else None
-        self.chosen_motors: set[str] | None = None
+        # the motor buttons as changes to the defaults, kept from one selection to the next
+        self.pressed_extra: set[str] = set()  # pressed although bexa would leave them released
+        self.released: set[str] = set()  # defaults released
         self.stack_choice: str | None = None  # None: the default; "none": no stack axis; a name
         self.widgets: Any = None  # the PickerWidgets when shown with ipywidgets
         self._thumbnails: dict[tuple[Path, int], bytes] = {}
@@ -159,7 +163,7 @@ class ScanPicker(ScanListing):
 
         The scans selected in other folders are dropped.
         """
-        self.chosen_motors = None
+        self.pressed_extra, self.released = set(), set()
         self.stack_choice = None
         super().reset()
 
@@ -186,14 +190,22 @@ class ScanPicker(ScanListing):
 
     @property
     def motors(self) -> list[str]:
-        """The motors to extract: the pressed buttons, else the defaults bexa detects."""
-        candidates = self.motor_candidates()
-        if self.chosen_motors is None:
-            return [name for name, c in candidates.items() if c.default]
-        return [name for name in candidates if name in self.chosen_motors]
+        """The motors to extract: the defaults bexa detects for the selection, with the
+        buttons pressed and released on top."""
+        return [
+            name
+            for name, c in self.motor_candidates().items()
+            if (c.default and name not in self.released) or name in self.pressed_extra
+        ]
 
     def set_motors(self, names: Iterable[str], notify: bool = True) -> None:
-        """Press exactly these motors (an unknown name raises ``ValueError``)."""
+        """Press exactly these motors (an unknown name raises ``ValueError``).
+
+        The choice is kept as presses and releases relative to the defaults, so
+        another selection starts from its own defaults with them on top: a
+        z-stack selected after a button was pressed for an energy mosa still
+        gets ``uz``.
+        """
         chosen = {str(n) for n in names}
         candidates = self.motor_candidates()
         unknown = sorted(chosen - set(candidates))
@@ -201,7 +213,14 @@ class ScanPicker(ScanListing):
             raise ValueError(
                 f"no motor {unknown} in the selected scans; choose from {list(candidates)}"
             )
-        self.chosen_motors = chosen
+        for name, candidate in candidates.items():
+            self.pressed_extra.discard(name)
+            self.released.discard(name)
+            if name in chosen and not candidate.default:
+                self.pressed_extra.add(name)
+            elif name not in chosen and candidate.default:
+                self.released.add(name)
+        self.pressed_extra |= set(unknown)  # nothing selected yet: pressed once they appear
         if notify:
             self._changed()
 
@@ -211,7 +230,7 @@ class ScanPicker(ScanListing):
 
     def reset_motors(self) -> None:
         """Back to the motors and the stack axis bexa detects."""
-        self.chosen_motors = None
+        self.pressed_extra, self.released = set(), set()
         self.stack_choice = None
         self._changed()
 
@@ -391,7 +410,7 @@ class ScanPicker(ScanListing):
         )
 
     def save_state(self) -> Path | None:
-        """Write the folders, the selection, motors, stack axis and filters to ``state_file``."""
+        """Write the folders, the selection, the motor buttons, the stack axis and the filters."""
         if self.state_file is None:
             return None
         return PickerState(
@@ -400,7 +419,8 @@ class ScanPicker(ScanListing):
             folders=[str(f) for f in self.folders],
             selected=[[str(folder), number] for folder, number in self.selection],
             ui=dict(self.ui),
-            motors=sorted(self.chosen_motors) if self.chosen_motors is not None else None,
+            pressed=sorted(self.pressed_extra),
+            released=sorted(self.released),
             stack_axis=self.stack_choice,
             view=self.view,
         ).write(self.state_file)
@@ -424,8 +444,7 @@ class ScanPicker(ScanListing):
             )
         self.ui.update({k: str(v) for k, v in state.ui.items() if k in self.ui})
         self._listed = None
-        if state.motors is not None:
-            self.chosen_motors = set(state.motors)
+        self.pressed_extra, self.released = set(state.pressed), set(state.released)
         self.stack_choice = state.stack_axis
         keys = []
         for folder, number in state.selected:

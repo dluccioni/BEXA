@@ -1,9 +1,10 @@
 """What a scan picker remembers across kernel restarts, and when it may use it.
 
 The state file holds the folders listed, every selected scan by folder and
-number, the filters of the bars, the pressed motors, the stack axis and the
-view, with a hash of the code defaults it was saved under: a state saved
-under other ``FOLDERS``, ``SCANS`` or ``FILTERS`` is ignored (edited code wins).
+number, the filters of the bars, the motor buttons pressed and released, the
+stack axis and the view, with a hash of the code defaults it was saved under:
+a state saved under other ``FOLDERS``, ``SCANS`` or ``FILTERS`` is ignored
+(edited code wins).
 """
 
 from __future__ import annotations
@@ -60,6 +61,8 @@ class PickerState:
 
     ``selected`` has one ``[folder, scan number]`` per selected scan; a state
     written before the selection could span folders names the folder alone.
+    ``pressed`` and ``released`` are the motor buttons pressed beyond the
+    defaults and the defaults released.
     """
 
     defaults: str
@@ -67,7 +70,8 @@ class PickerState:
     folders: list[str]
     selected: list[list[Any]]
     ui: dict[str, str] = field(default_factory=dict)
-    motors: list[str] | None = None
+    pressed: list[str] = field(default_factory=list)
+    released: list[str] = field(default_factory=list)
     stack_axis: str | None = None
     view: str = "list"
 
@@ -94,4 +98,6 @@ class PickerState:
         if state.defaults != defaults:
             log.info("picker state %s ignored: the code defaults changed", path)
             return None
+        if "motors" in saved and "pressed" not in saved:  # one fixed set, kept before 2026-10-18
+            log.info("picker state %s: the motor buttons start from the defaults", path)
         return state

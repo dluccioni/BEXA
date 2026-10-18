@@ -7273,7 +7273,8 @@ for (`list_datasets`; 2 is `RAW_DATA`, sample, dataset). Members:
   `reset_motors()`, `set_stack_axis(name)`, `observe(callback)`, `thumbnails(size)`,
   `summary_line(row)`, `selection_lines()`, `selection_view()`, `save_state()`, `show()`,
   `close()`; `widgets` (the `PickerWidgets`, or `None`), `ui` (the bars' filters), `view`,
-  `page_size`, `state_file`.
+  `page_size`, `state_file`, `pressed_extra` and `released` (the motor buttons pressed
+  beyond the defaults and the defaults released, kept from one selection to the next).
 
 ```python
 # picker: the chi x mu scans of the demo z-stack, no widgets; what it selected and extracts
@@ -7336,6 +7337,9 @@ between the selected scans (a z-stack at several energies lists `uz`, `energy`, 
 the stage readback `samz`). A name that is not a candidate raises `ValueError`. The pressed
 motors that move within a scan become the dims of every selected scan (`Scan.with_dims` when
 they differ from bexa's choice: `ccmth` instead of `energy` reads the mono angle in degrees).
+The buttons are kept as changes to the defaults, in `pressed_extra` and `released`, so another
+selection starts from its own defaults with them on top: a z-stack selected after `ccmth` was
+pressed for an energy mosa still gets `uz` pressed, and with it the stack axis.
 
 ```python
 # series: a picker on the energy series of the demo z-stack; the mono angle pressed instead of the energy
@@ -7346,6 +7350,7 @@ series.axes                                      # ['samz', 'energy']
 series.toggle_motor("ccmth")
 series.toggle_motor("energy")                    # the mono angle instead of the energy
 series.axes, series.varying()["ccmth"].round(4)  # (['samz', 'ccmth'], array([6.6705, 6.6744, 6.6784, 6.6823, 6.6863]))
+series.pressed_extra, series.released            # ({'ccmth'}, {'energy'}): what the next selection keeps
 series.reset_motors()
 series.motors                                    # ['mu', 'samz', 'energy']
 ```
@@ -7473,7 +7478,7 @@ sorted(pngs), pngs[1][:4]                        # ([1, 7, 13, 19, 25], b'\x89PN
 
 Write the state file (when the picker has one) and return its path: the hash of the code
 defaults, the folders listed, every selected scan as a `[dataset folder, scan number]` pair
-(of any folder; ids change when folders are added), the bars' filters, the pressed motors and
+(of any folder; ids change when folders are added), the bars' filters, the motor buttons and
 the stack axis (`bexa.notebook.picker_state.PickerState`). Called after every change. The file
 is read back by the next picker built with the same code defaults: changed defaults are
 reported and the file ignored, listed folders that are gone give way to the code folders, and
@@ -7604,7 +7609,7 @@ folder_path("RAW_DATA").is_absolute()            # True
 ### bexa.notebook.picker_state: what a picker remembers
 
 The state file of the scan picker: the folders listed, every selected scan by folder and
-number, the bars' filters, the pressed motors, the stack axis and the view, with a hash of the
+number, the bars' filters, the motor buttons, the stack axis and the view, with a hash of the
 code defaults it was saved under. A state saved under other `FOLDERS`, `SCANS` or `FILTERS` is
 ignored: edited code wins.
 
@@ -7616,9 +7621,12 @@ folder = tempfile.mkdtemp()                      # any folder for the state file
 ```
 
 #### `PickerState`
-`bexa.notebook.picker_state.PickerState(defaults, root, folders, selected, ui=<factory>, motors=None, stack_axis=None, view="list")`
+`bexa.notebook.picker_state.PickerState(defaults, root, folders, selected, ui=<factory>, pressed=<factory>, released=<factory>, stack_axis=None, view="list")`
 
-A picker's choices as its state file holds them: `selected` has one `[folder, scan number]` per
+A picker's choices as its state file holds them: `pressed` and `released` are the motor
+buttons pressed beyond the defaults and the defaults released (a file written before
+2026-10-18 holds one fixed set of buttons instead, which is not restored: the buttons start
+from the defaults); `selected` has one `[folder, scan number]` per
 selected scan. `write(path)` writes it as JSON and returns the path; `PickerState.read(path,
 defaults)` returns it, or `None` when the file is missing, unreadable or saved under other
 code defaults.
