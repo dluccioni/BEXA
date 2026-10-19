@@ -5657,7 +5657,8 @@ The laser on/off cube of a run of single shots, such as an LCLS smalldata run op
 them, so `frames / i0` is the I0-normalised mean. `axis`, `flag`, `i0` and the names in `where` are
 per-frame channels of the scan; `bins` is `None` (a bin per distinct value, for step scans), the bin
 edges (centres in the result) or a number of equal bins; `where` keeps the shots inside
-`{channel: (low, high)}` ranges, or is a boolean mask with one entry per shot. The frames are read
+`{channel: (low, high)}` ranges, or is a boolean mask with one entry per shot. Shots with a NaN
+axis value or I0 are left out (`i0=None` reads no I0 and keeps them). The frames are read
 through `iter_frames`, `batch` at a time (default: 256 MiB worth). The binning of `genCube.py` and
 the smalldata_tools cube, from a smalldata file.
 

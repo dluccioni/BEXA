@@ -249,9 +249,9 @@ def bin_events(
     smalldata run): ``frames(laser, <axis>, y, x)`` sums the images of the shots
     with ``flag`` 0 (off) and 1 (on) in every bin, ``i0(laser, <axis>)`` sums
     their I0 and ``n_shots(laser, <axis>)`` counts them, so ``frames / i0`` is the
-    I0-normalised mean. Shots with another flag, a NaN axis value or outside
-    ``where`` are left out. The frames are read ``batch`` at a time (default: as
-    many as fit in 256 MiB).
+    I0-normalised mean. Shots with another flag, a NaN axis value or I0 (with
+    ``i0=None`` the I0 is not read) or outside ``where`` are left out. The frames are
+    read ``batch`` at a time (default: as many as fit in 256 MiB).
 
     ``axis``, ``flag``, ``i0`` and the names in ``where`` are per-frame channels
     of the scan (``delay``, ``scanvar``, ``laser_flag``, ``i0``, ...). ``bins``:
@@ -271,6 +271,8 @@ def bin_events(
     n = source.n_frames
     values, state = channel(axis), channel(flag)
     keep = np.isfinite(values) & ((state == 0) | (state == 1))
+    if i0 is not None:  # a shot without an I0 reading would make its bin's I0 sum NaN
+        keep &= np.isfinite(channel(i0))
     if isinstance(where, Mapping):
         for name, (low, high) in where.items():
             v = channel(name)
