@@ -616,7 +616,7 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | see what differs between scans (heights, energies) | `Dataset.varying`, `bexa.core.dataset.varying` | §4 |
 | treat an energy series or a z-stack of scans as one scan | `bexa.open(path, scan=(20, 24))`, `Dataset.series` |  |
 | read a plain `.npy`, tiff or HDF5 stack | `bexa.open("file.h5::/entry/data")`, `bexa.io.generic.load_array` |  |
-| read a PAL-XFEL run, an LCLS cube or smalldata, EuXFEL | `bexa.open(path)`, `bexa.io.cube.load_lcls_cube`, `SmalldataSource`, `ExtraDataSource` |  |
+| read a PAL-XFEL run, an LCLS cube or smalldata run, EuXFEL | `bexa.open(path)`, `bexa.open(smalldata_folder, scan=19)`, `bexa.io.cube.load_lcls_cube`, `SmalldataSource`, `bexa.io.engines.smalldata.read_scalars`, `ExtraDataSource` |  |
 | support a new file layout | `bexa profile sniff`, `bexa.io.formats.draft_spec`, `bexa.io.formats.write_draft` |  |
 | check every dataset of a beamtime at once, and draft specs for the layouts bexa does not know | `bexa profile sniff --recursive`, `bexa.io.survey.survey`, `bexa.io.survey.write_drafts` |  |
 | try the API without beamtime data | `bexa.demo`, `bexa.testing.synthetic.make_esrf_scan` | §3 |
@@ -657,7 +657,7 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | boundaries, vector fields, strain integration | `bexa.analysis.fields.edge_mask`, `bexa.analysis.fields.vector_field`, `bexa.analysis.fields.compatibility` |  |
 | points in reciprocal space (angles, Q, hkl) | `bexa.analysis.projections.rlp_points`, `bexa.geometry.transforms.build_coordinate_grids` |  |
 | laser on/off split and differential signal | `bexa.analysis.pump_probe.split_on_off`, `bexa.analysis.pump_probe.differential`, `OnOffSplit` |  |
-| combine runs, bin LCLS shots | `bexa.analysis.pump_probe.combine_runs`, `bexa.analysis.pump_probe.bin_lcls` |  |
+| combine runs, bin LCLS shots (cube triples or smalldata runs) | `bexa.analysis.pump_probe.combine_runs`, `bexa.analysis.pump_probe.bin_lcls`, `bexa.analysis.pump_probe.bin_events` |  |
 
 **Plots**
 
@@ -2712,7 +2712,7 @@ motor and key aliases, the energy source, the detectors, the engine that walks t
 | `pal_xfel_points_2025_09` | `hdf5_points` | PAL-XFEL, September 2025 (ue_250913_FXS): `type=measurement/.../pNNNN.h5` shot tables and `type=raw/...` Jungfrau frames |
 | `pal_xfel_spec_2025_04` | `spec_h5` | PAL-XFEL, April 2025 (ue_250419_DFXM): one HDF5 per scan with a spec-like `scanHistory` |
 | `lcls_xcs_cube` | `array_cube` | LCLS XCS cube triple `RunNNNN_onStk.npy`, `_offStk.npy`, `_stats.csv` |
-| `lcls_smalldata` | `smalldata` | LCLS smalldata_tools run file: per-event scalars and ROI images, `Sums/` |
+| `lcls_smalldata` | `smalldata` | LCLS smalldata_tools run file: per-event scalars, ROI or full images (`<det>/ROI_area`, `ROI_0_area`, `full_area`), `Sums/`, `UserDataCfg/` |
 | `bexa_cube_legacy` | `array_cube` | legacy PAL-XFEL `runN.h5` cubes (`Aaron_allscan_cube_parallel.py`, `Scan_Combiner.py`) |
 | `bexa_cube` | `array_cube` | files written by `bexa.save` |
 | `euxfel_extra_data` | `extra_data` | EuXFEL MID runs through `extra_data` (needs it; not sniffed, pass `format=`) |
@@ -2843,7 +2843,7 @@ Unknown entries are kept. Methods:
 - `known_motors()`: the `motors.known` list.
 - `min_steps()`: `{motor: step}` from `motors.min_step`: a smaller change is drift, not a move.
 - `motor_aliases(name)`: the names to try in the file for the logical motor `name`, `[name, *aliases]`.
-- `detector_info(detector)`: a copy of the `detectors` entry of `detector` (`{}` if unknown).
+- `detector_info(detector)`: a copy of the `detectors` entry of `detector`, else of the first glob key it matches (`epix*` covers `epix_5`); `{}` if none.
 
 ```python
 # pal_spec: the PAL-XFEL points spec; what a FormatSpec knows about its layout
@@ -3072,6 +3072,7 @@ the helpers:
 - `files()`: list of `Path`, every file read; used for provenance and cache keys (`scan.files`).
 - `frame_shape`, `n_frames`, `dtype`: properties; `(height, width)` in pixels, frames available now, stored numpy dtype.
 - `read_frames(index, y, x, dtype, out)`: frames as a numpy array, see `BaseSource.read_frames`.
+- `iter_frames(index=slice(None), batch=64)`: yields `(frame_ids, frames)` blocks of up to `batch` whole frames covering `index`, in id order; an engine whose files store frames out of order may yield them in file order (`SmalldataSource`), so code that sums or bins must not rely on the order.
 - `structure()`: the scan's `bexa.core.structure.Structure`: motor dims (slow first) and coordinates, `frame_index` (the frame id at each grid position, -1 where a partial scan has none), `per_frame` channels, `scalars`, `units`, `scan_type`, `energy_keV`, `title`. Built once, kept until `refresh()`, and the same object as `scan.structure`.
 - `scalars()`: dict of the values fixed during the scan (positioners); default `structure().scalars`.
 - `aux_tables()`: dict of extra pandas tables (the shot tables of `Hdf5PointsSource`); default `{}`.
@@ -3094,6 +3095,7 @@ src.cache_records()[0]                                          # {'path': '.../
 s = src.structure()
 s.dims, s.motor_shape, s.scan_type, s.units["mu"]              # (('chi', 'mu', 'y', 'x'), (6, 16), 'fscan2d', 'deg')
 src.frame_bytes(), list(BaseSource.contiguous_runs(np.array([0, 1, 2, 7, 8])))   # (10240, [(0, 3), (7, 9)])
+[ids.tolist() for ids, frames in src.iter_frames(slice(0, 6), batch=4)]   # [[0, 1, 2, 3], [4, 5]]
 BaseSource.normalise_index(slice(0, 10, 3), src.n_frames)      # array([0, 3, 6, 9])
 ```
 
@@ -3957,55 +3959,60 @@ Constants:
 ### bexa.io.engines.smalldata: LCLS smalldata run files
 
 The engine `smalldata` (spec `lcls_smalldata`) reads LCLS smalldata_tools files, one per run with
-one row per event: scalars (`lightStatus/laser`, `ipm4/sum`, `scan/lxt`, `ebeam/photon_energy`,
-...), per-event images or ROIs when the producer stored them (`<detector>/ROI_0_area`) and run sums
-under `Sums/`. The images are the frames (dim `frame`, scan type `events`), the scalars their
-per-frame channels. `bexa.open(run_file)` creates one (`scan.source`).
+one row per event: scalars (`lightStatus/laser`, `ipm4/sum`, `scan/var0`, `evr/code_41`, ...),
+the per-event images of the detectors the producer saved (one ROI as `<detector>/ROI_area`,
+several as `<detector>/ROI_0_area`, `ROI_1_area`, ..., the whole detector as
+`<detector>/full_area`), run sums under `Sums/` and each detector's settings under
+`UserDataCfg/<detector>`. The images of one detector are the frames (dim `frame`, scan type
+`events`), the scalars their per-frame channels. `bexa.open(run_file)` creates one
+(`scan.source`), and `bexa.open(folder, scan=19)` opens run 19 of a folder of run files. A run
+without per-event images (point detectors only) has no frames: `read_scalars` reads its table.
 
 ```python
 import tempfile
 from pathlib import Path
-import h5py
-import numpy as np
 import bexa
-from bexa.io.engines.smalldata import SmalldataSource
+from bexa.io.engines.smalldata import NoImagesError, SmalldataSource, read_scalars
 from bexa.io.formats import load_spec
+from bexa.testing import make_lcls_smalldata
 
 work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
-path = work / "xcsl1004621_Run0043.h5"           # a tiny smalldata file: 30 events, 8 x 10 ROI
-rng = np.random.default_rng(0)                  # the random generator of the synthetic file
-with h5py.File(path, "w") as f:
-    f["event_time"] = np.arange(30)
-    f["lightStatus/laser"] = np.arange(30) % 2
-    f["ipm4/sum"] = rng.uniform(0.9, 1.1, 30)
-    f["scan/lxt"] = np.repeat(np.linspace(-1, 1, 5), 6)
-    f["ebeam/photon_energy"] = np.full(30, 9500.0)                 # eV
-    f["jungfrau1M/ROI_0_area"] = rng.random((30, 8, 10)).astype(np.float32)
-    f["Sums/jungfrau1M_calib"] = f["jungfrau1M/ROI_0_area"][()].sum(axis=0)
-scan = bexa.open(path)                          # the smalldata run opened as a scan
+run = make_lcls_smalldata(work / "smalldata")   # run 19 in the XCS layout: epix_5 and jungfrau1M ROIs, 40 shots
+scalars_only = make_lcls_smalldata(work / "smalldata", run=17, detectors={})   # a run of point detectors only
+xcs = {"keys": {"laser_flag": ["evr/code_41"], "delay": ["epicsUser/awg_delay", "scan/var0"]}}   # the beamtime's pump flag and delay
+scan = bexa.open(work / "smalldata", scan=19, overrides=xcs, cache=False)   # run 19 of the folder as a scan
 src = scan.source                                # a SmalldataSource
 ```
 
 #### `SmalldataSource`
 `bexa.io.engines.smalldata.SmalldataSource(spec, path, detector=None, energy_keV=None)`
 
-The per-event images of one smalldata file as frames. `detector` names an entry of the spec's
-`detectors` (`jungfrau1M`, `jungfrau4M`, `epix10k2M`, `zyla`; an unlisted name reads
-`<detector>/ROI_0_area`), by default the first present; `KeyError` if none is, `ValueError` unless
-the images are `(event, y, x)`. The spec's `keys` are matched against the 1-D datasets with one
-value per event (the attribute `columns`, logical key to HDF5 path). It implements the `Source`
-members `files`, `frame_shape`, `n_frames`, `dtype`, `chunk_frames`, `energy_keV`, `read_frames`,
+The per-event images of one smalldata file as frames. `detector` names a detector with per-event
+images (`jungfrau1M`; by default the first of `detectors`) or the image dataset itself
+(`jungfrau1M/ROI_1_area`): `KeyError` when the file has no such images, `NoImagesError` when it has
+none at all. The spec's `keys` are matched against the 1-D datasets with one value per event (the
+attribute `columns`, logical key to HDF5 path). It implements the `Source` members `files`,
+`frame_shape`, `n_frames`, `dtype`, `chunk_frames`, `energy_keV`, `read_frames`, `iter_frames`,
 `structure` and `close` (see `BaseSource`): numeric keys are per-frame channels, the varying one of
 `delay`, `scanvar` is recorded in `structure().units["scan_axis"]`, and the energy is `energy_keV`
-or the median `photon_energy` (eV in the file) in keV. Also:
+or the median `photon_energy` (eV in the file) in keV. `iter_frames` reads in the order of the file
+when an MPI producer wrote the chunks out of event order: by event such a file is mostly seeks
+(100 to 200 MB/s from a network share). Also:
 
-- `from_path(spec, path, scan=None, **kwargs)`: classmethod, from the file or a folder (its first `.h5`); `scan` is ignored.
+- `detectors`: dict of every detector with per-event images to its image dataset, the spec's `detectors` first.
+- `detector`, `frames_path`: the detector read and its image dataset.
+- `pixel_size_um`: from `UserDataCfg/<detector>/pixelsize`, else the spec's `detectors` table (glob keys such as `epix*`); `bexa.open` puts it in `scan.geometry`.
+- `roi_bound`: the ROI's `[start, stop]` per raw detector dim (`UserDataCfg/<detector>/ROI__ROI_bound`), or `None`.
+- `run`: the run number of the file name, or `None`.
+- `from_path(spec, path, scan=None, **kwargs)`: classmethod, from the file, or run `scan` of a folder (`*_Run0019.h5`); a folder of several runs needs `scan` (`LookupError` without it, `FileNotFoundError` for a run it lacks).
 
 ```python
-# src: the engine behind a synthetic LCLS smalldata run; detector, frames, energy, columns
-src.detector, src.n_frames, src.frame_shape, scan.energy_keV      # ('jungfrau1M', 30, (8, 10), 9.5)
-src.columns["laser_flag"], src.columns["delay"], scan.structure.units["scan_axis"]   # ('lightStatus/laser', 'scan/lxt', 'delay')
-SmalldataSource.from_path(load_spec("lcls_smalldata"), work, detector="jungfrau1M").n_frames   # 30
+# src: run 19 of the synthetic XCS beamtime; its detectors, frames, pixel size and ROI
+src.detectors, src.detector, src.n_frames, src.frame_shape   # ({'jungfrau1M': 'jungfrau1M/ROI_area', 'epix_5': 'epix_5/ROI_area'}, 'jungfrau1M', 40, (10, 8))
+src.pixel_size_um, src.roi_bound, scan.geometry.pixel_size_um, src.run   # (75.0, [[1, 2], [200, 210], [300, 308]], 75.0, 19)
+src.columns["laser_flag"], src.columns["delay"], scan.structure.units["scan_axis"]   # ('evr/code_41', 'epicsUser/awg_delay', 'delay')
+epix = bexa.open(run.path, detector="epix_5", cache=False).source
+epix.pixel_size_um, [ids.tolist() for ids, frames in epix.iter_frames(slice(0, 6), batch=4)]   # (50.0, [[0, 4, 1, 5], [2, 3]]): file order
 ```
 
 #### `SmalldataSource.sums`
@@ -4016,19 +4023,59 @@ at each call. It replaces the `Sums/` cell of the `Usefulthings` notebook.
 
 ```python
 # src: an LCLS smalldata run; the summed images the file carries
-{name: image.shape for name, image in src.sums().items()}      # {'jungfrau1M_calib': (8, 10)}
+{name: image.shape for name, image in src.sums().items()}      # {'epix_5_calib': (12, 10), 'jungfrau1M_calib': (10, 8)}
 ```
 
 #### `SmalldataSource.scalars_table`
-`bexa.io.engines.smalldata.SmalldataSource.scalars_table()`
+`bexa.io.engines.smalldata.SmalldataSource.scalars_table(extra=())`
 
-Every resolved per-event scalar in a pandas DataFrame, one row per event, columns named by the
-logical keys (`laser_flag`, `i0`, `scanvar`, `delay`, `photon_energy`, `event_time`, ...).
+`read_scalars` of the source's file with its spec: every resolved per-event scalar in a pandas
+DataFrame, one row per event, columns named by the logical keys (`laser_flag`, `i0`, `scanvar`,
+`delay`, `event_time`, ...), then the datasets of `extra`.
 
 ```python
-# src: an LCLS smalldata run; one row per shot of its scalar channels
-src.scalars_table().head(3)                     # DataFrame: 3 rows x 6 columns (laser_flag, i0, scanvar, delay, photon_energy, event_time)
+# src: an LCLS smalldata run; one row per shot of its scalar channels, ipm5 added
+src.scalars_table(extra=["ipm5/sum"]).columns.tolist()   # ['laser_flag', 'xray_flag', 'i0', 'scanvar', 'delay', 'event_time', 'fiducials', 'ipm5/sum']
 ```
+
+#### `read_scalars`
+`bexa.io.engines.smalldata.read_scalars(path, spec=None, extra=())`
+
+The per-event scalars of a smalldata run as a pandas DataFrame, whether or not the file holds
+images: one row per event, one column per logical key of `spec` the file has (`laser_flag`, `i0`,
+`scanvar`, `delay`, ...), then one per dataset of `extra`, named by its path (`"snd_dio/sum"`);
+`KeyError` for a dataset the file lacks, `ValueError` for one that is not one value per event.
+`spec` is a `FormatSpec` or a spec name (default `lcls_smalldata`); a beamtime profile's is
+`BeamtimeProfile.format_spec()`.
+
+```python
+# scalars_only: run 17, point detectors only; bexa.open refuses it, read_scalars reads it
+try:
+    bexa.open(scalars_only.path, cache=False)
+except NoImagesError as exc:
+    print(exc)                                  # xcs101927227_Run0017.h5 holds no per-event images (no detector wrote ROIs or full images); ...
+table = read_scalars(scalars_only.path, load_spec("lcls_smalldata", overrides=xcs), extra=["ipm5/sum"])
+table.groupby("laser_flag")["ipm5/sum"].mean().round(1).to_dict()   # {0: 1876.2, 1: 1529.2}
+```
+
+#### `NoImagesError`
+`bexa.io.engines.smalldata.NoImagesError`, a subclass of `LookupError`
+
+What `SmalldataSource` (and so `bexa.open`) raises for a run whose detectors wrote no per-event
+images; the message points to `read_scalars`, which reads such a run.
+
+```python
+# scalars_only: a run of point detectors only; the error bexa.open raises, a LookupError
+try:
+    bexa.open(scalars_only.path, cache=False)
+except LookupError as exc:
+    print(type(exc).__name__)                    # NoImagesError
+```
+
+Constants:
+
+- `DEFAULT_FRAMES`: the image datasets tried for a detector when the spec's `layout.frames` names none, `("{detector}/ROI_0_area", "{detector}/ROI_area", "{detector}/full_area")`.
+- `SCATTERED`, `SPAN_BYTES`, `GAP_BYTES`: reading in file order (`iter_frames`): the fraction of events stored before the one ahead of them above which a file counts as scattered (0.1), the largest single read (64 MiB) and the largest gap read through rather than skipped (1 MiB).
 
 ### bexa.io.engines.extra_data: EuXFEL runs through extra_data
 
@@ -5504,7 +5551,7 @@ import tempfile
 import bexa
 from bexa.analysis import pump_probe
 from bexa.pipelines import xfel_cube
-from bexa.testing.synthetic import make_lcls_cube, make_pal_run
+from bexa.testing.synthetic import make_lcls_cube, make_lcls_smalldata, make_pal_run
 
 work = tempfile.mkdtemp()                       # a scratch folder for the files the examples write
 run = make_pal_run(f"{work}/raw", run=1, n_points=6, shots_per_point=12)   # synthetic PAL-XFEL run
@@ -5515,6 +5562,8 @@ cube = xfel_cube.build_cube(scan.source, roi=roi, workers=1)   # frames(laser, d
 lcls = bexa.load(make_lcls_cube(f"{work}/lcls").root, squeeze_single=False)   # frames(laser, shot, y, x)
 flag, i0 = "event_info.THIRTY_HERTZ", "qbpm:eh1:qbpm1:sum"   # columns of the shot table
 roi_sum = "detector:eh1:jungfrau2:ROI1_stat.sum"  # the per-shot ROI sum column
+xcs = {"keys": {"laser_flag": ["evr/code_41"], "delay": ["epicsUser/awg_delay"]}}   # the pump flag and delay of the XCS beamtime
+events = bexa.open(make_lcls_smalldata(f"{work}/smalldata").path, overrides=xcs, cache=False)   # an LCLS smalldata run, 40 shots
 ```
 
 #### `split_on_off`
@@ -5597,6 +5646,27 @@ counts the shots, to divide by for means. Keeps the attrs. Replaces the `kieran_
 # lcls: an LCLS cube of shots; the shots binned by delay into laser on and off
 binned = pump_probe.bin_lcls(lcls)
 binned["frames"].dims, binned["n_shots"].values        # (('laser', 'scanvar', 'y', 'x'), [3, 4, 4, 4, 4, 4])
+```
+
+#### `bin_events`
+`bexa.analysis.pump_probe.bin_events(scan, axis="delay", flag="laser_flag", i0="i0", bins=None, where=None, batch=None)`
+
+The laser on/off cube of a run of single shots, such as an LCLS smalldata run opened with
+`bexa.open`: `frames(laser, <axis>, y, x)` sums the images of the shots with `flag` 0 (off) and 1
+(on) in every bin of `axis`, `i0(laser, <axis>)` sums their I0 and `n_shots(laser, <axis>)` counts
+them, so `frames / i0` is the I0-normalised mean. `axis`, `flag`, `i0` and the names in `where` are
+per-frame channels of the scan; `bins` is `None` (a bin per distinct value, for step scans), the bin
+edges (centres in the result) or a number of equal bins; `where` keeps the shots inside
+`{channel: (low, high)}` ranges, or is a boolean mask with one entry per shot. The frames are read
+through `iter_frames`, `batch` at a time (default: 256 MiB worth). The binning of `genCube.py` and
+the smalldata_tools cube, from a smalldata file.
+
+```python
+# events: a smalldata run with the pump on every other shot; the shots summed per delay
+cube = pump_probe.bin_events(events)
+cube["frames"].dims, cube["n_shots"].values.tolist()    # (('laser', 'delay', 'y', 'x'), [[4, 4, 4, 4, 4], [4, 4, 4, 4, 4]])
+mean = cube["frames"] / cube["i0"]               # (laser, delay, y, x), I0-normalised
+pump_probe.bin_events(events, bins=[690000, 740000, 800000], where={"i0": (5e3, 3e4)})["n_shots"].values.tolist()   # [[7, 11], [5, 12]]
 ```
 
 #### `bin_shots`
@@ -8476,7 +8546,8 @@ from pathlib import Path
 import numpy as np
 import bexa
 from bexa.testing import (dfxm_sample, make_esrf_beamtime, make_esrf_energy_series, make_esrf_scan,
-                          make_esrf_zstack, make_lcls_cube, make_legacy_cube, make_pal_run, make_aps_session,
+                          make_esrf_zstack, make_lcls_cube, make_lcls_smalldata, make_legacy_cube, make_pal_run,
+                          make_aps_session,
                           make_pal_spec_scan, polycrystal)
 
 work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
@@ -8856,6 +8927,35 @@ I0-normalised images per bin, shots with an I0 of 0 skipped; sums despite the na
 lcls.truth["bins"], lcls.truth["avg_on"].shape   # (array([-1.,  0.,  1.,  2.,  3.,  4.]), (6, 24, 24))
 ```
 
+#### `make_lcls_smalldata`
+`bexa.testing.synthetic.make_lcls_smalldata(root, run=19, experiment="xcs101927227", n_steps=5, shots_per_step=8, detectors=None, seed=0)`
+
+An LCLS smalldata run in the layout of the autumn 2026 XCS beamtime, `<experiment>_Run<NNNN>.h5`
+in `root`: an AWG delay scan (`scan/var0` and `epicsUser/awg_delay`, ns; `n_steps` steps of
+`shots_per_step` shots) with the pump on every other shot (`evr/code_41`; `lightStatus/laser` is
+always 1), `ipm4/sum` as I0 and, per entry of `detectors` (name to ROI shape, default
+`{"epix_5": (12, 10), "jungfrau1M": (10, 8)}`, `{}` for point detectors only), the per-shot ROI
+`<det>/ROI_area`, its sum `Sums/<det>_calib` and `UserDataCfg/<det>` with `pixelsize` (m) and the
+ROI bounds. The pumped peak grows by up to 30 % along the scan, and the ePix chunks are scattered
+as an MPI producer writes them. Read by `lcls_smalldata`; returns a `SyntheticSmalldata`.
+
+```python
+# work: a scratch folder; a smalldata run in the XCS layout, opened back
+sd = make_lcls_smalldata(work / "smalldata")
+bexa.open(sd.path, cache=False).source.detectors   # {'jungfrau1M': 'jungfrau1M/ROI_area', 'epix_5': 'epix_5/ROI_area'}
+```
+
+#### `SyntheticSmalldata`
+`bexa.testing.synthetic.SyntheticSmalldata(path, run, delay, pump, i0, images)`
+
+Dataclass: the file written, the run number, per shot the `delay` (ns), the `pump` flag (0 or 1)
+and `i0`, and `images`, the per-shot ROIs written, `(shot, y, x)` per detector.
+
+```python
+# sd: the synthetic smalldata run; what it was made from
+sd.path.name, sd.delay[:3], sd.pump[:4], sd.images["epix_5"].shape   # ('xcs101927227_Run0019.h5', array([694000., 694000., 694000.]), array([0, 1, 0, 1]), (40, 12, 10))
+```
+
 #### `make_legacy_cube`
 `bexa.testing.synthetic.make_legacy_cube(path, n_points=6, frame_shape=(20, 24), axis="delays", seed=0)`
 
@@ -9032,11 +9132,12 @@ geom.with_energy(19.0).energy_keV                    # 19.0; geom keeps 17.0
 ```
 
 #### `DetectorGeometry.from_spec`
-`bexa.geometry.detector.DetectorGeometry.from_spec(spec, detector=None, energy_keV=None, profile=None)`
+`bexa.geometry.detector.DetectorGeometry.from_spec(spec, detector=None, energy_keV=None, profile=None, pixel_size_um=None)`
 
 Classmethod behind `bexa.open`: pixel size, effective pixel and shape from the format spec's
-`detectors` entry for `detector`, the spec's convention (`id03` if none), then every field set in
-the profile's `geometry` section (a pydantic model or a dict) on top.
+`detectors` entry for `detector` (a `pixel_size_um` given, the size the data file records, wins
+over the table), the spec's convention (`id03` if none), then every field set in the profile's
+`geometry` section (a pydantic model or a dict) on top.
 
 ```python
 # the geometry of the ESRF far-field camera, from the format spec at 17 keV
@@ -11607,11 +11708,12 @@ Everything specific to one beamtime, usually from `load_profile`:
 
 Methods: `sample(name)` returns the `Sample` or raises a `KeyError` listing the samples;
 `data_root()` returns `root`, else `raw_root` (`ValueError` without both), where datasets are
-opened as `data_root() / sample.dataset`.
+opened as `data_root() / sample.dataset`; `format_spec()` returns the format spec with
+`format_overrides` applied, the one `bexa.open(profile=...)` reads with.
 
 ```python
 # prof: the example ESRF profile; its detector, regions and a sample's reflection
-prof.detector, prof.rois["grain"]            # ('pco_ff', {'y': [700, 1500], 'x': [800, 1800]})
+prof.detector, prof.rois["grain"], prof.format_spec().name   # ('pco_ff', {'y': [700, 1500], 'x': [800, 1800]}, 'esrf_id03_bliss_2026')
 prof.sample("WS2G_100").hkl_center           # (0, 0, 6)
 prof.data_root() / prof.sample("WS2G_100").dataset  # Path('.../WS2G_100_DFXM')
 grain = bexa.ROI.from_dict(prof.rois["grain"])
