@@ -103,7 +103,17 @@ class FormatSpec(BaseModel):
         return [name] + ([extra] if isinstance(extra, str) else list(extra))
 
     def detector_info(self, detector: str) -> dict[str, Any]:
-        return dict(self.detectors.get(detector, {}))
+        """The ``detectors`` entry of ``detector``: its own, else the first glob key it matches.
+
+        Glob keys (``"epix*"``) cover aliases that change between experiments
+        (``epix_1``, ``epix_5``); they are tried in the spec's order.
+        """
+        if detector in self.detectors:
+            return dict(self.detectors[detector])
+        for key, info in self.detectors.items():
+            if any(c in key for c in "*?[") and fnmatch.fnmatchcase(detector, key):
+                return dict(info)
+        return {}
 
 
 def safe_format(template: str, **fields: Any) -> str:

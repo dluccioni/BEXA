@@ -81,12 +81,17 @@ class DetectorGeometry:
         detector: str | None = None,
         energy_keV: float | None = None,
         profile: Any = None,
+        pixel_size_um: float | None = None,
     ) -> DetectorGeometry:
-        """Combine the spec's detector table with a profile's geometry section."""
+        """Combine the spec's detector table with a profile's geometry section.
+
+        ``pixel_size_um`` is the size the data file records; it wins over the
+        spec's table, and the profile's values win over both.
+        """
         info = spec.detector_info(detector) if (spec is not None and detector) else {}
         geom = cls(
             energy_keV=energy_keV,
-            pixel_size_um=info.get("pixel_size_um"),
+            pixel_size_um=pixel_size_um if pixel_size_um is not None else info.get("pixel_size_um"),
             effective_pixel_nm=info.get("effective_pixel_nm"),
             detector_shape=tuple(info["shape"]) if info.get("shape") else None,
             convention=(spec.convention if spec is not None and spec.convention else "id03"),

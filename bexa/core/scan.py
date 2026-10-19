@@ -609,7 +609,10 @@ def open(
         from bexa.geometry.detector import DetectorGeometry
 
         geometry = DetectorGeometry.from_spec(
-            spec, getattr(source, "detector", detector), energy_keV=source.energy_keV
+            spec,
+            getattr(source, "detector", detector),
+            energy_keV=source.energy_keV,
+            pixel_size_um=getattr(source, "pixel_size_um", None),
         )
     resolved_cache = _resolve_cache(cache, cache_root())
     opened = Scan(
@@ -670,7 +673,7 @@ def open_profile(
     that cache.
     """
     prof = profile if isinstance(profile, BeamtimeProfile) else load_profile(profile)
-    spec = load_spec(prof.format, overrides=prof.format_overrides or None)
+    spec = prof.format_spec()
     root = prof.data_root()
     cif = None
     hkl_center = None
@@ -693,6 +696,7 @@ def open_profile(
         getattr(source, "detector", detector),
         energy_keV=source.energy_keV,
         profile=prof.geometry,
+        pixel_size_um=getattr(source, "pixel_size_um", None),
     )
     crystal = None
     if cif:

@@ -768,6 +768,87 @@ def make_lcls_cube(
     )
 
 
+@dataclass
+class SyntheticSmalldata:
+    """What :func:`make_lcls_smalldata` wrote: the per-shot inputs and images."""
+
+    path: Path
+    run: int
+    delay: np.ndarray
+    pump: np.ndarray
+    i0: np.ndarray
+    images: dict[str, np.ndarray]
+
+
+def make_lcls_smalldata(
+    root: str | Path,
+    run: int = 19,
+    experiment: str = "xcs101927227",
+    n_steps: int = 5,
+    shots_per_step: int = 8,
+    detectors: Mapping[str, tuple[int, int]] | None = None,
+    seed: int = 0,
+) -> SyntheticSmalldata:
+    """Write an LCLS smalldata run in the layout of the autumn 2026 XCS beamtime.
+
+    ``<experiment>_Run<NNNN>.h5`` in ``root`` holds an AWG delay scan
+    (``scan/var0`` and ``epicsUser/awg_delay``, ns) of ``n_steps`` steps with the
+    pump on every other shot (``evr/code_41``; ``lightStatus/laser`` is always 1),
+    ``ipm4/sum`` as I0 and, for every detector of ``detectors`` (name to ROI
+    shape; default ``{"epix_5": (12, 10), "jungfrau1M": (10, 8)}``, ``{}`` for a
+    run of scalars only), the per-shot ROI ``<det>/ROI_area``, its run sum under
+    ``Sums/`` and ``UserDataCfg/<det>`` with ``pixelsize`` (m) and the ROI bounds.
+    The peak of the pumped shots grows by up to 30 % along the scan. ePix
+    images are stored as the MPI producer of the beamtime left them: chunks of
+    three quarters of a frame's rows, written out of event order by four ranks.
+    """
+    rng = np.random.default_rng(seed)
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    if detectors is None:
+        detectors = {"epix_5": (12, 10), "jungfrau1M": (10, 8)}
+    delay = np.repeat(np.linspace(694000.0, 794000.0, n_steps), shots_per_step)
+    n = delay.size
+    pump = (np.arange(n) % 2).astype(np.int64)
+    i0 = rng.uniform(2e3, 3e4, n)
+    growth = 1 + 0.3 * pump * np.repeat(np.linspace(0.0, 1.0, n_steps), shots_per_step)
+    path = root / f"{experiment}_Run{run:04d}.h5"
+    images: dict[str, np.ndarray] = {}
+    with h5py.File(path, "w") as f:
+        f["event_time"] = np.arange(n, dtype=np.int64)
+        f["fiducials"] = 3 * np.arange(n, dtype=np.int64)
+        f["lightStatus/laser"] = np.ones(n, dtype=np.int64)
+        f["lightStatus/xray"] = np.ones(n, dtype=np.int64)
+        f["evr/code_41"] = pump
+        f["ipm4/sum"] = i0
+        f["ipm5/sum"] = 0.1 * i0
+        f["scan/var0"] = delay
+        f["scan/XCS:USR:EVR:TRIG5:TDES"] = delay
+        f["scan/varStep"] = np.repeat(np.arange(n_steps), shots_per_step)
+        f["epicsUser/awg_delay"] = delay
+        for det, (h, w) in detectors.items():
+            yy, xx = np.mgrid[0:h, 0:w]
+            peak = np.exp(-0.5 * (((yy - h / 2) / 2.0) ** 2 + ((xx - w / 2) / 2.0) ** 2))
+            frames = peak[None] * (growth * i0 / 1e3)[:, None, None]
+            frames = (frames + rng.normal(0.0, 0.05, frames.shape)).astype(np.float32)
+            if det.startswith("epix"):  # rank r writes events r, r + 4, ...
+                ds = f.create_dataset(
+                    f"{det}/ROI_area", frames.shape, np.float32, chunks=(1, max(1, 3 * h // 4), w)
+                )
+                for k in np.concatenate([np.arange(r, n, 4) for r in range(4)]):
+                    ds[k] = frames[k]
+            else:
+                f.create_dataset(f"{det}/ROI_area", data=frames, chunks=(1, h, w))
+            f[f"Sums/{det}_calib"] = frames.sum(axis=0)
+            cfg = f.create_group(f"UserDataCfg/{det}")
+            jungfrau = det.startswith("jungfrau")
+            cfg["pixelsize"] = np.array([75e-6 if jungfrau else 50e-6])
+            bound = [[200, 200 + h], [300, 300 + w]]
+            cfg["ROI__ROI_bound"] = np.array([[1, 2], *bound] if jungfrau else bound)
+            images[det] = frames
+    return SyntheticSmalldata(path, run, delay, pump, i0, images)
+
+
 # ---------------------------------------------------------------------- legacy cube
 def make_legacy_cube(
     path: str | Path,

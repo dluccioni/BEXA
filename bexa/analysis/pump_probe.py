@@ -7,19 +7,20 @@ numpy or cupy arrays.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
 import xarray as xr
 
-from bexa.core.backend import array_module
+from bexa.core.backend import MAX_BATCH_BYTES, array_module
 from bexa.core.provenance import build_attrs, parameters_of, to_json
 
 LASER_COORD = np.array(["off", "on"])
 
 __all__ = [
     "bin_by_axis",
+    "bin_events",
     "bin_lcls",
     "bin_shots",
     "combine_runs",
@@ -230,6 +231,115 @@ def bin_lcls(ds: xr.Dataset, axis: str = "scanvar") -> xr.Dataset:
     out.attrs.update(ds.attrs)
     out.attrs["scan_axis"] = axis
     out.attrs["parameters"] = to_json({**parameters_of(ds.attrs), "binned_by": axis})
+    return out
+
+
+def bin_events(
+    scan: Any,
+    axis: str = "delay",
+    flag: str = "laser_flag",
+    i0: str | None = "i0",
+    bins: Any = None,
+    where: Any = None,
+    batch: int | None = None,
+) -> xr.Dataset:
+    """The laser on/off cube of a run of single shots, binned on ``axis``.
+
+    For a scan whose frames are events with per-frame channels (an LCLS
+    smalldata run): ``frames(laser, <axis>, y, x)`` sums the images of the shots
+    with ``flag`` 0 (off) and 1 (on) in every bin, ``i0(laser, <axis>)`` sums
+    their I0 and ``n_shots(laser, <axis>)`` counts them, so ``frames / i0`` is the
+    I0-normalised mean. Shots with another flag, a NaN axis value or outside
+    ``where`` are left out. The frames are read ``batch`` at a time (default: as
+    many as fit in 256 MiB).
+
+    ``axis``, ``flag``, ``i0`` and the names in ``where`` are per-frame channels
+    of the scan (``delay``, ``scanvar``, ``laser_flag``, ``i0``, ...). ``bins``:
+    ``None`` puts every distinct axis value in a bin of its own (step scans), a
+    sequence gives the bin edges (centres in the result), an int that many equal
+    bins over the range. ``where`` is a boolean array, one entry per event, or
+    ``{channel: (low, high)}`` keeping the shots inside every range.
+    """
+    source = getattr(scan, "source", scan)
+    channels = source.structure().per_frame
+
+    def channel(name: str) -> np.ndarray:
+        if name not in channels:
+            raise KeyError(f"no per-frame channel {name!r}; the scan has {sorted(channels)}")
+        return np.asarray(channels[name], dtype=float)
+
+    n = source.n_frames
+    values, state = channel(axis), channel(flag)
+    keep = np.isfinite(values) & ((state == 0) | (state == 1))
+    if isinstance(where, Mapping):
+        for name, (low, high) in where.items():
+            v = channel(name)
+            keep &= (v >= low) & (v <= high)
+    elif where is not None:
+        mask = np.asarray(where, dtype=bool)
+        if mask.shape != (n,):
+            raise ValueError(f"where has shape {mask.shape}; the scan has {n} events")
+        keep &= mask
+    if not keep.any():
+        raise ValueError("no shot is left to bin (check flag, axis and where)")
+
+    edges = None
+    if bins is None:
+        centres = np.unique(values[keep])
+        index = np.searchsorted(centres, values)
+    else:
+        if np.ndim(bins) == 0:
+            edges = np.linspace(values[keep].min(), values[keep].max(), int(bins) + 1)
+        else:
+            edges = np.asarray(bins, dtype=float)
+        centres = 0.5 * (edges[:-1] + edges[1:])
+        index = np.digitize(values, edges) - 1
+        index[values == edges[-1]] = len(centres) - 1  # the last edge belongs to the last bin
+        keep &= (index >= 0) & (index < len(centres))
+    n_bins = len(centres)
+    ids = np.flatnonzero(keep)
+    key = np.full(n, -1, dtype=np.int64)  # flat (laser, bin) of every shot kept
+    key[ids] = state[ids].astype(np.int64) * n_bins + index[ids]
+
+    h, w = source.frame_shape
+    sums = np.zeros((2 * n_bins, h, w))
+    if batch is None:
+        batch = max(1, MAX_BATCH_BYTES // max(1, h * w * source.dtype.itemsize))
+
+    def blocks() -> Any:  # sources without iter_frames: by frame id
+        for start in range(0, ids.size, batch):
+            block = ids[start : start + batch]
+            yield block, source.read_frames(block)
+
+    reader = source.iter_frames(ids, batch) if hasattr(source, "iter_frames") else blocks()
+    for block, frames in reader:  # any order: the sums do not depend on it
+        keys = key[block]
+        for k in np.unique(keys):
+            sums[k] += frames[keys == k].sum(axis=0, dtype=np.float64)
+    counts = np.bincount(key[ids], minlength=2 * n_bins).reshape(2, n_bins)
+
+    dims = ("laser", axis)
+    data = {
+        "frames": xr.DataArray(sums.reshape(2, n_bins, h, w), dims=(*dims, "y", "x")),
+        "n_shots": xr.DataArray(counts, dims=dims),
+    }
+    if i0 is not None:
+        weights = channel(i0)[ids]
+        data["i0"] = xr.DataArray(
+            np.bincount(key[ids], weights=weights, minlength=2 * n_bins).reshape(2, n_bins),
+            dims=dims,
+        )
+    out = xr.Dataset(data, coords={"laser": LASER_COORD, axis: centres})
+    parameters = {"axis": axis, "flag": flag, "i0": i0, "n_bins": n_bins}
+    if edges is not None:
+        parameters["bin_edges"] = edges.tolist()
+    if isinstance(where, Mapping):
+        parameters["where"] = {k: list(v) for k, v in where.items()}
+    out.attrs.update(build_attrs(source_files=source.files(), parameters=parameters))
+    out.attrs["scan_axis"] = axis
+    for name in ("detector", "run"):
+        if getattr(source, name, None) is not None:
+            out.attrs[name] = getattr(source, name)
     return out
 
 

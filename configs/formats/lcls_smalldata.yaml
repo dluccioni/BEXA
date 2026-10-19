@@ -7,6 +7,14 @@ description: LCLS smalldata run file (per-event scalars, optional per-event imag
 fingerprint:
   h5_paths: [lightStatus, event_time]
 
+layout:
+  run_file: "*_Run{run:04d}.h5"       # one run in a folder of run files
+  # the per-event images of a detector, first found: one ROI is written as
+  # <det>/ROI_area, several as <det>/ROI_0_area, <det>/ROI_1_area, ..., the
+  # whole detector as <det>/full_area
+  frames: ["{detector}/ROI_0_area", "{detector}/ROI_area", "{detector}/full_area"]
+  detector_config: "UserDataCfg/{detector}"   # pixelsize (m) and the ROI bounds
+
 keys:
   laser_flag: [lightStatus/laser]
   xray_flag: [lightStatus/xray]
@@ -19,10 +27,16 @@ keys:
 
 axis_priority: [delay, scanvar]
 
+# The order is the preference when a run holds several detectors. A file's
+# UserDataCfg/<det>/pixelsize wins over these pixel sizes; the glob keys cover
+# aliases that change between experiments (epix_1, epix_5, ...).
 detectors:
-  jungfrau1M: {frames_path: jungfrau1M/ROI_0_area, pixel_size_um: 75.0}
-  jungfrau4M: {frames_path: jungfrau4M/ROI_0_area, pixel_size_um: 75.0}
-  epix10k2M: {frames_path: epix10k2M/ROI_0_area, pixel_size_um: 100.0}
-  zyla: {frames_path: zyla/ROI_0_area, pixel_size_um: 6.5}
+  jungfrau1M: {pixel_size_um: 75.0}
+  jungfrau4M: {pixel_size_um: 75.0}
+  epix10k2M: {pixel_size_um: 100.0}
+  zyla: {pixel_size_um: 6.5}
+  "jungfrau*": {pixel_size_um: 75.0}
+  "epix10k*": {pixel_size_um: 100.0}
+  "epix*": {pixel_size_um: 50.0}       # ePix100a
 
 convention: lcls_xcs

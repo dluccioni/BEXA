@@ -190,6 +190,20 @@ class BaseSource(ABC):
     def __exit__(self, *exc: object) -> None:
         self.close()
 
+    def iter_frames(
+        self, index: np.ndarray | slice = slice(None), batch: int = 64
+    ) -> Iterator[tuple[np.ndarray, np.ndarray]]:
+        """Yield ``(frame_ids, frames)`` blocks of up to ``batch`` frames covering ``index``.
+
+        The blocks follow the frame ids here; an engine whose files store the
+        frames out of order may yield them in the order of the file instead, so
+        a caller that sums or bins frames must not rely on the order.
+        """
+        ids = self.normalise_index(index, self.n_frames)
+        for start in range(0, ids.size, batch):
+            block = ids[start : start + batch]
+            yield block, self.read_frames(block)
+
     def cache_records(self) -> list[dict[str, Any]]:
         """What identifies the data for cache keys: path, size and mtime of every file.
 

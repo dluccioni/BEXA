@@ -9,9 +9,12 @@ those belong to the format spec (:mod:`bexa.io.formats`).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+if TYPE_CHECKING:  # bexa.io.formats imports the config package
+    from bexa.io.formats import FormatSpec
 
 
 class Geometry(BaseModel):
@@ -113,6 +116,12 @@ class BeamtimeProfile(BaseModel):
             raise KeyError(
                 f"unknown sample {name!r} in profile {self.name!r}; available: {available}"
             ) from None
+
+    def format_spec(self) -> FormatSpec:
+        """The profile's format spec with its ``format_overrides`` applied."""
+        from bexa.io.formats import load_spec
+
+        return load_spec(self.format, overrides=self.format_overrides or None)
 
     def data_root(self) -> Path:
         """``root`` for frame-stack beamlines, ``raw_root`` for point-file beamlines."""
