@@ -78,7 +78,7 @@ the rest stays the same.
 | `11_roi_to_3d_rlp.py` | from a pixel ROI on the projections to the 3-D reciprocal-space view |
 | `12_esrf_dfxm_workflow.ipynb` | a notebook for an ID03 DFXM beamtime end to end: alignment scans, quick mosa scan, fine mosa scan, energy scan, z-stack, 3-D rendering with a slider per scanned motor |
 | `13_esrf_dfxm_general.ipynb` | one notebook for any ID03 dataset (a single mosaicity scan, a z-stack, an energy series, both, or several folders): it reads what varies between the scans and stacks on that; one streaming pass per scan (several scans at a time with `WORKERS`) gives the binned previews and the full-resolution maps, stacked into one file in the cache that every later cell reads block by block; section 10 also renders the total scattered intensity per voxel, and section 11 compares two sets of scans from any folders, B minus A pair by pair (intensity and tilt changes) |
-| `14_aps_7id_session.ipynb` | an APS 7-ID-C SPEC session from the counters to the maps: every scan in a table, the log of the session (filters, timing), the counters of any scan with or without its frames, normalised by the monitor; Gaussian fits of every rocking curve, peaks or edges of the stage scans, time zero and the pump-probe step of every delay scan, the loop scans; the frames checked against their rows, and the summed image and COM maps of a scan with frames. Runs on the sample data set of the lab share, or on a synthetic session |
+| `14_aps_7id_session.ipynb` | an APS 7-ID-C SPEC session from the counters to the maps: every scan in a table, the log of the session (filters, timing), the counters of any scan with or without its frames, normalised by the monitor; Gaussian fits of every rocking curve, peaks or edges of the stage scans, time zero and the pump-probe step of every delay scan, the loop scans; the frames checked against their rows, and the summed image and COM maps of a scan with frames; one scan as a package read back. Runs on the sample data set of the lab share, or on a synthetic session |
 
 ## Layout
 
@@ -612,6 +612,7 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | select scans from several dataset folders and see them all in one panel | `ScanPicker.set_folders`, `ScanPicker.selection`, `ScanPicker.selection_view` | §3 |
 | open an APS 7-ID session (a SPEC file with a TIFF per point) | `bexa.open(folder, scan=4)`, `bexa.open_dataset(folder)`; the profile `example_aps_7id`; `examples/14_aps_7id_session.ipynb` |  |
 | the counters of every point of an APS scan, frames or not, and the log of the whole session | `SpecTiffSource.point_table` (`scan.source.point_table()`), `SpecFile.table` (`read_spec_file(path).table()`) |  |
+| keep a scan of any beamline as one self-contained HDF5 file (frames, motors, counters, metadata) that bexa reads back as the same scan, or every scan of a session | `bexa.write_package`, `bexa.io.package.write_packages`, `bexa scan package`; then `bexa.open(package)`, `bexa.open_dataset(folder)` |  |
 | open one scan | `bexa.open(path, scan=7)` |  |
 | open through a beamtime profile | `bexa.open(profile=..., sample=..., scan=...)`, `bexa profile new`, `bexa.config.load_profile` |  |
 | pick scans by type, scanned motor or positioner (`samz`, energy) | `Dataset.select`, `Dataset.select_numbers`, `Dataset.groups` | §7 |
@@ -807,9 +808,9 @@ folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"  #
 `bexa.core.scan.open(path=None, *, profile=None, sample=None, dataset=None, format=None, scan=None, detector=None, overrides=None, energy_keV=None, geometry=None, crystal=None, cache=True, cache_reductions=None, motors=None, layer=None, **kwargs)`
 
 Open a measurement and return a `Scan` (top-level name `bexa.open`). `path` is a dataset
-folder, its master file, a `scanNNNN` folder, a PAL-XFEL run folder, a cube file, or
-`"file.h5::/path/to/stack"` for a plain frame stack in any HDF5 file (the `generic_stack`
-spec). The layout is sniffed unless `format` names a spec, or is one already loaded (a
+folder, its master file, a `scanNNNN` folder, a PAL-XFEL run folder, a cube file, a scan package
+(`bexa.write_package`; a folder of them with `scan=`), or `"file.h5::/path/to/stack"` for a plain
+frame stack in any HDF5 file (the `generic_stack` spec). The layout is sniffed unless `format` names a spec, or is one already loaded (a
 `FormatSpec`: no file is read for it, which is how a `Dataset` opens its scans); `overrides` is
 a dict merged into the spec. Instead of a path, `profile` (a name, a YAML path or a
 `BeamtimeProfile`; the `BEXA_PROFILE` variable when left out) with `sample` or `dataset` opens
@@ -2720,6 +2721,7 @@ motor and key aliases, the energy source, the detectors, the engine that walks t
 | `lcls_smalldata` | `smalldata` | LCLS smalldata_tools run file: per-event scalars, ROI or full images (`<det>/ROI_area`, `ROI_0_area`, `full_area`), `Sums/`, `UserDataCfg/` |
 | `bexa_cube_legacy` | `array_cube` | legacy PAL-XFEL `runN.h5` cubes (`Aaron_allscan_cube_parallel.py`, `Scan_Combiner.py`) |
 | `bexa_cube` | `array_cube` | files written by `bexa.save` |
+| `bexa_package` | `package` | scan packages written by `bexa.write_package` (`bexa.io.package`): one scan of any layout in one HDF5 file; a folder of them is a dataset |
 | `euxfel_extra_data` | `extra_data` | EuXFEL MID runs through `extra_data` (needs it; not sniffed, pass `format=`) |
 | `generic_stack` | `generic` | `.npy`, `.npz`, tiff stacks, `file.h5::/path` (not sniffed) |
 
@@ -2764,7 +2766,7 @@ profile list` prints it.
 
 ```python
 # every format spec bexa ships
-sorted(formats.list_specs())[:3]                 # ['bexa_cube', 'bexa_cube_legacy', 'esrf_bliss_base']
+sorted(formats.list_specs())[:3]                 # ['aps_7id_spec_2025', 'bexa_cube', 'bexa_cube_legacy']
 ```
 
 #### `all_specs`
@@ -3820,7 +3822,8 @@ frames), `refresh` and `close` (see `BaseSource`). Also:
   numbers of `root/dataset` (a folder, or the file's stem), those with a frame by default.
 - attributes: `spec_file`, `session` (the `SpecFile`), `record` (the `SpecScan`), `command` (a
   `ScanCommand`), `points` (the point numbers that have a frame), `frames` (their files), `scan`,
-  `detector`.
+  `detector`, and `dataset` (a property: the SPEC file's stem, the session's name that `Scan.name`
+  shows).
 
 ```python
 # scan: scan 2 of the synthetic session; its grid, status and the counters per frame
@@ -4221,6 +4224,78 @@ otherwise. A full EuXFEL folder path, with `raw/` between the proposal and the r
 parse_run_id("p6832_r0259")                      # (6832, 259)
 ```
 
+### bexa.io.engines.package: scan packages as sources
+
+The engine `package` (spec `bexa_package`, sniffed by the paths `entry/structure/frame_index`
+and `entry/data/frames`) serves a package that `bexa.io.package` wrote as the scan it was written
+from: the recorded grid, channels, positioners, energy, status, side tables and geometry
+(`recorded_geometry`, which `bexa.open` puts into `scan.geometry`: pixel size, distance, beam
+centre, effective pixel, convention), and the frames read chunk by chunk from the file. A folder
+of packages is a dataset: `bexa.open(folder, scan=4)` opens the package of scan 4 and
+`bexa.open_dataset(folder)` lists the packages by the scan number each records.
+
+```python
+import tempfile
+from pathlib import Path
+import bexa
+from bexa.io.engines.package import PackageSource, packages_in
+from bexa.io.package import write_packages
+from bexa.testing import make_aps_session
+
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
+session = make_aps_session(work / "aps")         # a loopscan, ascans (one aborted), an a2scan, a scan without frames
+folder = work / "packages"                       # where the packages go
+written = write_packages(session.root, folder, show_progress=False)   # wse2_1_1_S001.h5 ... wse2_1_1_S005.h5
+```
+
+#### `PackageSource`
+`bexa.io.engines.package.PackageSource(spec, path, detector=None, energy_keV=None, motors=None)`
+
+One package as a source: `path` is the package file; `detector` is not used (a package holds the
+frames of one detector, named by `detector`), `energy_keV` overrides the recorded energy and
+`motors` takes per-frame channels as the dims instead of the recorded grid (`Scan.with_dims`).
+It implements the `Source` members `files`, `frame_shape`, `n_frames`, `dtype`, `energy_keV`,
+`read_frames` (chunk by chunk, straight into the buffer when the dtypes agree), `structure` (the
+recorded grid), `status` (the recorded status), `with_motors`, `aux_tables` (the recorded
+tables), `refresh` and `close` (see `BaseSource`). Also:
+
+- `point_table()`: the `points` table the package was written with (for an APS scan, every point
+  SPEC recorded, frames or not), else one row per frame of the per-frame channels, with the
+  `frame` id.
+- `from_path(spec, path, scan=None, **kwargs)`: classmethod, from a package (`KeyError` when
+  `scan` names another scan), or from a folder of packages and a scan number (`LookupError` when
+  the folder holds several and none is named).
+- `list_scans(spec, root, dataset, detector=None, require_files=True)`: classmethod, the scan
+  numbers of the packages in `root/dataset`, those with frames by default.
+- attributes: `path`, `scan` (the recorded scan number), `dataset` (the recorded name, what
+  `Scan.name` shows), `detector`, `recorded_geometry`, `pixel_size_um` and `origin` (the spec,
+  engine, recipe and name the scan was read with).
+
+```python
+# folder: the packages of the synthetic session; the aborted scan 3, the frameless scan 5, the a2scan
+aborted = bexa.open(folder, scan=3, cache=False)
+aborted.status, aborted.structure.n_missing, aborted.source.origin["format"]   # (<ScanStatus.ABORTED: 'aborted'>, 2, 'aps_7id_spec_2025')
+none = bexa.open(written[4], cache=False)
+none.n_frames, len(none.source.point_table()), sorted(none.source.aux_tables())   # (0, 5, ['header', 'points'])
+bexa.open(written[3], cache=False).with_dims(["yaw"]).dims   # ('yaw', 'y', 'x')
+isinstance(none.source, PackageSource)           # True
+```
+
+#### `packages_in`
+`bexa.io.engines.package.packages_in(folder)`
+
+`{scan number: package}` of the packages in a folder, by the number each records; packages
+without one take the numbers after the highest, in name order, and of two packages of one
+number the first by name is kept (with a warning). Other HDF5 files are left out. The listing is
+kept until the folder's modification time changes.
+
+```python
+# folder: the packages of the synthetic session
+sorted(packages_in(folder)), packages_in(folder)[2].name   # ([1, 2, 3, 4, 5], 'wse2_1_1_S002.h5')
+```
+
+Constants: `PACKAGE_SUFFIXES`: `(".h5", ".hdf5")`, the files a folder listing opens.
+
 ### bexa.io.generic: plain arrays, tiff stacks and `file.h5::/path`
 
 For data with no beamline layout: `.npy`, `.npz`, a (multi-page) tiff, a folder of tiffs, or one
@@ -4604,6 +4679,103 @@ Constants:
 - `MAX_ATTR_BYTES`: `60_000`, the largest attr `save` and `StoreWriter` write.
 - `LEGACY_AXES`: the axes looked for in a legacy cube, in priority order.
 - `LASER_COORD`: `np.array(["off", "on"])`, the `laser` coordinate of loaded cubes.
+
+### bexa.io.package: scan packages, one scan in one HDF5 file
+
+A scan package is one scan of any layout bexa reads, in one HDF5 file: the frames as the engine
+reads them, the grid that places them (`frame_index`, -1 where a frame is missing), the
+per-frame motors and counters, the positioners, the energy, the status, the detector geometry
+and the source's side tables (for an APS scan, every point SPEC recorded, frames or not, and the
+beamline state). `bexa.open(package)` reads it back as the same scan (spec `bexa_package`, engine
+`package`, see [bexa.io.engines.package](#bexaioenginespackage-scan-packages-as-sources)), and a
+folder of packages is a dataset (`bexa.open_dataset`). The groups are NeXus ones and the arrays
+plain HDF5, so h5web, silx or h5py open a package without bexa:
+
+| Path | Holds |
+|---|---|
+| `/` | attrs `bexa_package` (`"scan-v1"`), `scan_number`, `name`, `title`, `frames`, `source_fingerprint` and the provenance of `build_attrs` |
+| `/entry` | `NXentry`: `title`; attrs `scan_type`, `status` |
+| `/entry/data/frames` | `(n_frames, height, width)` in acquisition order and in the stored dtype, one chunk per frame; attr `flagged_pixel_value` when the detector's flagged pixels were read as 0 |
+| `/entry/measurement/<channel>` | `(n_frames,)`: the per-frame channels (`Structure.per_frame`) |
+| `/entry/structure` | `frame_index` and `coords/<dim>`; attrs `motor_dims`, `motor_shape`, `frame_shape`, `n_frames`, `scan_type`, `title`, `units`, `energy_keV`, `planned_shape`, `planned_frames`, `motor_names` |
+| `/entry/instrument/positioners/<motor>` | the fixed positioners (`Structure.scalars`) |
+| `/entry/instrument/detector` | `NXdetector`: attrs `name` and `geometry` (the `DetectorGeometry` fields); `x_pixel_size`, `y_pixel_size` (um) and `distance` (mm) when known |
+| `/entry/tables/<table>/<column>` | the side tables (`Source.aux_tables()`), attr `columns` in order; text as UTF-8, times as int64 nanoseconds |
+| `/entry/source` | attrs `format`, `engine`, `recipe`, `name`; `files`, the records of the files the scan was read from (JSON) |
+
+A name with `/` in it is stored with `%2F` instead (and `%` as `%25`), the name itself in the
+attr `name`.
+
+```python
+import tempfile
+from pathlib import Path
+import numpy as np
+import bexa
+from bexa.io.package import write_packages
+from bexa.testing import make_aps_session
+
+work = Path(tempfile.mkdtemp())                 # a scratch folder for the files the examples write
+session = make_aps_session(work / "aps", frames_dir="images/{prefix}/S{scan:03d}")   # an APS session in the beamline's layout
+scan = bexa.open(session.root, scan=2, cache=False)   # ascan phi 8.8 9.8 8 1: 9 frames of 24 x 32
+```
+
+#### `write_package`
+`bexa.io.package.write_package(scan, path, *, compression="gzip", overwrite=False, show_progress=None)`
+
+Writes `scan` (any `Scan`) to one package at `path` (`.h5`) and returns the path; `bexa.write_package`
+is this function. The frames are copied as the engine reads them, in their stored dtype (an EIGER
+frame stays uint32, its flagged pixels read as 0), in steps of `BATCH_BYTES`, the next step read
+in a background thread while the last one is compressed; a scan without frames keeps its
+counters in the tables. `compression` is `"gzip"` (the default: level 1 after a byte shuffle,
+which every HDF5 library reads; EIGER frames come out 10 times smaller at 280 MB/s),
+`"bitshuffle"` (LZ4 through hdf5plugin, the EIGER's own format: as small, three times as fast,
+and readers need hdf5plugin), `"lzf"` (h5py only) or `None`; another name raises `ValueError`.
+The file is written as `<path>.partial` and renamed when complete, so a package is never half
+there; an existing `path` raises `FileExistsError` unless `overwrite`, and a scan with no data row
+raises `ScanNotReadyError` before a file exists. `show_progress` (default: in an interactive
+session) shows a bar over the steps.
+
+```python
+# scan: scan 2 of the synthetic session; one file, read back as the same scan
+path = bexa.write_package(scan, work / "wse2_1_1_S002.h5")
+again = bexa.open(path, cache=False)
+again.dims, again.shape, again.status, again.name   # (('phi', 'y', 'x'), (9, 24, 32), <ScanStatus.COMPLETE: 'complete'>, 'wse2_1_1')
+np.array_equal(again.source.read_frames(slice(None)), scan.source.read_frames(slice(None)))   # True
+again.source.point_table().equals(scan.source.point_table()), again.geometry.pixel_size_um   # (True, 75.0)
+bexa.write_package(scan, work / "fast.h5", compression="bitshuffle")   # Path('.../fast.h5')
+```
+
+#### `write_packages`
+`bexa.io.package.write_packages(data, out_dir, scans=None, *, name="{stem}_S{scan:03d}.h5", compression="gzip", overwrite=False, show_progress=None, **open_kwargs)`
+
+One package per scan of a dataset, written into `out_dir`: `data` is a `Dataset` or what
+`bexa.open_dataset` opens (an APS session's folder or SPEC file, a BLISS dataset, a folder of
+packages), with `open_kwargs`; `scans` is an id, an inclusive `(first, last)` or a list, by default
+every scan of the table, frames or not. `name` is the file name, with the fields `{stem}` (the
+session: the SPEC file's stem, else the scan's name), `{scan}` (the scan number) and `{id}` (the
+table id). A package already there is kept while its scan is unchanged (the fingerprint of the
+files and rows it was written from, the root attr `source_fingerprint`) and written again
+otherwise, so a second run during a beamtime writes only the new scans and those that grew;
+`overwrite=True` writes them all. A scan with nothing to read (no data row) is left out with a
+warning. Returns the package of every scan, in table order. On the command line: `bexa scan
+package`.
+
+```python
+# session.root: the synthetic session; every scan in a package of its own, and the packages as a dataset
+written = write_packages(session.root, work / "packages", show_progress=False)
+[p.name for p in written]                        # ['wse2_1_1_S001.h5', 'wse2_1_1_S002.h5', 'wse2_1_1_S003.h5', 'wse2_1_1_S004.h5', 'wse2_1_1_S005.h5']
+bexa.open_dataset(work / "packages", cache=False).table()[["scan", "status", "type", "frames"]].shape   # (5, 4)
+write_packages(session.root, work / "packages", show_progress=False) == written   # True: no scan changed, none written
+```
+
+Constants:
+
+- `PACKAGE_MARKER`, `PACKAGE_VERSION`: `"bexa_package"` and `"scan-v1"`, the root attribute that
+  marks a package and the layout it has.
+- `FRAMES`: `"entry/data/frames"`.
+- `COMPRESSIONS`: `("gzip", "bitshuffle", "lzf", None)`.
+- `DEFAULT_NAME`: `"{stem}_S{scan:03d}.h5"`, named like the session's TIFFs.
+- `BATCH_BYTES`: 64 MiB, the frames read per step (two steps are read ahead).
 
 ### bexa.io.darfix: the bridge to darfix
 
@@ -9218,12 +9390,14 @@ geom.with_energy(19.0).energy_keV                    # 19.0; geom keeps 17.0
 ```
 
 #### `DetectorGeometry.from_spec`
-`bexa.geometry.detector.DetectorGeometry.from_spec(spec, detector=None, energy_keV=None, profile=None, pixel_size_um=None)`
+`bexa.geometry.detector.DetectorGeometry.from_spec(spec, detector=None, energy_keV=None, profile=None, pixel_size_um=None, recorded=None)`
 
 Classmethod behind `bexa.open`: pixel size, effective pixel and shape from the format spec's
-`detectors` entry for `detector` (a `pixel_size_um` given, the size the data file records, wins
-over the table), the spec's convention (`id03` if none), then every field set in the profile's
-`geometry` section (a pydantic model or a dict) on top.
+`detectors` entry for `detector` and the spec's convention (`id03` if none); what the data file
+records wins over the table: `pixel_size_um` (a size the file gives) and `recorded`, a dict of
+any fields of this class (a scan package keeps the whole geometry of its scan, which the source
+offers as `recorded_geometry`; `None` values are ignored). Every field set in the profile's
+`geometry` section (a pydantic model or a dict) goes on top of all that.
 
 ```python
 # the geometry of the ESRF far-field camera, from the format spec at 17 keV
@@ -9232,6 +9406,9 @@ ff = DetectorGeometry.from_spec(load_spec("esrf_id03_bliss_2026"), "pco_ff", ene
                                 profile={"distance_mm": 850.0})
 print(ff)                   # 17.0000 keV, 6.5 um pixels, 850 mm, 235 nm effective pixel, convention id03
 print(bexa.demo("mosa").geometry)    # what bexa.open attached (no distance)
+kept = DetectorGeometry.from_spec(load_spec("esrf_id03_bliss_2026"), "pco_ff",
+                                  recorded={"effective_pixel_nm": 100.0, "beam_center": [1080, 1280]})
+kept.effective_pixel_nm, kept.beam_center, kept.pixel_size_um   # (100.0, (1080, 1280), 6.5)
 ```
 
 ### bexa.geometry.transforms: pixels to angles to Q to hkl
@@ -12365,10 +12542,11 @@ bexa cache clear
 
 ### bexa scan: frame-stack scans
 
-`bexa scan list` lists the scans of a dataset folder; the four other commands open a scan, or a
-series of scans, through a profile or a path (`bexa.cli.scan_cmd.open_from_options`) and work
-on every layout bexa reads as frames: ESRF BLISS datasets, PAL-XFEL point runs (dims `frame,
-y, x`), plain stacks. Shared options:
+`bexa scan list` lists the scans of a dataset folder and `bexa scan package` writes scans as
+packages; the four other commands open a scan, or a series of scans, through a profile or a
+path (`bexa.cli.scan_cmd.open_from_options`) and work on every layout bexa reads as frames: ESRF
+BLISS datasets, APS 7-ID sessions, PAL-XFEL point runs (dims `frame, y, x`), scan packages,
+plain stacks. Shared options:
 
 - `PATH` (argument, optional): dataset folder, master file or `scanNNNN` folder (which opens
   that scan); ignored with `-p`.
@@ -12467,6 +12645,29 @@ a `processed_root` or `BEXA_CACHE_DIR` is set.
 ```bash
 bexa scan reduce -p hc6293 -s WS2G_100 --scan 7 --acc sum,max,com,projections,stats --roi y=700:1100,x=800:1200 -o scan7_reduced.h5
 bexa scan reduce -p hc6293 -s WS2G_100 --scan 7 --acc com --roi y=700:1100,x=800:1200,chi=-0.2:0.2 --sigma 2 --downsample 2 -o scan7_com.zarr
+```
+
+#### `bexa scan package`
+Python: `bexa.cli.scan_cmd.scan_package`
+
+Writes scans as packages (`bexa.io.package`): one HDF5 file per scan with its frames, the
+per-point motors and counters, the grid, the positioners, the geometry and the beamline state,
+which `bexa.open` reads back as the same scan whatever beamline it came from. One scan (`--scan
+4`) with an `-o` ending in `.h5` gives that file; otherwise `-o` is a folder that receives
+`<session>_S<scan>.h5` for every chosen scan (a range, a list, or every scan of the dataset),
+keeping the packages whose scan is unchanged since (`write_packages`). Prints the file, or the
+number of packages, with a progress bar.
+
+- `PATH`, `-p` / `--profile`, `-s` / `--sample`, `--detector`: the scan, or the dataset.
+- `--scan TEXT`: a number, a range `2-10` or a list `2,3,5`; every scan when left out.
+- `-o` / `--out PATH` (required): the `.h5` file of one scan, else the folder.
+- `--compression TEXT` (default `gzip`): `gzip` (any HDF5 reader), `bitshuffle` (three times as
+  fast; readers need hdf5plugin), `lzf` (h5py only) or `none`.
+- `--overwrite`: write every package anew.
+
+```bash
+bexa scan package "X:/Dresselhaus Lab/Data/Beamline Examples/APS/7-ID/Sample_data_set" --scan 4 -o wse2_1_1_S004.h5
+bexa scan package /data/aps/7id/wse2_session -o /data/aps/7id/wse2_packages --compression bitshuffle
 ```
 
 #### `bexa scan report`
