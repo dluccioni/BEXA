@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import dataclasses
 import re
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -43,7 +44,7 @@ from bexa.core.provenance import build_attrs, file_records, fingerprint, to_json
 from bexa.core.status import ScanNotReadyError
 from bexa.io.cube import _read_attrs, _write_attrs
 from bexa.io.formats import safe_format
-from bexa.io.h5files import open_h5
+from bexa.io.h5files import RETRY_DELAY, open_h5
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -116,11 +117,27 @@ def write_package(
             _write_instrument(f["entry"], scan, structure)
             _write_tables(f["entry"], scan.source)
             _write_source(f["entry"], scan)
-        partial.replace(path)
+        _move(partial, path)
     except BaseException:
         partial.unlink(missing_ok=True)
         raise
     return path
+
+
+def _move(partial: Path, path: Path, attempts: int = 5) -> None:
+    """Rename the finished file into place, retrying while Windows has a lock on it.
+
+    A file that was just closed may be held for a moment by another program (a virus
+    scanner, the search indexer), which makes the rename fail with ``PermissionError``.
+    """
+    for attempt in range(attempts):
+        try:
+            partial.replace(path)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(RETRY_DELAY)
 
 
 def write_packages(
