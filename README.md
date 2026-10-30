@@ -78,6 +78,7 @@ the rest stays the same.
 | `11_roi_to_3d_rlp.py` | from a pixel ROI on the projections to the 3-D reciprocal-space view |
 | `12_esrf_dfxm_workflow.ipynb` | a notebook for an ID03 DFXM beamtime end to end: alignment scans, quick mosa scan, fine mosa scan, energy scan, z-stack, 3-D rendering with a slider per scanned motor |
 | `13_esrf_dfxm_general.ipynb` | one notebook for any ID03 dataset (a single mosaicity scan, a z-stack, an energy series, both, or several folders): it reads what varies between the scans and stacks on that; one streaming pass per scan (several scans at a time with `WORKERS`) gives the binned previews and the full-resolution maps, stacked into one file in the cache that every later cell reads block by block; section 10 also renders the total scattered intensity per voxel, and section 11 compares two sets of scans from any folders, B minus A pair by pair (intensity and tilt changes) |
+| `14_aps_7id_session.ipynb` | an APS 7-ID-C SPEC session from the counters to the maps: every scan in a table, the log of the session (filters, timing), the counters of any scan with or without its frames, normalised by the monitor; Gaussian fits of every rocking curve, peaks or edges of the stage scans, time zero and the pump-probe step of every delay scan, the loop scans; the frames checked against their rows, and the summed image and COM maps of a scan with frames. Runs on the sample data set of the lab share, or on a synthetic session |
 
 ## Layout
 
@@ -609,7 +610,8 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | choose the scans, the motors to extract and the stack axis with widgets | `bexa.notebook.ScanPicker`, `bexa.notebook.pick_scans`, `Dataset.motor_candidates` | §3, §11 |
 | stack the layers of one scan along a motor that moves within it (the heights of a `uz x chi x mu` scan) | `Scan.layers`, `ScanPicker.set_stack_axis` | §3 |
 | select scans from several dataset folders and see them all in one panel | `ScanPicker.set_folders`, `ScanPicker.selection`, `ScanPicker.selection_view` | §3 |
-| open an APS 7-ID session (a SPEC file with a TIFF per point) | `bexa.open(folder, scan=4)`, `bexa.open_dataset(folder)`; the profile `example_aps_7id` |  |
+| open an APS 7-ID session (a SPEC file with a TIFF per point) | `bexa.open(folder, scan=4)`, `bexa.open_dataset(folder)`; the profile `example_aps_7id`; `examples/14_aps_7id_session.ipynb` |  |
+| the counters of every point of an APS scan, frames or not, and the log of the whole session | `SpecTiffSource.point_table` (`scan.source.point_table()`), `SpecFile.table` (`read_spec_file(path).table()`) |  |
 | open one scan | `bexa.open(path, scan=7)` |  |
 | open through a beamtime profile | `bexa.open(profile=..., sample=..., scan=...)`, `bexa profile new`, `bexa.config.load_profile` |  |
 | pick scans by type, scanned motor or positioner (`samz`, energy) | `Dataset.select`, `Dataset.select_numbers`, `Dataset.groups` | §7 |
@@ -807,10 +809,11 @@ folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"  #
 Open a measurement and return a `Scan` (top-level name `bexa.open`). `path` is a dataset
 folder, its master file, a `scanNNNN` folder, a PAL-XFEL run folder, a cube file, or
 `"file.h5::/path/to/stack"` for a plain frame stack in any HDF5 file (the `generic_stack`
-spec). The layout is sniffed unless `format` names a spec; `overrides` is a dict merged into
-the spec. Instead of a path, `profile` (a name, a YAML path or a `BeamtimeProfile`; the
-`BEXA_PROFILE` variable when left out) with `sample` or `dataset` opens through
-`open_profile`.
+spec). The layout is sniffed unless `format` names a spec, or is one already loaded (a
+`FormatSpec`: no file is read for it, which is how a `Dataset` opens its scans); `overrides` is
+a dict merged into the spec. Instead of a path, `profile` (a name, a YAML path or a
+`BeamtimeProfile`; the `BEXA_PROFILE` variable when left out) with `sample` or `dataset` opens
+through `open_profile`.
 
 - `scan`: one number, an inclusive `(start, end)` tuple or a list. Several scans are opened as
   one `Scan` with a new leading dim named by `stack_dim=` (passed through `**kwargs`):
@@ -1384,8 +1387,10 @@ The class behind `open_dataset` (top-level name `bexa.Dataset`). `format`, `dete
 cache for the dataset there), a `Cache` or `False`, and every scan shares it. The layout of a
 folder is sniffed once, when the dataset is opened (a folder that cannot be read fails there:
 a BLISS dataset copied without its master file says "no master file ... is missing"), and the
-scans are then opened by that spec's name. Scans are opened once and their handles kept until
-`refresh` or `close`; a `Dataset` is a context manager, and in a notebook it shows its table.
+scans are then opened with that spec, loaded once (no file is read for it per scan, so the
+967 scans of an APS session list in seconds from a network share). Scans are opened once and
+their handles kept until `refresh` or `close`; a `Dataset` is a context manager, and in a
+notebook it shows its table.
 
 - `scans`: property, every scan id, sorted: the scan numbers with detector files for one
   folder, `0, 1, 2, ...` over the combined table for several.
@@ -2737,13 +2742,17 @@ Loads a spec by name (a file stem from `list_specs`) or from a `.yaml`/`.yml` pa
 `FormatSpec`. The `extends` parent is deep-merged under the child (`name`, `extends` and `abstract`
 are not inherited), then `overrides` on top (see `deep_merge`); `_chain` is internal. An unknown
 name raises `FileNotFoundError` listing the available ones. `bexa.open(..., format=...,
-overrides=...)` and a profile's `format_overrides` go through it.
+overrides=...)` and a profile's `format_overrides` go through it. A loaded spec is kept and the
+same object given again (read it, do not change it) while its YAML files, its own and those it
+extends, keep their size and modification time: an edited spec is read anew, and sniffing, which
+loads every spec, costs no YAML parsing after the first time.
 
 ```python
 # spec: the ESRF 2026 spec loaded by name; its engine, its layout, a copy with an override
 spec.engine, spec.layout["frames"]               # ('hdf5_stack', 'entry_0000/ESRF-ID03/{detector}/data')
 renamed = formats.load_spec("esrf_id03_bliss_2026", overrides={"motors": {"aliases": {"mu": ["mu_new1"]}}})
 renamed.motors["aliases"]                        # {'z1': ['samz'], 'mu': ['mu_new1']}
+formats.load_spec("esrf_id03_bliss_2026") is formats.load_spec("esrf_id03_bliss_2026")   # True: kept
 ```
 
 #### `list_specs`
@@ -2777,8 +2786,9 @@ Scores specs (default: all of `list_specs`) against a file or folder and returns
 FormatSpec)` pairs, best first. The score is the fraction of fingerprint checks passed: master
 files and their groups (`master_glob`, `master_paths`), `scanNNNN` folders (`scan_dir_glob`),
 folder and file names (`dir_globs`, `file_globs`), a text file and its opening lines (`text_glob`,
-`text_tags`), HDF5 paths and attributes (`h5_paths`, `h5_attrs`). Ties go to the longer
-fingerprint, then the later name (the newest dated spec). Abstract specs, specs without a
+`text_tags`; for a frame, next to it or up to three folders above), HDF5 paths and attributes
+(`h5_paths`, `h5_attrs`). Ties go to the longer fingerprint, then the later name (the newest
+dated spec). Abstract specs, specs without a
 fingerprint and specs that fail to load (warning) are skipped. `quick=True` opens no HDF5 file:
 only the file-system part of each fingerprint counts, and a spec with nothing else to check is
 left out. `listing`, a `FolderListing`, keeps the folder listings between calls, as a survey of a
@@ -3752,18 +3762,25 @@ cmd.command, cmd.shape                           # ('a2scan', (3, 4))
 The engine `spec_tiff` reads the APS 7-ID-C layout of 2025 (spec `aps_7id_spec_2025`): one SPEC
 text file per session, holding every scan (`#S 4 ascan phi 8.8 9.8 40 1`, the `#P` positions,
 the `#U_` beamline state, the `#L` columns and one data row per point), and one EPICS
-areaDetector TIFF per point next to it, `<session>_S004_00012.tif`. The rows are the per-frame
-motor and counter values, the TIFFs the frames; a point whose frame was not saved (or not copied
-along) is a missing frame, a scan SPEC aborted (`#C ... Scan aborted after N points.`) reports
-the points it planned, and the file is parsed once per process. `bexa.open(folder, scan=4)`,
-`bexa.open(frame.tif)` and `bexa.open_dataset(folder)` all work; a session has many scans of
-many kinds, so `bexa.open(folder)` without `scan=` says which to choose.
+areaDetector TIFF per point, `<session>_S004_00012.tif`: at the beamline in a folder per scan,
+`images/<session>/S004/`, in a copy often next to the SPEC file (the spec's `frames_dir` names
+both, tried in that order). The rows are the per-frame motor and counter values, the TIFFs the
+frames; a point whose frame was not saved (or not copied along) is a missing frame whose motors
+and counters stay in `point_table()`, a scan SPEC aborted (`#C ... Scan aborted after N
+points.`) reports the points it planned, and the file is parsed once per process. The camera is
+the EIGER2 Si 500K of 7-ID-C (512 x 1028 uint32, 75 um pixels); a pixel at the detector's
+`invalid_value`, the 2**32 - 1 the EIGER writes for a dead or masked pixel, reads as 0.
+`bexa.open(folder, scan=4)`, `bexa.open(frame.tif)` and `bexa.open_dataset(folder)` all work; a
+session has many scans of many kinds, so `bexa.open(folder)` without `scan=` says which to
+choose, and a TIFF of another program beside the session says it is not one of its frames
+(`format="generic_stack"` opens it alone).
 
 ```python
 import tempfile
 from pathlib import Path
 import bexa
-from bexa.io.engines.spec_tiff import SpecTiffSource, frame_point, frames_by_scan, read_spec_file, spec_file_of
+from bexa.io.engines.spec_tiff import (SpecTiffSource, frame_point, frame_templates, frames_by_scan,
+                                       read_spec_file, scan_frames, session_frames, spec_file_of)
 from bexa.io.formats import load_spec
 from bexa.testing import make_aps_session
 
@@ -3779,19 +3796,26 @@ scan = bexa.open(session.path, scan=2, cache=False)   # ascan phi 8.8 9.8 8 1: 9
 One scan of a session as a frame stack: `path` is the SPEC file, the folder holding it or one of
 its frames; `scan` the `#S` number. The dims come from the command (`ascan phi` gives `phi`;
 the motors of an `a2scan` step together and give one dim named after the first, the other
-staying a per-frame channel; `loopscan` gives frames only), the coordinates from the data rows
-(motors by their `#o` mnemonic, `"Nano SY"` as `nsy`, counters as labelled: `r1`, `IC_1`), the
-positioners of `scalars` from `#P`, the energy from the `#U_` block the spec names
-(`energy: {header: mono, field: Energy}`) and `detector` names the spec's camera (its `shape`
-is the frame shape of a scan without a frame yet). `motors` chooses other columns as dims
-(`Scan.with_dims`). `KeyError` for a scan the file does not hold. It implements the `Source`
-members `files`, `frame_shape`, `n_frames`, `dtype`, `energy_keV`, `read_frames`, `structure`,
-`status`, `with_motors`, `scalars`, `aux_tables` (`header`: one row of the `#U_` state,
+staying a per-frame channel; `loopscan` gives frames only, scan type `"loopscan"`), the
+coordinates from the data rows (motors by their `#o` mnemonic, `"Nano SY"` as `nsy`, counters as
+labelled: `r1`, `IC_1`), the positioners of `scalars` from `#P`, the energy from the `#U_` block
+the spec names (`energy: {header: mono, field: Energy}`) and `detector` names the spec's camera
+(its `shape` is the frame shape of a scan without a frame yet, its `invalid_value` the pixel
+value read as 0). `motors` chooses other columns as dims (`Scan.with_dims`). `KeyError` for a
+scan the file does not hold. It implements the `Source` members `files`, `frame_shape`,
+`n_frames`, `dtype`, `energy_keV`, `read_frames`, `structure`, `status`, `with_motors`,
+`scalars`, `aux_tables` (`points`: `point_table()`; `header`: one row of the `#U_` state,
 `<block>_<field>` columns), `cache_records` (the scan's rows of the growing file plus the
 frames), `refresh` and `close` (see `BaseSource`). Also:
 
+- `point_table()`: one row per point SPEC recorded, with or without its frame: `point` (the row
+  number, the `<point>` of a frame's name), `frame` (the id `read_frames` reads, -1 when the
+  frame was not saved or not copied), then every data column by channel name (`phi`, `H`,
+  `Epoch`, `IC_1`, `r1`, ...). The counters of a session copied without its images are all here,
+  while `structure.per_frame` holds only the points that have a frame.
 - `from_path(spec, path, scan=None, **kwargs)`: classmethod, from the file, its folder or a frame
-  (whose name gives the scan); `LookupError` when the session holds several scans and none is named.
+  (whose name gives the scan); `LookupError` when the session holds several scans and none is
+  named, and for a file that is not one of the session's frames.
 - `list_scans(spec, root, dataset, detector=None, require_files=True)`: classmethod, the scan
   numbers of `root/dataset` (a folder, or the file's stem), those with a frame by default.
 - attributes: `spec_file`, `session` (the `SpecFile`), `record` (the `SpecScan`), `command` (a
@@ -3810,6 +3834,11 @@ pair.dims, pair.structure.per_frame["yaw"][:2]   # (('phi', 'y', 'x'), array([23
 pair.with_dims(["yaw"]).dims                      # ('yaw', 'y', 'x')
 bexa.open(session.frames[2][0], cache=False).source.scan   # 2: a frame names its scan
 scan.source.aux_tables()["header"][["mono_Energy", "ring_Current(mA)"]]   # DataFrame: 1 rows x 2 columns
+none = bexa.open(session.path, scan=5, cache=False)   # ascan phi 3.6 4.6 4 1, copied without its frames
+none.n_frames, none.source.point_table()[["point", "frame", "phi", "r1"]].shape   # (0, (5, 4))
+beamline = make_aps_session(work / "beamline", frames_dir="images/{prefix}/S{scan:03d}")
+beamline.frames[2][0].relative_to(beamline.root).as_posix()   # 'images/wse2_1_1/S002/wse2_1_1_S002_00000.tif'
+bexa.open(beamline.root, scan=2, cache=False).n_frames   # 9: the folder per scan of the beamline
 ```
 
 #### `read_spec_file`
@@ -3832,12 +3861,18 @@ read_spec_file(session.path) is parsed           # True: cached
 A parsed session: `title` (`#F`), the motors' `#O` labels and `#o` mnemonics, the counters'
 `#J`/`#j`, `header_fields` (the field names of every `#U0_<block>` line) and `scans`
 (`{number: SpecScan}`). `label_to_name` maps a label to its mnemonic and `channel_names(scan)`
-gives the per-frame channel of every data column of a scan.
+gives the per-frame channel of every data column of a scan. `table()` is the beamline log of the
+session, read from the parse without opening a scan: one row per scan with `scan`, `command`,
+`started` (the `#D` time as a datetime, the beamline's local time), `points` (rows recorded),
+`aborted`, then every `#U_` field as `<block>_<field>` (`mono_Energy`, `ATTEN1_filter1_1stat`).
 
 ```python
-# parsed: the synthetic session; the column names of scan 2 as channels
+# parsed: the synthetic session; the column names of scan 2 as channels, and the session's log
 parsed.channel_names(parsed.scans[2])[:5]        # ['phi', 'H', 'K', 'L', 'Epoch']
-parsed.counter_labels, parsed.header_fields["mono"][:2]   # (['Seconds', 'IC_1', 'IC_2', 'Btot', 'r1'], ['Energy', 'Lambda'])
+parsed.counter_labels, parsed.header_fields["mono"][:2]   # (['Seconds', 'IC_1', 'IC_2', 'Btot', 'r5', 'Rmax', 'r1'], ['Energy', 'Lambda'])
+log = parsed.table()                             # one row per scan
+log[["scan", "command", "points", "aborted"]].values[2].tolist()   # [3, 'ascan nsy -8.44 -8.04 4 1', 3, True]
+log["started"].iloc[0], log["mono_Energy"].iloc[0]   # (Timestamp('2025-07-30 18:43:28'), np.float64(11.5))
 ```
 
 #### `SpecScan`
@@ -3860,24 +3895,63 @@ record.positions["phi"], record.header["mono"]["Energy"]   # (8.8, 11.5)
 `bexa.io.engines.spec_tiff.spec_file_of(path, glob="*.spec")`
 
 The SPEC file behind a path: the file itself, the one found in a folder, or the session of a
-frame (the one whose name starts the frame's). `FileNotFoundError` without one, `ValueError` when
-a folder holds several.
+frame: `<prefix>_S004_00012.tif` belongs to `<prefix>.spec`, next to it or up to three folders
+above (`images/<prefix>/S004/`); for another file, the one SPEC file of its folder.
+`FileNotFoundError` without one, `ValueError` when a folder holds several.
 
 ```python
-# session.root: the folder of the synthetic session, and one of its frames
+# session.root: the folder of the synthetic session, one of its frames, and a frame of the beamline layout
 spec_file_of(session.root).name, spec_file_of(session.frames[2][0]).name   # ('wse2_1_1.spec', 'wse2_1_1.spec')
+spec_file_of(beamline.frames[2][0]) == beamline.path   # True: three folders up
 ```
 
 #### `frames_by_scan`
 `bexa.io.engines.spec_tiff.frames_by_scan(folder, prefix)`
 
 `{scan: {point: path}}` of every `<prefix>_S<scan>_<point>.tif` in a folder, from one listing of
-it; `frame_point(path)` gives the point number of one frame (-1 for another name).
+it, kept until the folder changes; `frame_point(path)` gives the point number of one frame (-1
+for another name).
 
 ```python
 # session.root, session.name: the frames folder and the session prefix
 found = frames_by_scan(session.root, session.name)
 sorted(found), sorted(found[2])[:3]              # ([1, 2, 3, 4], [0, 1, 2])
+```
+
+#### `frame_templates`
+`bexa.io.engines.spec_tiff.frame_templates(layout)`
+
+The frame folders the `frames_dir` of a spec's layout names, in the order they are tried: one
+template or a list, relative to the SPEC file's folder, with the fields `{prefix}` (the SPEC
+file's stem) and `{scan}`.
+
+```python
+# spec: the APS 7-ID spec; where it looks for the frames of a scan
+frame_templates(spec.layout)                     # ['images/{prefix}/S{scan:03d}', '.']
+```
+
+#### `scan_frames`
+`bexa.io.engines.spec_tiff.scan_frames(spec_file, scan, templates=('.',))`
+
+`{point: path}` of one scan's frames, from the first template folder that holds any (each folder
+listed once, as in `frames_by_scan`).
+
+```python
+# session.path, beamline.path: the two synthetic sessions; the frames of their scan 2
+templates = frame_templates(spec.layout)
+len(scan_frames(session.path, 2, templates)), len(scan_frames(beamline.path, 2, templates))   # (9, 9)
+```
+
+#### `session_frames`
+`bexa.io.engines.spec_tiff.session_frames(spec_file, templates=('.',))`
+
+`{scan: {point: path}}` of every scan with frames. A template with `{scan}` stands for every
+folder it matches with the scan number as a wildcard (`images/<session>/S*`), and the first
+template holding frames of a scan wins; `SpecTiffSource.list_scans` keeps the scans it finds.
+
+```python
+# beamline.path: the session with a folder per scan; the scans with frames and how many each has
+{n: len(points) for n, points in session_frames(beamline.path, templates).items()}   # {1: 5, 2: 9, 3: 3, 4: 6}
 ```
 
 #### `frame_point`
@@ -3893,6 +3967,9 @@ frame_point(session.frames[2][3]), frame_point("notes.tif")   # (3, -1)
 Constants:
 
 - `FRAME_NAME`: the compiled pattern of a frame name, with the groups `prefix`, `scan`, `point`.
+- `FRAME_LEVELS`: `3`, the folders above a frame searched for its SPEC file.
+- `SCAN_FIELD`: the compiled pattern of the `{scan}` field of a frame folder template.
+- `SPEC_DATE`: `"%a %b %d %H:%M:%S %Y"`, the format of the `#D` lines.
 - `SPEC_SUFFIX`: `".spec"`.
 
 ### bexa.io.engines.array_cube: reduced cubes as sources
@@ -8871,23 +8948,31 @@ spec.path.name, spec.n_recorded, spec.images.shape      # ('p0001.h5', 8, (8, 20
 ```
 
 #### `make_aps_session`
-`bexa.testing.synthetic.make_aps_session(root, name="wse2_1_1", scans=DEFAULT_APS_SCANS, frame_shape=(24, 32), energy_keV=11.5, seed=0)`
+`bexa.testing.synthetic.make_aps_session(root, name="wse2_1_1", scans=DEFAULT_APS_SCANS, frame_shape=(24, 32), energy_keV=11.5, seed=0, frames_dir=".")`
 
 Write an APS 7-ID session: `<root>/<name>.spec` with the 7-ID-C motor and counter lists, and
 one areaDetector TIFF per scan point, `<name>_S<scan:03d>_<point:05d>.tif`. `scans` holds
 `(number, command, options)`: SPEC step scans (`ascan`, `a2scan`) and `loopscan`; the options are
 `partial` (points not taken, with SPEC's "aborted" comment), `frames=False` (rows without frames,
-as a session copied without its TIFFs) and `missing` (point numbers whose frame is left out).
-Every frame holds a Gaussian spot whose centre moves with the first motor and whose intensity
-peaks mid-scan; the `r1` counter column is the frame's total. The default session has a
+as a session copied without its TIFFs), `missing` (point numbers whose frame is left out) and
+`step=True` (the spot brightens in a blurred step mid-scan instead of peaking there, as in a
+pump-probe delay scan). Every frame holds a Gaussian spot whose centre moves with the first motor
+and whose intensity peaks mid-scan; the `r1` and `r5` counter columns are the frame's total,
+`Rmax` its brightest pixel. `frames_dir` is the folder of a scan's TIFFs relative to the SPEC
+file, with the fields `{prefix}` (`name`) and `{scan}`: `"."` beside the file,
+`"images/{prefix}/S{scan:03d}"` the folder per scan of the beamline. The default session has a
 loopscan, two ascans (one aborted), an a2scan and a scan without frames.
 
 ```python
-# work: a scratch folder; the default session, then one of your own with a missing frame
+# work: a scratch folder; the default session, one of your own with a missing frame, the beamline layout
 session = make_aps_session(work / "aps")
 session.path.name, sorted(session.scans), session.rows   # ('wse2_1_1.spec', [1, 2, 3, 4, 5], {1: 5, 2: 9, 3: 3, 4: 6, 5: 5})
 mine = make_aps_session(work / "aps2", scans=[(7, "ascan phi 0 1 4 1", {"missing": [2]})])
 len(mine.frames[7]), bexa.open(mine.path, cache=False).structure.n_missing   # (4, 1)
+nested = make_aps_session(work / "aps3", frames_dir="images/{prefix}/S{scan:03d}")
+nested.frames[4][0].parent.relative_to(nested.root).as_posix()   # 'images/wse2_1_1/S004'
+delay = make_aps_session(work / "aps4", scans=[(9, "ascan sdelay -2 2 20 1", {"step": True})])
+delay.totals[9][:3].round(-3), delay.totals[9][-3:].round(-3)   # (array([53000., 53000., 53000.]), array([159000., 159000., 159000.]))
 ```
 
 #### `SyntheticApsSession`
@@ -11710,7 +11795,8 @@ Everything specific to one beamtime, usually from `load_profile`:
 Methods: `sample(name)` returns the `Sample` or raises a `KeyError` listing the samples;
 `data_root()` returns `root`, else `raw_root` (`ValueError` without both), where datasets are
 opened as `data_root() / sample.dataset`; `format_spec()` returns the format spec with
-`format_overrides` applied, the one `bexa.open(profile=...)` reads with.
+`format_overrides` applied, the one `bexa.open(profile=...)` reads with, loaded once per profile
+(again after `format` or `format_overrides` change).
 
 ```python
 # prof: the example ESRF profile; its detector, regions and a sample's reflection
