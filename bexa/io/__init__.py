@@ -4,6 +4,7 @@
 - :mod:`bexa.io.base`: the ``Source`` protocol every engine implements.
 - :mod:`bexa.io.engines`: the engines, one per kind of file structure.
 - :mod:`bexa.io.cube`: bexa's own reduced format, plus ``load``/``save``.
+- :mod:`bexa.io.package`: scan packages, one scan of any layout in one HDF5 file.
 - :mod:`bexa.io.inspect`: HDF5 tree printing and file summaries.
 - :mod:`bexa.io.generic`: tiff stacks, npy, ``"file.h5::/path"``.
 - :mod:`bexa.io.darfix`: interoperability with the darfix package (extra).

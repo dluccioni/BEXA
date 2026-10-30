@@ -615,6 +615,7 @@ def open(
             getattr(source, "detector", detector),
             energy_keV=source.energy_keV,
             pixel_size_um=getattr(source, "pixel_size_um", None),
+            recorded=getattr(source, "recorded_geometry", None),  # a scan package keeps it all
         )
     resolved_cache = _resolve_cache(cache, cache_root())
     opened = Scan(
@@ -699,6 +700,7 @@ def open_profile(
         energy_keV=source.energy_keV,
         profile=prof.geometry,
         pixel_size_um=getattr(source, "pixel_size_um", None),
+        recorded=getattr(source, "recorded_geometry", None),
     )
     crystal = None
     if cif:

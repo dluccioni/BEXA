@@ -181,6 +181,48 @@ def scan_reduce(
         typer.echo(f"saved {sorted(results)} to {save(dataset, out)}")
 
 
+@scan_app.command("package")
+def scan_package(
+    path: Path | None = typer.Argument(None, help=PATH_HELP),
+    profile: str | None = typer.Option(None, "-p", "--profile"),
+    sample: str | None = typer.Option(None, "-s", "--sample"),
+    scan: str | None = typer.Option(
+        None, help="Scan number, range 2-10 or list 2,3,5; every scan when left out."
+    ),
+    detector: str | None = typer.Option(None),
+    out: Path = typer.Option(
+        ..., "-o", "--out", help="The .h5 file of one scan, else a folder for one file per scan."
+    ),
+    compression: str = typer.Option(
+        "gzip", help="gzip (any HDF5 reader), bitshuffle (faster, needs hdf5plugin), lzf or none."
+    ),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Write every package anew."),
+) -> None:
+    """Write scans as packages: one HDF5 file per scan with its frames, motors and counters."""
+    from bexa.core.dataset import Dataset
+    from bexa.io.package import write_package, write_packages
+
+    codec = None if compression == "none" else compression
+    chosen = parse_scan(scan)
+    if isinstance(chosen, int) and out.suffix in (".h5", ".hdf5"):
+        with open_from_options(path, profile, sample, scan, detector) as s:
+            written = write_package(
+                s, out, compression=codec, overwrite=overwrite, show_progress=True
+            )
+        typer.echo(f"wrote {written}")
+        return
+    if profile:
+        data: Any = Dataset(profile=profile, sample=sample, detector=detector, cache=False)
+    elif path is None:
+        raise typer.BadParameter("give a PATH or --profile with --sample")
+    else:
+        data = Dataset(path, detector=detector, cache=False)
+    packages = write_packages(
+        data, out, chosen, compression=codec, overwrite=overwrite, show_progress=True
+    )
+    typer.echo(f"{len(packages)} packages in {out}")
+
+
 @scan_app.command("report")
 def scan_report(
     path: Path | None = typer.Argument(None, help=PATH_HELP),

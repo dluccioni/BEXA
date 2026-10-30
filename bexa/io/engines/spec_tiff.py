@@ -519,6 +519,11 @@ class SpecTiffSource(BaseSource):
             numbers = [n for n in numbers if with_frames.get(n)]
         return numbers
 
+    @property
+    def dataset(self) -> str:
+        """The session's name, the SPEC file's stem: what ``Scan.name`` shows."""
+        return self.spec_file.stem
+
     # ------------------------------------------------------------ the frames
     def files(self) -> list[Path]:
         return [self.spec_file, *self.frames]

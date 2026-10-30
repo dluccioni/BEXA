@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -82,21 +83,34 @@ class DetectorGeometry:
         energy_keV: float | None = None,
         profile: Any = None,
         pixel_size_um: float | None = None,
+        recorded: Mapping[str, Any] | None = None,
     ) -> DetectorGeometry:
         """Combine the spec's detector table with a profile's geometry section.
 
-        ``pixel_size_um`` is the size the data file records; it wins over the
-        spec's table, and the profile's values win over both.
+        ``pixel_size_um`` is the size the data file records, and ``recorded`` any field
+        of this class it records (a scan package keeps the whole geometry of its scan);
+        both win over the spec's table, and the profile's values win over everything.
         """
         info = spec.detector_info(detector) if (spec is not None and detector) else {}
+        recorded = {k: v for k, v in (recorded or {}).items() if v is not None}
+        if pixel_size_um is not None:
+            recorded["pixel_size_um"] = pixel_size_um
+        shape = recorded.get("detector_shape", info.get("shape"))
         geom = cls(
             energy_keV=energy_keV,
-            pixel_size_um=pixel_size_um if pixel_size_um is not None else info.get("pixel_size_um"),
-            effective_pixel_nm=info.get("effective_pixel_nm"),
-            detector_shape=tuple(info["shape"]) if info.get("shape") else None,
-            convention=(spec.convention if spec is not None and spec.convention else "id03"),
+            pixel_size_um=recorded.get("pixel_size_um", info.get("pixel_size_um")),
+            effective_pixel_nm=recorded.get("effective_pixel_nm", info.get("effective_pixel_nm")),
+            detector_shape=tuple(shape) if shape else None,
+            convention=recorded.get(
+                "convention", spec.convention if spec is not None and spec.convention else "id03"
+            ),
             detector=detector,
         )
+        for key in ("distance_mm", "two_theta_offset_deg", "delta_offset_deg"):
+            if key in recorded:
+                setattr(geom, key, recorded[key])
+        if "beam_center" in recorded:
+            geom.beam_center = tuple(recorded["beam_center"])
         if profile is not None:
             values = profile.model_dump() if hasattr(profile, "model_dump") else dict(profile)
             for key in (

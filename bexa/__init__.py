@@ -59,6 +59,7 @@ __all__ = [
     "testing",
     "to_host",
     "viz",
+    "write_package",
 ]
 
 # Public attribute -> (module, attribute) resolved on first access.
@@ -81,6 +82,7 @@ _LAZY_ATTRS: dict[str, tuple[str, str]] = {
     "reduce": ("bexa.core.reductions", "reduce"),
     "load": ("bexa.io.cube", "load"),
     "save": ("bexa.io.cube", "save"),
+    "write_package": ("bexa.io.package", "write_package"),
     "to_host": ("bexa.core.backend", "to_host"),
     "profile": ("bexa._profiling", "profile"),
     "help": ("bexa._help", "help"),
@@ -111,6 +113,7 @@ if TYPE_CHECKING:  # pragma: no cover - static analysis only
     from bexa.core.settings import show as settings
     from bexa.core.status import ScanNotReadyError, ScanStatus
     from bexa.io.cube import load, save
+    from bexa.io.package import write_package
     from bexa.testing.demo import demo
     from bexa.viz.auto import plot
 

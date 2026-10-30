@@ -1,0 +1,10 @@
+# Scan packages written by bexa (bexa.write_package, bexa.io.package): one scan in one HDF5
+# file, from any layout bexa reads: the frames, the grid that places them, the per-frame
+# motors and counters, the positioners, the energy, the status, the detector geometry and
+# the scan's side tables. A folder of packages is a dataset of the scans they record.
+name: bexa_package
+engine: package
+description: One scan in one HDF5 file written by bexa.write_package (frames, motors, counters, metadata).
+
+fingerprint:
+  h5_paths: [entry/structure/frame_index, entry/data/frames]   # in the file, or in a folder's first files
