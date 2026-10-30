@@ -4,20 +4,24 @@ A SPEC session is one text file: a header naming the motors (``#O`` labels,
 ``#o`` mnemonics) and the counters, then one block per scan with its command
 (``#S 4 ascan phi 8.8 9.8 40 1``), the motor positions at its start (``#P``),
 the beamline state (``#U_mono ...``), the column labels (``#L``) and one data
-row per point. EPICS areaDetector saves the frame of every point next to it,
-``<file>_S004_00012.tif``. This engine reads the rows as the per-frame motor
-and counter values and the TIFFs as the frames. A point whose frame was not
-saved (or not copied) is marked missing, a scan aborted early (``#C ... Scan
-aborted after N points.``) reports the points it planned, and the file is
-parsed once per process (it grows while a session runs: ``refresh()``).
+row per point. EPICS areaDetector saves the frame of every point,
+``<file>_S004_00012.tif``: at the beamline in a folder per scan
+(``images/<file>/S004/``), in a copy often next to the file; the spec's
+``frames_dir`` lists the places to look. This engine reads the rows as the
+per-frame motor and counter values and the TIFFs as the frames. A point whose
+frame was not saved (or not copied) is marked missing and keeps its row in
+:meth:`SpecTiffSource.point_table`, a scan aborted early (``#C ... Scan aborted
+after N points.``) reports the points it planned, and the file is parsed once
+per process (it grows while a session runs: ``refresh()``).
 """
 
 from __future__ import annotations
 
+import fnmatch
 import os
 import re
 import threading
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -30,7 +34,7 @@ from bexa.core.status import ScanNotReadyError, ScanStatus
 from bexa.core.structure import MISSING, Structure
 from bexa.io.base import BaseSource
 from bexa.io.engines.hdf5_master import collapse_lockstep
-from bexa.io.formats import FormatSpec
+from bexa.io.formats import FormatSpec, safe_format
 from bexa.io.scan_commands import ScanCommand, parse_scan_command
 
 if TYPE_CHECKING:
@@ -43,14 +47,20 @@ __all__ = [
     "SpecScan",
     "SpecTiffSource",
     "frame_point",
+    "frame_templates",
     "frames_by_scan",
     "read_spec_file",
+    "scan_frames",
+    "session_frames",
     "spec_file_of",
 ]
 
 SPEC_SUFFIX = ".spec"
+SPEC_DATE = "%a %b %d %H:%M:%S %Y"  # the #D lines: "Wed Jul 30 18:43:28 2025"
 TWO_SPACES = re.compile(r"\s{2,}")
 FRAME_NAME = re.compile(r"^(?P<prefix>.+)_S(?P<scan>\d+)_(?P<point>\d+)\.tiff?$")
+SCAN_FIELD = re.compile(r"\{scan(:[^{}]*)?\}")
+FRAME_LEVELS = 3  # folders above a frame searched for its SPEC file: images/<file>/S004/
 _CACHE: dict[Path, tuple[tuple[float, int], SpecFile]] = {}
 _FRAMES: dict[tuple[Path, str], tuple[int, dict[int, dict[int, Path]]]] = {}
 _CACHE_LOCK = threading.Lock()
@@ -105,6 +115,33 @@ class SpecFile:
         motors = self.label_to_name
         return [motors.get(label, label.replace(" ", "_")) for label in scan.labels]
 
+    def table(self) -> pd.DataFrame:
+        """One row per scan, read from the parse alone: the beamline log of the session.
+
+        Columns ``scan``, ``command``, ``started`` (the ``#D`` time, the
+        beamline's local time), ``points`` (data rows recorded), ``aborted``,
+        then every ``#U_`` field as ``<block>_<field>`` (``mono_Energy``,
+        ``ATTEN1_filter1_1stat``, ``ring_Current(mA)``).
+        """
+        import pandas as pd
+
+        rows = []
+        for number, scan in self.scans.items():
+            row: dict[str, Any] = {
+                "scan": number,
+                "command": scan.command,
+                "started": scan.date,
+                "points": scan.n_rows,
+                "aborted": scan.aborted,
+            }
+            for block, values in scan.header.items():
+                row.update({f"{block}_{name}": value for name, value in values.items()})
+            rows.append(row)
+        table = pd.DataFrame(rows)
+        if not table.empty:
+            table["started"] = pd.to_datetime(table["started"], format=SPEC_DATE, errors="coerce")
+        return table
+
 
 def _values(tokens: list[str]) -> list[Any]:
     out: list[Any] = []
@@ -124,7 +161,7 @@ def _labels(text: str) -> list[str]:
 
 def read_spec_file(path: str | Path) -> SpecFile:
     """Parse a SPEC session file, once per process (again when its size or mtime changed)."""
-    path = Path(path).resolve()
+    path = Path(os.path.abspath(path))  # abspath, not resolve(): no round trip to a network share
     st = path.stat()
     key = (st.st_mtime, st.st_size)
     with _CACHE_LOCK:
@@ -229,7 +266,7 @@ def frames_by_scan(folder: str | Path, prefix: str) -> dict[int, dict[int, Path]
         stamp = folder.stat().st_mtime_ns
     except OSError:
         return {}
-    key = (folder.resolve(), prefix)
+    key = (Path(os.path.abspath(folder)), prefix)
     with _CACHE_LOCK:
         hit = _FRAMES.get(key)
         if hit is not None and hit[0] == stamp:
@@ -249,16 +286,80 @@ def frames_by_scan(folder: str | Path, prefix: str) -> dict[int, dict[int, Path]
     return found
 
 
+def frame_templates(layout: Mapping[str, Any]) -> list[str]:
+    """The frame folders a spec's ``frames_dir`` names, in the order they are tried.
+
+    One template or a list, relative to the SPEC file's folder, with the fields
+    ``{prefix}`` (the file's stem) and ``{scan}``: ``"images/{prefix}/S{scan:03d}"``
+    is the folder per scan of the beamline, ``"."`` the frames next to the file.
+    """
+    value = layout.get("frames_dir", ".")
+    return [str(value)] if isinstance(value, (str, Path)) else [str(v) for v in value]
+
+
+def scan_frames(spec_file: Path, scan: int, templates: Sequence[str] = (".",)) -> dict[int, Path]:
+    """``{point: path}`` of one scan's frames, from the first template folder that holds any."""
+    prefix = spec_file.stem
+    for template in templates:
+        folder = spec_file.parent / safe_format(template, prefix=prefix, scan=scan)
+        found = frames_by_scan(folder, prefix).get(scan)
+        if found:
+            return found
+    return {}
+
+
+def session_frames(
+    spec_file: Path, templates: Sequence[str] = (".",)
+) -> dict[int, dict[int, Path]]:
+    """``{scan: {point: path}}`` of every scan with frames, each frames folder listed once.
+
+    A template with ``{scan}`` stands for every folder it matches with the scan
+    number as a wildcard (``images/<file>/S*``); the first template holding
+    frames of a scan wins, as in :func:`scan_frames`.
+    """
+    prefix = spec_file.stem
+    found: dict[int, dict[int, Path]] = {}
+    for template in templates:
+        place = safe_format(template, prefix=prefix)
+        if SCAN_FIELD.search(place):
+            folders = sorted(spec_file.parent.glob(SCAN_FIELD.sub("*", place)))
+        else:
+            folders = [spec_file.parent / place]
+        for folder in folders:
+            for scan, points in frames_by_scan(folder, prefix).items():
+                found.setdefault(scan, points)
+    return found
+
+
 def spec_file_of(path: str | Path, glob: str = "*.spec") -> Path:
-    """The SPEC file behind a path: the file itself, the one in a folder, or a frame's session."""
+    """The SPEC file behind a path: the file itself, the one in a folder, or a frame's session.
+
+    A frame ``<prefix>_S004_00012.tif`` belongs to ``<prefix>.spec``, next to it
+    or up to :data:`FRAME_LEVELS` folders above (``images/<prefix>/S004/``); for
+    another file it is the one SPEC file of the file's folder.
+    """
     path = Path(path)
-    if path.is_file() and path.suffix == SPEC_SUFFIX:
+    if path.suffix == SPEC_SUFFIX and path.is_file():
         return path
-    folder = path if path.is_dir() else path.parent
-    found = sorted(p for p in folder.glob(glob) if p.is_file())
-    if path.is_file():  # a frame: the session whose name starts its own
-        mine = [p for p in found if path.name.startswith(p.stem + "_")]
-        found = mine or found
+    if path.is_dir():
+        return _one_spec_file(path, glob)
+    m = FRAME_NAME.match(path.name)
+    if m is not None:
+        for folder in list(path.parents)[: FRAME_LEVELS + 1]:
+            candidate = folder / f"{m.group('prefix')}{SPEC_SUFFIX}"
+            if candidate.is_file():
+                return candidate
+    return _one_spec_file(path.parent, glob)
+
+
+def _one_spec_file(folder: Path, glob: str) -> Path:
+    try:  # one listing, no stat per entry
+        with os.scandir(folder) as entries:
+            found = sorted(
+                Path(e.path) for e in entries if fnmatch.fnmatch(e.name, glob) and e.is_file()
+            )
+    except OSError:
+        found = []
     if not found:
         raise FileNotFoundError(f"no SPEC file ({glob}) in {folder}")
     if len(found) > 1:
@@ -307,7 +408,8 @@ class SpecTiffSource(BaseSource):
         The scan number (``#S``).
     detector
         Name from the spec's ``detectors``; its ``shape`` is the frame shape of
-        a scan without a frame yet.
+        a scan without a frame yet, and pixels at its ``invalid_value`` (the
+        EIGER's 2**32 - 1 for a dead or masked pixel) read as 0.
     energy_keV
         Overrides the energy the spec reads from the scan's ``#U_`` block.
     motors
@@ -331,6 +433,8 @@ class SpecTiffSource(BaseSource):
         self.spec_file = spec_file_of(path, str(spec.layout.get("spec_glob", "*.spec")))
         self.scan = int(scan)
         self.detector = detector or next(iter(spec.detectors), "areadetector")
+        invalid = spec.detector_info(self.detector).get("invalid_value")
+        self._invalid = None if invalid is None else int(invalid)
         self._energy_override = energy_keV
         self._motors = [str(m) for m in motors] if motors is not None else None
         self._structure: Structure | None = None
@@ -348,8 +452,7 @@ class SpecTiffSource(BaseSource):
         self.command: ScanCommand = parse_scan_command(
             self.record.command, motor_names=set(self.session.motor_names)
         )
-        folder = (self.spec_file.parent / str(self.spec.layout.get("frames_dir", "."))).resolve()
-        found = frames_by_scan(folder, self.spec_file.stem).get(self.scan, {})
+        found = scan_frames(self.spec_file, self.scan, frame_templates(self.spec.layout))
         self.points = [p for p in sorted(found) if p < self.record.n_rows]
         self.frames = [found[p] for p in self.points]
         if len(found) > len(self.points):
@@ -368,9 +471,15 @@ class SpecTiffSource(BaseSource):
         """From the SPEC file, its folder or one of its frames (whose name gives the scan)."""
         path = Path(path)
         spec_file = spec_file_of(path, str(spec.layout.get("spec_glob", "*.spec")))
-        if scan is None and path.is_file() and path != spec_file:
+        if scan is None and path != spec_file and path.is_file():
             m = FRAME_NAME.match(path.name)
-            scan = int(m.group("scan")) if m else None
+            if m is None or m.group("prefix") != spec_file.stem:  # a file of another program
+                raise LookupError(
+                    f"{path.name} is not a frame of {spec_file.name}, whose frames are named "
+                    f"{spec_file.stem}_S<scan>_<point>.tif: pass scan=<n> to open one of its "
+                    'scans, or open the file alone with format="generic_stack"'
+                )
+            scan = int(m.group("scan"))
         if scan is None:
             numbers = sorted(read_spec_file(spec_file).scans)
             if not numbers:
@@ -406,8 +515,7 @@ class SpecTiffSource(BaseSource):
         session = read_spec_file(spec_file)
         numbers = sorted(session.scans)
         if require_files:
-            folder = (spec_file.parent / str(spec.layout.get("frames_dir", "."))).resolve()
-            with_frames = frames_by_scan(folder, spec_file.stem)
+            with_frames = session_frames(spec_file, frame_templates(spec.layout))
             numbers = [n for n in numbers if with_frames.get(n)]
         return numbers
 
@@ -419,7 +527,7 @@ class SpecTiffSource(BaseSource):
         if self.frames:
             self._shape, self._dtype = _probe_frame(self.frames[0])
             return
-        info = self.spec.detectors.get(self.detector, {})
+        info = self.spec.detector_info(self.detector)
         shape = info.get("shape")
         self._shape = (int(shape[0]), int(shape[1])) if shape else (1, 1)
         self._dtype = np.dtype(info.get("dtype", "uint32"))
@@ -468,7 +576,10 @@ class SpecTiffSource(BaseSource):
         if out is None:
             out = np.empty((ids.size, ny, nx), dtype=target)
         for k, fid in enumerate(ids):
-            out[k] = _read_frame(self.frames[fid])[y, x]
+            frame = _read_frame(self.frames[fid])[y, x]
+            if self._invalid is not None:  # a flagged pixel would add 4e9 counts to every sum
+                frame = np.where(frame == self._invalid, 0, frame)
+            out[k] = frame
         return out
 
     # --------------------------------------------------------- the structure
@@ -480,8 +591,9 @@ class SpecTiffSource(BaseSource):
     def _build_structure(self) -> Structure:
         record, session = self.record, self.session
         if record.n_rows == 0:
+            why = ": SPEC aborted it before its first point" if record.aborted else " yet"
             raise ScanNotReadyError(
-                f"scan {self.scan} of {self.spec_file.name} has no data row yet",
+                f"scan {self.scan} of {self.spec_file.name} has no data row{why}",
                 ScanStatus.EMPTY,
                 self.scan,
             )
@@ -499,7 +611,7 @@ class SpecTiffSource(BaseSource):
         exact = self.command.exact and bool(order) and self._motors is None
         units = self.spec.motors.get("units", {}) or {}
         common: dict[str, Any] = {
-            "scan_type": self.command.command if order else "list",
+            "scan_type": self.command.command or "list",  # "loopscan" for frames at one place
             "title": record.command,
             "units": {m: units[m] for m in order if m in units},
             "energy_keV": self.energy_keV,
@@ -550,16 +662,41 @@ class SpecTiffSource(BaseSource):
     def scalars(self) -> dict[str, float]:
         return dict(self.record.positions)
 
-    def aux_tables(self) -> dict[str, pd.DataFrame]:
-        """``header``: one row of the scan's ``#U_`` beamline state, ``<block>_<field>`` columns."""
+    def point_table(self) -> pd.DataFrame:
+        """One row per point SPEC recorded, with or without its frame: every data column.
+
+        ``point`` is the row number (the ``<point>`` of the frame's name) and
+        ``frame`` the id :meth:`read_frames` reads for it, -1 when the frame was
+        not saved or not copied; then the columns by channel name: the motors by
+        mnemonic (``phi``, ``nsz``), the rest as labelled (``r1``, ``IC_1``,
+        ``Epoch``). A session copied without its images keeps all of them.
+        """
         import pandas as pd
 
+        record = self.record
+        table = pd.DataFrame(record.rows, columns=self.session.channel_names(record))
+        frame = np.full(record.n_rows, -1, dtype=np.int64)
+        frame[self.points] = np.arange(len(self.points))
+        table.insert(0, "frame", frame)
+        table.insert(0, "point", np.arange(record.n_rows))
+        return table
+
+    def aux_tables(self) -> dict[str, pd.DataFrame]:
+        """``points`` (:meth:`point_table`) and ``header``: the scan's ``#U_`` state in one row.
+
+        The header has one ``<block>_<field>`` column per field (``mono_Energy``).
+        """
+        import pandas as pd
+
+        tables = {"points": self.point_table()}
         flat = {
             f"{block}_{name}": value
             for block, values in self.record.header.items()
             for name, value in values.items()
         }
-        return {"header": pd.DataFrame([flat])} if flat else {}
+        if flat:
+            tables["header"] = pd.DataFrame([flat])
+        return tables
 
     def cache_records(self) -> list[dict[str, Any]]:
         """The scan's rows in the (growing) SPEC file, and the frame files."""
@@ -574,7 +711,7 @@ class SpecTiffSource(BaseSource):
         return [own, *file_records(self.frames)]
 
     def refresh(self) -> SpecTiffSource:
-        """Read the SPEC file and the frames folder again (a session still running)."""
+        """Read the SPEC file and the frames folders again (a session still running)."""
         self._structure = None
         self._shape = self._dtype = None
         self._load()

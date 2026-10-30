@@ -2,8 +2,10 @@
 # layout of summer 2025. It points at the sample data set on the lab share:
 #   bexa.open(profile="example_aps_7id", sample="wse2_1", scan=4)        Python
 #   bexa scan info -p example_aps_7id -s wse2_1 --scan 4                  command line
-# A session is one SPEC file (every scan of the session) and one TIFF per scan point next
-# to it; the dataset of a sample is the folder that holds them.
+# A session is one SPEC file (every scan of the session) and one TIFF per scan point, in
+# images/<session>/S<scan>/ at the beamline or next to the file in a copy; the dataset of a
+# sample is the folder that holds the SPEC file. examples/14_aps_7id_session.ipynb walks
+# through one.
 
 name: example_aps_7id
 format: aps_7id_spec_2025
@@ -13,13 +15,13 @@ processed_root: null             # results and the cache: a folder of your own, 
 
 samples:
   wse2_1:
-    dataset: Sample_data_set     # holds wse2_1_1.spec and the frames wse2_1_1_S<scan>_<point>.tif
+    dataset: Sample_data_set     # holds wse2_1_1.spec and the first frame wse2_1_1_S001_00000.tif
     notes: WSe2; rocking scans on phi, nano-stage scans on nsx/nsy/nsz, delay scans on sdelay
 
-detector: areadetector           # the EPICS areaDetector camera, 512 x 1028 uint32
+detector: areadetector           # the EIGER2 Si 500K of 7-ID-C: 512 x 1028 uint32, 75 um pixels
 geometry:
   energy_keV: 11.5               # the #U_mono header of every scan says it too
-  pixel_size_um: null            # fill in for the camera in use
+  pixel_size_um: 75.0            # the spec's detector table says it too
   distance_mm: null              # sample to detector, for pixel-to-angle conversions
 
 defaults:

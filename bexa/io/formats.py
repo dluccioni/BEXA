@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import copy
 import fnmatch
+import json
 import os
 import re
 from collections.abc import Iterable
@@ -193,7 +194,51 @@ def load_spec(
     overrides: dict[str, Any] | None = None,
     _chain: tuple[str, ...] = (),
 ) -> FormatSpec:
-    """Load a spec by name or path, resolving ``extends`` and applying ``overrides``."""
+    """Load a spec by name or path, resolving ``extends`` and applying ``overrides``.
+
+    A loaded spec is kept and given again (the same object: read it, do not
+    change it) while its YAML files, its own and those it extends, keep their
+    size and modification time; every scan of a session, and every sniffing,
+    loads specs, and on a network share the folder listings and YAML parsing
+    of a fresh load cost tens of milliseconds each time.
+    """
+    key = (
+        str(name_or_path),
+        json.dumps(overrides, sort_keys=True, default=str) if overrides else "",
+        os.environ.get(FORMAT_DIR_ENV, ""),
+        os.getcwd(),
+    )
+    hit = _LOADED.get(key)
+    if hit is not None and _unchanged(hit[0]):
+        return hit[1]
+    spec, files = _load(name_or_path, overrides, _chain)
+    try:
+        _LOADED[key] = (tuple(_stamp(p) for p in files), spec)
+    except OSError:  # a file vanished meanwhile: keep nothing, load it again next time
+        _LOADED.pop(key, None)
+    return spec
+
+
+# what load_spec gave, by its arguments: (stamps of the files read, the spec)
+_LOADED: dict[tuple[str, str, str, str], tuple[tuple[tuple[Path, int, int], ...], FormatSpec]] = {}
+
+
+def _stamp(path: Path) -> tuple[Path, int, int]:
+    st = path.stat()
+    return path, st.st_mtime_ns, st.st_size
+
+
+def _unchanged(stamps: tuple[tuple[Path, int, int], ...]) -> bool:
+    try:
+        return all(_stamp(stamp[0]) == stamp for stamp in stamps)
+    except OSError:
+        return False
+
+
+def _load(
+    name_or_path: str | Path, overrides: dict[str, Any] | None, _chain: tuple[str, ...]
+) -> tuple[FormatSpec, list[Path]]:
+    """The spec, and every YAML file read for it (its own first, then those it extends)."""
     candidate = Path(name_or_path)
     if candidate.suffix in SPEC_SUFFIXES and candidate.exists():
         path = candidate
@@ -208,9 +253,11 @@ def load_spec(
     chain = (*_chain, raw["name"])
     if raw["name"] in _chain:
         raise ValueError(f"circular 'extends' chain: {' -> '.join(chain)}")
+    files = [path]
     parent_name = raw.get("extends")
     if parent_name:
-        parent = load_spec(parent_name, _chain=chain)
+        parent, parent_files = _load(parent_name, None, chain)
+        files += parent_files
         inherited = parent.model_dump(exclude={"source_path", "name", "extends", "abstract"})
         merged = deep_merge(inherited, raw)
     else:
@@ -219,7 +266,7 @@ def load_spec(
         merged = deep_merge(merged, overrides)
     spec = FormatSpec.model_validate(merged)
     spec.source_path = path
-    return spec
+    return spec, files
 
 
 # ----------------------------------------------------------------- matching
@@ -356,8 +403,11 @@ def _fingerprint_checks(
             texts = listing.glob(path, fp["text_glob"], folders=False)
         elif fnmatch.fnmatch(path.name, fp["text_glob"]):
             texts = [path]
-        elif path.is_file():  # a frame next to the text file
-            texts = listing.glob(folder, fp["text_glob"], folders=False)
+        elif path.is_file():  # a frame next to the text file or below it (images/<file>/S004/)
+            for place in _dir_and_parents(folder):
+                texts = listing.glob(place, fp["text_glob"], folders=False)
+                if texts:
+                    break
         results.append(bool(texts))
     if "text_tags" in fp:
         results.append(any(_text_has_tags(t, fp["text_tags"]) for t in texts[:3]))

@@ -1261,6 +1261,8 @@ APS_COUNTERS: tuple[tuple[str, str], ...] = (
     ("IC_1", "ic1"),
     ("IC_2", "ic2"),
     ("Btot", "btot"),
+    ("r5", "r5"),
+    ("Rmax", "rmax"),
     ("r1", "r1"),
 )
 # the scans of the default session: number, SPEC command, options (partial, frames, missing)
@@ -1308,6 +1310,7 @@ def make_aps_session(
     frame_shape: tuple[int, int] = (24, 32),
     energy_keV: float = 11.5,
     seed: int = 0,
+    frames_dir: str = ".",
 ) -> SyntheticApsSession:
     """Write an APS 7-ID session: one SPEC file and one areaDetector TIFF per scan point.
 
@@ -1315,11 +1318,17 @@ def make_aps_session(
     ``a2scan``, whose motors step together) and ``loopscan`` (frames only).
     The options are ``partial`` (points not taken: the scan ends with SPEC's
     "aborted" comment), ``frames=False`` (rows without frames, as a copy of
-    the session without its TIFFs) and ``missing`` (point numbers whose frame
-    is left out). Every frame holds a Gaussian spot whose centre moves with
-    the first motor and whose intensity peaks mid-scan; the ``r1`` counter
-    column is the frame's total.
+    the session without its TIFFs), ``missing`` (point numbers whose frame
+    is left out) and ``step=True`` (the spot brightens in a blurred step
+    mid-scan instead of peaking there, as in a pump-probe delay scan). Every
+    frame holds a Gaussian spot whose centre moves with the first motor and
+    whose intensity peaks mid-scan; the ``r1`` and ``r5`` counter columns are
+    the frame's total, ``Rmax`` its brightest pixel.
+    ``frames_dir`` is the folder of a scan's TIFFs relative to the SPEC file,
+    with the fields ``{prefix}`` (``name``) and ``{scan}``: ``"."`` beside the
+    file, ``"images/{prefix}/S{scan:03d}"`` the beamline's folder per scan.
     """
+    from bexa.io.formats import safe_format
     from bexa.io.scan_commands import parse_scan_command
 
     rng = np.random.default_rng(seed)
@@ -1364,16 +1373,25 @@ def make_aps_session(
             rel = (lead - lead.mean()) / span  # -0.5 .. 0.5 over the scan
         else:
             rel = np.zeros(recorded)
-        amplitude = 4000.0 * np.exp(-0.5 * (rel / 0.2) ** 2)
+        if options.get("step"):  # 30 % of the full spot before the middle, all of it after
+            from scipy.special import erf
+
+            amplitude = 4000.0 * (0.3 + 0.35 * (1.0 + erf(rel / 0.1)))
+        else:
+            amplitude = 4000.0 * np.exp(-0.5 * (rel / 0.2) ** 2)
         cy, cx = H / 2 + 4.0 * rel, W / 2 + 8.0 * rel
         written: list[Path] = []
         totals = np.zeros(recorded)
+        peaks = np.zeros(recorded)
+        folder = root / safe_format(frames_dir, prefix=name, scan=number)
         for i in range(recorded):
             spot = np.exp(-0.5 * (((yy - cy[i]) / 2.0) ** 2 + ((xx - cx[i]) / 3.0) ** 2))
             frame = rng.poisson(10.0 + amplitude[i] * spot).astype(np.uint32)
             totals[i] = float(frame.sum())
+            peaks[i] = float(frame.max())
             if options.get("frames", True) and i not in missing:
-                frame_path = root / f"{name}_S{number:03d}_{i:05d}.tif"
+                folder.mkdir(parents=True, exist_ok=True)
+                frame_path = folder / f"{name}_S{number:03d}_{i:05d}.tif"
                 _write_tiff(frame_path, frame)
                 written.append(frame_path)
         positions = dict(rest)
@@ -1389,18 +1407,19 @@ def make_aps_session(
             f"#U_mono {energy_keV:g} {wavelength:.5f} -17.76 101.77 -2.29 1.08 2.50",
             "#U_Lakeshore340 300 300.1 299.9 0 0",
         ]
+        counters = ["Epoch", "Seconds", "IC_1", "IC_2", "Btot", "r5", "Rmax", "r1"]
         if cmd.motors:
-            cols = [labels[names.index(m.name)] for m in cmd.motors]
-            cols += ["H", "K", "L", "Epoch", "Seconds", "IC_1", "IC_2", "Btot", "r1"]
+            cols = [labels[names.index(m.name)] for m in cmd.motors] + ["H", "K", "L", *counters]
         else:
-            cols = ["Time", "Epoch", "Seconds", "IC_1", "IC_2", "Btot", "r1"]
+            cols = ["Time", *counters]
         lines += [f"#N {len(cols)}", "#L " + "  ".join(cols)]
         for i in range(recorded):
             if cmd.motors:
                 row = [values[m.name][i] for m in cmd.motors] + [0.0, 0.0, 0.0]
             else:
                 row = [0.1 * i]
-            row += [epoch + 2 * i, 1, 56000 + int(rng.integers(-100, 100)), 0, 360000, totals[i]]
+            monitor = 56000 + int(rng.integers(-100, 100))
+            row += [epoch + 2 * i, 1, monitor, 0, 360000, totals[i], peaks[i], totals[i]]
             lines.append(" ".join(f"{v:g}" for v in row))
         if recorded < n:
             lines.append(f"#C {date}.  Scan aborted after {recorded} points.")

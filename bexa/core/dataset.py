@@ -215,15 +215,16 @@ class Dataset:
                 folder = _folder_of(p)
                 # the layout is sniffed once per folder, here: a folder that cannot be read (a
                 # BLISS dataset copied without its master, say) fails where it is named, and
-                # the scans are opened by the spec's name without sniffing again
-                spec_name = _resolve_spec(folder, format, None).name
+                # the scans are opened with this spec, read once: loading it again for every
+                # scan of a large session cost seconds on a network share
+                spec = _resolve_spec(folder, format, None)
                 options = {
                     **self._open_kwargs,
-                    "format": spec_name,
+                    "format": spec,
                     "cache": self.cache if self.cache is not None else False,
                 }
-                listing = {"format": spec_name, "detector": detector}
-                folders.append(_Folder(folder, folder.name, options, listing))
+                listing = {"format": spec.name, "detector": detector}
+                folders.append(_Folder(folder, folder.name, options, listing, _spec=spec))
         self._folders = folders
         self.paths = [f.path for f in folders]
         self.path = self.paths[0]

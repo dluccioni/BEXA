@@ -422,8 +422,10 @@ class Scan:
 
 # ----------------------------------------------------------------- opening
 def _resolve_spec(
-    path: Path, format_name: str | None, overrides: dict[str, Any] | None
+    path: Path, format_name: str | FormatSpec | None, overrides: dict[str, Any] | None
 ) -> FormatSpec:
+    if isinstance(format_name, FormatSpec):  # loaded already: a Dataset opening its scans
+        return load_spec(format_name.name, overrides=overrides) if overrides else format_name
     if format_name:
         return load_spec(format_name, overrides=overrides)
     spec = best_spec(path)
@@ -533,7 +535,7 @@ def open(
     profile: str | Path | BeamtimeProfile | None = None,
     sample: str | None = None,
     dataset: str | None = None,
-    format: str | None = None,
+    format: str | FormatSpec | None = None,
     scan: int | Sequence[int] | tuple[int, int] | None = None,
     detector: str | None = None,
     overrides: dict[str, Any] | None = None,
@@ -552,8 +554,8 @@ def open(
     ----------
     path
         Dataset folder, master file, ``scanNNNN`` folder, run folder or cube
-        file; the format is sniffed unless ``format`` names a spec. Leave it
-        out to open through a profile.
+        file; the format is sniffed unless ``format`` names a spec (or is one,
+        loaded: no file is read for it). Leave it out to open through a profile.
     profile, sample, dataset
         A beamtime profile (name, path or object; with no path and no profile
         the ``BEXA_PROFILE`` variable is read) and the sample, or the dataset
