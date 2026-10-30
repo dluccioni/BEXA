@@ -4731,8 +4731,9 @@ which every HDF5 library reads; EIGER frames come out 10 times smaller at 280 MB
 `"bitshuffle"` (LZ4 through hdf5plugin, the EIGER's own format: as small, three times as fast,
 and readers need hdf5plugin), `"lzf"` (h5py only) or `None`; another name raises `ValueError`.
 The file is written as `<path>.partial` and renamed when complete, so a package is never half
-there; an existing `path` raises `FileExistsError` unless `overwrite`, and a scan with no data row
-raises `ScanNotReadyError` before a file exists. `show_progress` (default: in an interactive
+there (the rename is retried for a moment when another program, a virus scanner say, holds the
+new file on Windows); an existing `path` raises `FileExistsError` unless `overwrite`, and a scan
+with no data row raises `ScanNotReadyError` before a file exists. `show_progress` (default: in an interactive
 session) shows a bar over the steps.
 
 ```python
