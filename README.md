@@ -674,9 +674,9 @@ bexa gui --workspace session.bexa.h5               # continue a saved workspace
 JupyterLab (`examples/17_gui_guide.ipynb` is the same guide with a live GUI on demo data);
 `docs/commands.html` lists every operation of the GUI and of `ws.run` with all its settings, the
 workspace's methods, every command line and every public function, with a search box (written by
-`tools/commands/make_command_list.py`). `examples/16_aps_7id_analysis.ipynb` explains the files
-of an APS 7-ID session line by line and analyses a whole session in a workspace, the GUI opened on
-it at the end.
+`tools/commands/make_command_list.py`). `docs/aps_7id_data.md` explains the files of an APS 7-ID
+session line by line; `examples/16_aps_7id_analysis.ipynb` analyses a whole session in a
+workspace, the GUI opened on it at the end.
 
 ## Find a function by task
 
