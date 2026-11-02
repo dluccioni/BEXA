@@ -603,8 +603,10 @@ in [bexa scan](#bexa-scan-frame-stack-scans).
 
 ## The notebook GUI
 
-`bexa.gui.App` puts bexa in one notebook cell: the objects of a workspace on the left, seven tabs
-on the right, a progress bar with Cancel on top. It reads every layout bexa reads (ESRF BLISS,
+`bexa.gui.App` puts bexa in one notebook cell, in panels: on the left the objects of a workspace
+and the Data, Browse and Convert tabs, in the middle the View, on the right the Analysis and Fit
+tabs, the Log below, a progress bar with Cancel on top. On a narrow screen the right panel moves
+below the others. It reads every layout bexa reads (ESRF BLISS,
 APS 7-ID SPEC sessions with their TIFF frames, PAL, LCLS smalldata, EuXFEL, scan packages,
 cubes). It needs ipywidgets; with ipympl the figures zoom and pan, ROIs are drawn with the mouse
 and a click places a peak, and without it (the ESRF POWER nodes) the figures are pictures and
@@ -643,7 +645,7 @@ runs on every scan and stacks the results (the ROI curve of every height as one 
 
 **Commands.** The GUI is a view of `app.ws`, a `bexa.workspace.Workspace`: every button runs a
 logged command (`ws.open_scan(...)`, `ws.set_roi(...)`, `ws.run("roi_curves", "scan_7",
-rois=["peak"])`) that works the same in a cell. The Log tab shows them and writes the session as
+rois=["peak"])`) that works the same in a cell. The Log shows them and writes the session as
 a script; Save workspace keeps objects, ROIs, settings and log in one HDF5 file (scans by how to
 open them again).
 
@@ -2372,6 +2374,22 @@ Replaces `plotter.plot_projections`; `bexa.viz.volume.projections_panel` draws t
 # scan: the demo chi x mu scan; its projections onto every pair of axes
 proj = scan.reduce([bexa.acc.Projections()])
 proj["mu_x"].dims, proj["chi_mu"].dims        # ('mu', 'x'), ('chi', 'mu')
+```
+
+#### `ReduceDims`
+`bexa.core.reductions.ReduceDims(dims, how="sum")`
+
+The frames summed (or averaged, maximum, minimum) over any of the scan's dims, motors and pixels
+alike: `("mu", "y", "x")` of a `chi x mu` scan gives a curve over `chi`, `("y", "x")` the map of
+the window (an ROI's map). The other dims are kept, in their order. Each batch is reduced over
+its pixel dims first, then folded into the kept grid positions (`ufunc.at`, on numpy or cupy).
+Results: `reduce_dims` and `reduce_dims_count` (how many values each point combines); a point
+without a frame is NaN. The workspace's *Reduce Dims* streams a scan with it.
+
+```python
+# scan: the demo chi x mu scan; a curve over chi, its frames summed over mu and the pixels
+curve = scan.reduce([bexa.acc.ReduceDims(("mu", "y", "x"))])["reduce_dims"]
+curve.dims                                      # ('chi',)
 ```
 
 #### `RoiIntegral`
@@ -9178,10 +9196,11 @@ op.command(["rock"], {"rois": ["peak"]})        # "ws.run('roi_curves', 'rock', 
 ```
 
 #### `P`
-`bexa.workspace.catalog.P(name, label="", kind="number", default=None, choices=(), help="", optional=False, kinds=('stack', 'image', 'map', 'curve', 'volume'), minimum=None)`
+`bexa.workspace.catalog.P(name, label="", kind="number", default=None, choices=(), help="", optional=False, kinds=('stack', 'image', 'map', 'curve', 'volume'), minimum=None, pixels=False)`
 
 One setting: `name`, `label`, `kind`, `default`, `choices`, `help`, `optional`,
-`kinds` (for objects) and `minimum`. `parse(raw)` turns a form field into the value
+`kinds` (for objects), `minimum` and `pixels` (the dims of a scan offered for it include
+its pixel dims, `y` and `x`). `parse(raw)` turns a form field into the value
 (`ValueError` naming the field), `text(value)` back into the field's text.
 
 ```python
@@ -9430,10 +9449,15 @@ extract.take_slice(stack, "mu", value=0.0).describe()  # 'stack chi[6] x y[32] x
 ```
 
 #### `reduce_dims`
-`bexa.workspace.ops.extract.reduce_dims(obj, dims, how="sum")`
+`bexa.workspace.ops.extract.reduce_dims(obj, dims, how="sum", roi=None, downsample=None)`
 
-Sum (or average, maximum, ...) an object over the named dims. On the Analysis tab: Extract,
-"Reduce Dims"; in code `ws.run("reduce_dims", ...)`.
+Sum (or average, maximum, minimum, std, median) any object over any of its dims, inside an
+ROI. A scan is streamed with `bexa.acc.ReduceDims`, its motors and pixels alike: `("y", "x")`
+of a mosa scan inside an ROI gives the ROI's map, `("mu", "y", "x")` a curve over chi, and
+that map can be reduced the same way; std and median read its frames into memory first.
+The ROI's ranges cut the dims it names, `downsample` bins a scan's pixels; Poisson
+uncertainties for a sum or mean of counts. At least one dim is kept (`ValueError`). On the
+Analysis tab: Extract, "Reduce Dims"; in code `ws.run("reduce_dims", ...)`.
 
 ```python
 # stack: summed over both motors
@@ -9873,6 +9897,27 @@ Combine, "Mosaic"; in code `ws.run("mosaic", ...)`.
 combine.mosaic([image, image], offsets=[0, 0, 0, 80]).shape  # (64, 160)
 ```
 
+#### `resample_onto`
+`bexa.workspace.ops.combine.resample_onto(obj, reference, dims=None, method="linear")`
+
+`obj` interpolated onto the coordinates of `reference`, along the dims they share (or the `dims`
+named): two rocking curves on the same mu values, to subtract or average them; a stack on the
+motor positions of another scan. Only dims whose coordinates differ are interpolated (`method`
+`linear`, `nearest` or `cubic`); points outside the range of `obj` are NaN. A scan's frames are
+read into memory first, within the memory budget; a reference scan gives only its coordinates.
+The uncertainties are interpolated as the values are (linearly for `cubic`). `ValueError` when
+the objects share no dim. On the Analysis tab: Combine, "Resample onto Another"; in code
+`ws.run("resample_onto", a, b)`.
+
+```python
+# the rocking curve of rock on other mu values (half a step further)
+import xarray as xr
+curve = ws.run("roi_curves", rock, rois=["peak"])[0]
+mu = curve.coord("mu")[2:8] + 0.5 * (curve.coord("mu")[1] - curve.coord("mu")[0])
+other = ws.add(xr.DataArray(mu * 0, dims=("mu",), coords={"mu": mu}), name="other_mu")
+combine.resample_onto(curve, other).shape      # (6,)
+```
+
 #### `merge_scan_sets`
 `bexa.workspace.ops.combine.merge_scan_sets(objects)`
 
@@ -9886,6 +9931,7 @@ combine.merge_scan_sets([rock, mosa]).describe()  # 'scan set of 2 scans'
 ```
 
 - `OPERATORS`: `("+", "-", "*", "/")`.
+- `INTERP_METHODS`: `("linear", "nearest", "cubic")`, the methods of `resample_onto`.
 
 ### bexa.workspace.ops.multiscan: many scans at once
 
@@ -10861,8 +10907,10 @@ forms and drawing, and its panels and tabs.
 
 ### bexa.gui.app: the notebook GUI
 
-`bexa.gui.App` is the whole GUI in one cell: the objects panel on the left, the tabs Data,
-Browse, View, Analysis, Fit, Convert and Log on the right, a progress bar with Cancel on top.
+`bexa.gui.App` is the whole GUI in one cell, in panels: on the left the objects and the tabs
+Data, Browse and Convert, in the middle the View, on the right the tabs Analysis and Fit, the
+Log below (it folds away), a progress bar with Cancel on top. Each panel scrolls on its own;
+on a narrow screen (a notebook cell) the right one wraps below the others.
 Work runs in a background thread; the widget updates that follow a job are handed to the
 kernel's event loop, so they happen in the main thread. `app.ws` is the
 `bexa.workspace.Workspace` behind it. Needs ipywidgets; with ipympl the figures are interactive
@@ -10884,15 +10932,16 @@ The GUI. `root` is the folder to work in (`DataTab.use_folder`), scans or not ye
 `workspace` continues an existing workspace; `background=False` runs every job in the calling
 thread (scripts, tests); `figures` is `"auto"`, `"interactive"` or `"static"`. Its parts are
 attributes: `objects` (`ObjectsPanel`), `data`, `browse`, `view`, `analysis`, `fit`, `convert`,
-`log` (the tabs), `jobs` (`bexa.workspace.jobs.JobRunner`), `tabs`, `box` (what the cell shows),
+`log` (the pages), `left_tabs` and `right_tabs` (the `ipywidgets.Tab` of each side), `bottom`
+(the Log's `Accordion`), `jobs` (`bexa.workspace.jobs.JobRunner`), `box` (what the cell shows),
 `folder` (the folder worked in, or `None`), `dialogs` (whether the system's file dialogs can
 open: `bexa.gui.dialogs.available`).
 Members:
 
 - `current`: Property: the first selected object.
 - `set_selection(names)`: select objects: the View draws them, the other tabs take them as inputs.
-- `show_results(made)`: select what an action made, refresh, and show the View tab.
-- `show_tab(name)`: show a tab by its title.
+- `show_results(made)`: select what an action made, refresh, and draw it in the View.
+- `show_tab(name)`: bring a tab forward by its title: Data, Browse or Convert on the left, Analysis or Fit on the right (the View is always shown, the Log opens); `ValueError` for another name.
 - `say(text, kind="info")`: a message under the header (`kind` `info`, `ok` or `error`, in red).
 - `guarded(function, show=None)`: run a callable now; a failure becomes a red message instead of a traceback.
 - `submit(label, function, done=None, *, quiet=False)`: run a callable in the background; `done(result)` follows in the main thread. `quiet`: no message when it starts (the header still shows the job).
@@ -10908,7 +10957,7 @@ Members:
 # app: an ROI and the rocking curve through the catalog, then what is selected
 app.ws.set_roi("peak", y=(16, 48), x=(20, 60))  # ROI(y=(16, 48), x=(20, 60))
 app.run_op("roi_curves", [rock.name], {"rois": ["peak"]})  # Job
-app.current, app.tabs.titles[app.tabs.selected_index]  # ('demo_rocking_roi_peak', 'View')
+app.current, app.left_tabs.titles              # ('demo_rocking_roi_peak', ('Data', 'Browse', 'Convert'))
 ```
 
 #### `launch`
@@ -10922,7 +10971,8 @@ shows an `App` too.
 type(bexa.gui.launch(background=False, figures="static", cache=False)).__name__  # 'App'
 ```
 
-- `TABS`: the tab titles, in order.
+- `LEFT_TABS`, `RIGHT_TABS`: the titles of the tabs on each side.
+- `COLUMNS`: how the three panels share the width (`flex`) and the width below which they wrap.
 - `CSS`: the style the app adds to the page.
 - `MESSAGE_COLOURS`: the colours of `say`.
 
@@ -10998,7 +11048,7 @@ and return at once, so the window's end could not be followed).
 
 ```python
 # Edge on the page, a profile of its own
-window.window_command(Path("msedge.exe"), "http://127.0.0.1:8866/?token=t", Path("profile"))[1:4]   # ['--app=http://127.0.0.1:8866/?token=t', '--user-data-dir=profile', '--window-size=1500,950']
+window.window_command(Path("msedge.exe"), "http://127.0.0.1:8866/?token=t", Path("profile"))[1:4]   # ['--app=http://127.0.0.1:8866/?token=t', '--user-data-dir=profile', '--window-size=1800,1000']
 ```
 
 #### `GuiServer`
@@ -11051,7 +11101,8 @@ on this computer; Ctrl+C stops it).
 window.serve("X:/beamtime/RAW_DATA")            # bexa GUI in its window (http://127.0.0.1:...); close the window to stop
 ```
 
-- `WINDOW_SIZE`: `(1500, 950)`, the window's size in pixels.
+- `WINDOW_SIZE`: `(1800, 1000)`, the window's size in pixels before it is maximized
+  (`--start-maximized`: three panels side by side).
 - `START_TIMEOUT`: `60.0` seconds for Voilà to listen (the App appears about ten seconds later).
 - `NOTEBOOK_NAME`: `"bexa.ipynb"`; Voilà titles the window after the notebook.
 - `BROWSERS`: the browsers looked for, by platform (`win32`, `darwin`, `linux`), in order.
@@ -11155,7 +11206,7 @@ dims and channels (refreshed from the workspace and the first input), two fields
 each with its help as its tooltip.
 
 ```python
-from bexa.gui.forms import Form, kind_label, object_options, set_tooltip
+from bexa.gui.forms import DimToggles, Form, kind_label, object_options, set_tooltip
 from bexa.workspace import Workspace
 from bexa.workspace.catalog import find
 
@@ -11172,6 +11223,23 @@ The widgets of one operation's settings: `fields` by setting name,
 - `refresh(first=None)`: fill the drop-downs from the workspace and the first input.
 - `values()`: the parsed values that differ from the defaults (`ValueError` names the field at fault).
 - `set_values(values)`: put remembered values back (stale ones are skipped).
+
+A `dims` setting is a `DimToggles`, the others plain widgets (a range two text fields).
+
+#### `DimToggles`
+`bexa.gui.forms.DimToggles(label)`
+
+Any number of dims chosen with a toggle button each, the field of a `dims` setting (a
+`SelectMultiple` needs Ctrl+click to choose several): `options` and `value` (a tuple) behave
+as those of a `SelectMultiple`, `buttons` are the toggles, `box` the widget shown.
+
+```python
+# the dims of Reduce Dims, two of them chosen
+toggles = DimToggles("Dims")
+toggles.options = ["chi", "mu", "y", "x"]
+toggles.value = ("y", "x")
+toggles.value, [b.value for b in toggles.buttons]   # (('y', 'x'), [False, False, True, True])
+```
 
 ```python
 # a distance and a range typed, then read back
@@ -11206,7 +11274,8 @@ object_options(ws, ("scan",), "none")           # [('none', None), ('[scan] demo
 `bexa.gui.forms.set_tooltip(widget, text)`
 
 The text shown when the mouse rests on a widget (`tooltip` in
-ipywidgets 8, `description_tooltip` in 7).
+ipywidgets 8, `description_tooltip` in 7). A box passes it to its parts: the box views of
+ipywidgets 8 fail to draw a box with a tooltip of its own.
 
 ```python
 # a tooltip on a field
@@ -11306,9 +11375,10 @@ CurveOptions()                                  # CurveOptions(log_y=False, erro
 
 ### bexa.gui.objects_panel: the objects of the workspace
 
-The left column of the app: every object (raw scans first, then results in the order made),
-filtered by kind or name; rename, duplicate, delete (with a confirmation), notes; what the
-selected object is (its metadata, parents and history); the named ROIs.
+The top of the left panel: every object (raw scans first, then results in the order made),
+filtered by kind or name; rename, duplicate, delete (with a confirmation); under **Details**
+(folded away) what the selected object is (its metadata, parents and history), its notes and
+the named ROIs.
 
 ```python
 import bexa
@@ -11322,7 +11392,8 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 `bexa.gui.objects_panel.ObjectsPanel(app)`
 
 The panel of an `App`: `listing` (a `SelectMultiple`
-of the objects), `filter`, `search`, `details`, `notes`, `rois`, `box`. `refresh()` lists the
+of the objects), `filter`, `search`, `details`, `notes`, `rois`, `more` (the **Details**
+`Accordion`), `box`. `refresh()` lists the
 objects again, `select(names)` selects from code.
 
 ```python
@@ -11700,9 +11771,9 @@ app.convert.result.value[:40]                   # '<b>wrote 1 file(s)</b><ul><li
 
 ### bexa.gui.log_tab: commands, script, workspace files, jobs
 
-The Log tab: every command run (newest first, with its time, status and duration, and the
-error of a failure), the script that replays the session, saving and opening the workspace, and
-the job history.
+The Log, below the panels: every command run (newest first, with its time, status and duration,
+and the error of a failure), beside the script that replays the session, saving and opening
+the workspace, and the job history.
 
 ```python
 import bexa

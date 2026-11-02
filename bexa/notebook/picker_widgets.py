@@ -143,7 +143,7 @@ class PickerWidgets:
         )
         self.motor_reset.on_click(lambda _b: m.reset_motors())
         self.roles_text = ipw.HTML()
-        self.roles_row = ipw.HBox(layout=ipw.Layout(align_items="center"))
+        self.roles_row = ipw.HBox(layout=ipw.Layout(align_items="center", flex_flow="row wrap"))
         motor_box = ipw.VBox(
             [
                 ipw.HTML(

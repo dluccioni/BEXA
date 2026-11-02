@@ -55,6 +55,7 @@ __all__ = [
     "Plan",
     "Preview",
     "Projections",
+    "ReduceDims",
     "RoiIntegral",
     "Sum",
     "block_reduce",
@@ -372,6 +373,89 @@ class Min(Accumulator):
 
     def result(self) -> xr.DataArray:
         return self._image(self.total, self.name, n_frames=self.n_frames_seen)
+
+
+@register_accumulator("reduce_dims")
+class ReduceDims(Accumulator):
+    """The frames summed (or averaged, maximum, minimum) over any of the scan's dims.
+
+    ``dims`` names the dims reduced, motors and pixels alike: ``("mu", "y", "x")``
+    of a ``chi x mu`` scan gives a curve over ``chi``. The other dims are kept, in
+    their order. Each batch is reduced over its pixel dims first, then folded into
+    the kept grid positions. Results: ``reduce_dims`` and ``reduce_dims_count``
+    (how many values each point combines); a point without a frame is NaN.
+    """
+
+    name = "reduce_dims"
+    live_copies = 1
+
+    def __init__(self, dims: Sequence[str], how: str = "sum") -> None:
+        if how not in ("sum", "mean", "max", "min"):
+            raise ValueError(f"how must be sum, mean, max or min, not {how!r}")
+        super().__init__(dims=[str(d) for d in dims], how=how)
+        self.dims = tuple(str(d) for d in dims)
+        self.how = how
+
+    def _allocate(self) -> None:
+        plan = self.plan
+        unknown = [d for d in self.dims if d not in plan.dims]
+        if unknown:
+            raise ValueError(f"no dim {unknown} in this scan; its dims: {list(plan.dims)}")
+        self.kept_motors = [i for i, d in enumerate(plan.motor_dims) if d not in self.dims]
+        self.pixel_axes = tuple(1 + i for i, d in enumerate(PIXEL_DIMS) if d in self.dims)
+        pixels = dict(zip(PIXEL_DIMS, plan.window.shape, strict=True))
+        kept_pixels = [n for d, n in pixels.items() if d not in self.dims]
+        self.per_frame = math.prod(n for d, n in pixels.items() if d in self.dims)
+        grid = [plan.grid_shape[i] for i in self.kept_motors]
+        start = {"sum": 0.0, "mean": 0.0, "max": -np.inf, "min": np.inf}[self.how]
+        self.total = self.xp.full((*grid, *kept_pixels), start, dtype=np.float64)
+        self.frames_at = self._zeros(grid)
+
+    def update(self, frames: Any, frame_ids: np.ndarray) -> None:
+        xp, axes = self.xp, self.pixel_axes
+        if self.how in ("sum", "mean"):
+            part = frames.sum(axis=axes, dtype=np.float64) if axes else frames.astype(np.float64)
+            op = "add"
+        else:
+            op = "maximum" if self.how == "max" else "minimum"
+            part = (getattr(frames, self.how)(axis=axes) if axes else frames).astype(np.float64)
+        positions = self.plan.grid_positions(frame_ids)
+        index = tuple(xp.asarray(positions[i]) for i in self.kept_motors)
+        if index:
+            _scatter(xp, op, self.total, index, part)
+            _scatter(xp, "add", self.frames_at, index, xp.ones(len(frame_ids)))
+        else:  # every motor reduced: the batch folds into one array
+            whole = part.sum(axis=0) if op == "add" else getattr(part, self.how)(axis=0)
+            getattr(xp, op)(self.total, whole, out=self.total)
+            self.frames_at += len(frame_ids)
+        self.n_frames_seen += len(frame_ids)
+
+    def result(self) -> dict[str, xr.DataArray]:
+        xp, plan = self.xp, self.plan
+        kept = [plan.motor_dims[i] for i in self.kept_motors]
+        dims = kept + [d for d in PIXEL_DIMS if d not in self.dims]
+        frames_at = self.frames_at.reshape(self.frames_at.shape + (1,) * (len(dims) - len(kept)))
+        count = xp.broadcast_to(frames_at * self.per_frame, self.total.shape)
+        total = self.total / xp.maximum(count, 1) if self.how == "mean" else self.total
+        total = xp.where(count > 0, total, xp.nan)
+        coords = plan.all_coords()
+        attrs = {"how": self.how, "reduced": list(self.dims)}
+        return {
+            name: xr.DataArray(
+                backend.to_host(data),
+                dims=dims,
+                coords={d: coords[d] for d in dims},
+                name=name,
+                attrs=attrs,
+            )
+            for name, data in (("reduce_dims", total), ("reduce_dims_count", count))
+        }
+
+
+def _scatter(xp: Any, op: str, target: Any, index: tuple[Any, ...], values: Any) -> None:
+    """``target[index] (op)= values`` with repeated indices folded (``ufunc.at``, which numpy
+    and cupy both have for add, maximum and minimum)."""
+    getattr(xp, op).at(target, index, values)
 
 
 @register_accumulator("preview")

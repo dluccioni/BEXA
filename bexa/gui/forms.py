@@ -10,7 +10,7 @@ parses them with the catalog's own rules, so the GUI and ``ws.run`` agree.
 from __future__ import annotations
 
 import html
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from bexa.workspace.catalog import Op, P
@@ -50,7 +50,12 @@ def kind_label(obj: DataObject) -> str:
 
 def set_tooltip(widget: Any, text: str) -> None:
     """The text shown when the mouse rests on a widget (``tooltip`` in ipywidgets 8,
-    ``description_tooltip`` in 7)."""
+    ``description_tooltip`` in 7). A box passes it to its parts: the box views of
+    ipywidgets 8 fail to draw a box with a tooltip of its own (they read its description)."""
+    if "description" not in widget.keys and getattr(widget, "children", None) is not None:
+        for child in widget.children:
+            set_tooltip(child, text)
+        return
     if "tooltip" in widget.keys:
         widget.tooltip = text
     elif "description_tooltip" in widget.keys:
@@ -79,14 +84,62 @@ def _first_channels(obj: DataObject | None) -> list[str]:
         return []
 
 
-def _first_dims(obj: DataObject | None) -> list[str]:
+def _first_dims(obj: DataObject | None, pixels: bool = False) -> list[str]:
+    """The dims of the first input; a scan's motors, with its pixel dims when ``pixels``."""
     if obj is None:
         return []
-    if obj.kind == "scanset":
-        return [str(d) for d in obj.data.scans[0].dims[:-2]]
-    if obj.kind == "scan":
-        return [str(d) for d in obj.data.dims[:-2]]
+    if obj.kind in ("scan", "scanset"):
+        dims = (obj.data.scans[0] if obj.kind == "scanset" else obj.data).dims
+        return [str(d) for d in (dims if pixels else dims[:-2])]
     return list(obj.dims)
+
+
+class DimToggles:
+    """Any number of dims chosen with a toggle button each: the field of a ``dims`` setting.
+
+    ``options`` and ``value`` (a tuple) behave as those of a SelectMultiple, which
+    needs Ctrl+click to choose several; ``box`` is the widget shown.
+    """
+
+    def __init__(self, label: str) -> None:
+        import ipywidgets as ipw
+
+        self._options: list[tuple[str, Any]] = []
+        self.buttons: list[Any] = []
+        self.row = ipw.HBox(layout=ipw.Layout(flex_flow="row wrap"))
+        title = ipw.HTML(
+            f"<div style='width:{LABEL_WIDTH};text-align:right;padding-right:6px'>"
+            f"{html.escape(label)}</div>"
+        )
+        self.box = ipw.HBox([title, self.row])
+
+    @property
+    def options(self) -> list[tuple[str, Any]]:
+        return list(self._options)
+
+    @options.setter
+    def options(self, options: Sequence[Any]) -> None:
+        import ipywidgets as ipw
+
+        chosen = set(self.value)
+        for button in self.buttons:  # ipywidgets keeps a widget until it is closed
+            button.close()
+        self._options = [o if isinstance(o, tuple) else (str(o), o) for o in options]
+        self.buttons = [
+            ipw.ToggleButton(description=label, value=v in chosen, layout=ipw.Layout(width="auto"))
+            for label, v in self._options
+        ]
+        self.row.children = self.buttons or [ipw.HTML("<i>no dims</i>")]
+
+    @property
+    def value(self) -> tuple[Any, ...]:
+        return tuple(v for (_, v), b in zip(self._options, self.buttons, strict=True) if b.value)
+
+    @value.setter
+    def value(self, values: Sequence[Any]) -> None:
+        wanted = set(values)
+        for (_, v), button in zip(self._options, self.buttons, strict=True):
+            button.value = v in wanted
 
 
 class Form:
@@ -105,9 +158,9 @@ class Form:
         for p in op.params:
             if p.kind == "spec":
                 continue
-            widget = self._widget(p, style, wide)
-            self.fields[p.name] = widget
-            rows.append(widget)
+            field = self._widget(p, style, wide)
+            self.fields[p.name] = field
+            rows.append(getattr(field, "box", field))  # DimToggles: its box
         if not rows:
             rows.append(ipw.HTML("<i>no settings</i>"))
         self.box = ipw.VBox(rows, layout=ipw.Layout(width="100%"))
@@ -115,7 +168,8 @@ class Form:
 
     def _widget(self, p: P, style: dict[str, str], layout: Any) -> Any:
         widget = self._make(p, style, layout)
-        set_tooltip(widget, p.help or p.label)  # the help shows when the mouse rests on it
+        # the help shows when the mouse rests on it
+        set_tooltip(getattr(widget, "box", widget), p.help or p.label)
         return widget
 
     @staticmethod
@@ -134,7 +188,9 @@ class Form:
             )
         if p.kind in ("object", "roi", "dim", "channel"):
             return ipw.Dropdown(options=[("none", None)], value=None, **common)
-        if p.kind in ("objects", "rois", "dims", "channels"):
+        if p.kind == "dims":
+            return DimToggles(label)
+        if p.kind in ("objects", "rois", "channels"):
             return ipw.SelectMultiple(options=[], rows=4, **common)
         if p.kind == "range":
             low = ipw.Text(placeholder="from", layout=ipw.Layout(width="120px"))
@@ -166,7 +222,7 @@ class Form:
                 names = list(self.ws.rois)
                 options = ([("none", None)] if p.kind == "roi" else []) + [(n, n) for n in names]
             elif p.kind in ("dim", "dims"):
-                dims = _first_dims(self.first)
+                dims = _first_dims(self.first, p.pixels)
                 options = ([("", None)] if p.kind == "dim" and p.optional else []) + [
                     (d, d) for d in dims
                 ]

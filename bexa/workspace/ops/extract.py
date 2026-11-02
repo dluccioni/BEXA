@@ -490,16 +490,61 @@ def take_slice(
     return new(obj, picked, f"{dim}{int(index)}", sigma=sigma, meta={f"slice_{dim}": where})
 
 
-def reduce_dims(obj: DataObject, dims: Sequence[str], how: str = "sum") -> DataObject:
-    """Sum (or average, maximum, ...) an object over the named dims."""
-    require(obj, ANY, "Reduce Dims")
+def reduce_dims(
+    obj: DataObject,
+    dims: Sequence[str],
+    how: str = "sum",
+    roi: ROI | None = None,
+    downsample: int | None = None,
+) -> DataObject:
+    """Sum (or average, maximum, ...) an object over any of its dims, inside an ROI.
+
+    A scan is streamed (its pixels and motors alike: ``("mu", "y", "x")`` of a mosa
+    scan gives a curve over chi); std and median read its frames into memory first.
+    The ROI's ranges cut the dims it names; ``downsample`` bins a scan's pixels.
+    """
+    require(obj, ("scan", *ANY), "Reduce Dims")
+    dims = [str(d) for d in dims or ()]
     missing = [d for d in dims if d not in obj.dims]
     if missing or not dims:
         raise ValueError(f"choose dims of {obj.name} {obj.dims}; not {list(missing) or dims}")
-    data = reduce_over(obj.array, dims, how)
-    n = int(np.prod([obj.array.sizes[d] for d in dims]))
-    sigma = sigma_over(obj.sigma, dims, how, n)
-    return new(obj, data, f"{how}_{'_'.join(dims)}", sigma=sigma)
+    if len(dims) == len(obj.dims):
+        raise ValueError("keep at least one dim (ROI Statistics gives one number per ROI)")
+    suffix = f"{how}_{'_'.join(dims)}"
+    meta = {"roi": roi.to_dict()} if roi else {}
+    if obj.kind == "scan":
+        return _reduce_scan(obj, dims, how, roi, downsample, suffix, meta)
+    data, sigma = windowed(obj, roi)
+    n = int(np.prod([data.sizes[d] for d in dims]))
+    reduced = reduce_over(data, dims, how)
+    return new(obj, reduced, suffix, sigma=sigma_over(sigma, dims, how, n), meta=meta)
+
+
+def _reduce_scan(
+    obj: DataObject,
+    dims: list[str],
+    how: str,
+    roi: ROI | None,
+    downsample: int | None,
+    suffix: str,
+    meta: dict[str, Any],
+) -> DataObject:
+    """:func:`reduce_dims` of a scan: one streaming pass, or its frames in memory."""
+    scan = obj.data
+    ds = None if not downsample else (1,) * len(scan.dims[:-2]) + (downsample,) * 2
+    if how not in SCAN_HOWS:  # std, median: not a running total
+        if how not in REDUCE_HOWS:
+            raise ValueError(f"how must be one of {REDUCE_HOWS}, not {how!r}")
+        reduced = reduce_over(scan.read(roi=roi, downsample=ds), dims, how)
+        return _from_scan(obj, reduced, suffix, meta=meta)
+    from bexa.core.reductions import ReduceDims
+
+    result = scan.reduce([ReduceDims(dims, how)], roi=roi, downsample=ds)
+    reduced, count = result["reduce_dims"], result["reduce_dims_count"]
+    sigma = None
+    if how in ("sum", "mean") and _counts(scan) and not downsample:  # Poisson, from the counts
+        sigma = poisson(reduced) if how == "sum" else np.sqrt(np.abs(reduced) / count)
+    return _from_scan(obj, reduced, suffix, sigma=sigma, meta={"quantity": how, **meta})
 
 
 def profile(

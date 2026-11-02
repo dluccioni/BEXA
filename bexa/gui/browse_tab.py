@@ -70,7 +70,7 @@ class BrowseTab:
         self.app = app
         self.folder = Path(root) if root else Path.cwd()
         self.inspector: Any = None
-        self.path = ipw.Text(value=str(self.folder), layout=ipw.Layout(width="62%"))
+        self.path = ipw.Text(value=str(self.folder), layout=ipw.Layout(width="70%"))
         go = ipw.Button(description="Go", layout=ipw.Layout(width="50px"))
         choose = ipw.Button(
             icon="ellipsis-h",
@@ -94,26 +94,27 @@ class BrowseTab:
         up.on_click(lambda _b: self.go(self.folder.parent))
         enter.on_click(lambda _b: self._enter())
         use.on_click(lambda _b: self._use())
-        self.listing = ipw.Select(options=[], rows=24, layout=ipw.Layout(width="100%"))
+        self.listing = ipw.Select(options=[], rows=12, layout=ipw.Layout(width="100%"))
         self.listing.add_class("bexa-files")
         self.listing.observe(lambda c: self._picked(c["new"]), names="value")
         self.head = ipw.HTML()
-        self.pane = FigurePane((6.4, 4.2), interactive=False)
+        self.pane = FigurePane((5.4, 3.6), interactive=False)
         self.figure_box = ipw.Box([self.pane.widget], layout=ipw.Layout(display="none"))
         self.text = ipw.HTML()
         self.body = ipw.VBox()
-        self.box = ipw.HBox(
+        self.box = ipw.VBox(  # one column: the folder, then what is inside the entry picked
             [
-                ipw.VBox(
-                    [ipw.HBox([up, self.path, go, choose]), ipw.HBox([enter, use]), self.listing],
-                    layout=ipw.Layout(width="38%", padding="0 8px 0 0"),
-                ),
-                ipw.VBox(
-                    [self.head, self.body, self.figure_box, self.text],
-                    layout=ipw.Layout(width="62%"),
-                ),
+                ipw.HBox([up, self.path, go, choose]),
+                ipw.HBox([enter, use]),
+                self.listing,
+                self.head,
+                self.body,
+                self.figure_box,
+                self.text,
             ]
         )
+        self.box.add_class("bexa-browse")
+        self.path.add_class("bexa-browse-path")
         self.go(self.folder)
 
     # ------------------------------------------------------------------ navigation

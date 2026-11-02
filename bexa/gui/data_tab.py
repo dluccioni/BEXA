@@ -32,6 +32,13 @@ def _section(title: str) -> Any:
     return ipw.HTML(f"<h4 style='margin:10px 0 4px 0'>{html.escape(title)}</h4>")
 
 
+def _wrap() -> Any:
+    """A row whose widgets go on to the next line when the column is narrow."""
+    import ipywidgets as ipw
+
+    return ipw.Layout(flex_flow="row wrap")
+
+
 def _no_format(exc: Exception) -> bool:
     return isinstance(exc, (LookupError, ValueError)) and "no format spec matches" in str(exc)
 
@@ -88,7 +95,8 @@ class DataTab:
         add_set.on_click(lambda _b: self._from_picker("set"))
         add_series.on_click(lambda _b: self._from_picker("series"))
         self.picker_buttons = ipw.HBox(
-            [add_scans, add_set, add_series], layout=ipw.Layout(display="none")
+            [add_scans, add_set, add_series],
+            layout=ipw.Layout(display="none", flex_flow="row wrap"),
         )
         # a path
         self.path = ipw.Text(
@@ -153,17 +161,19 @@ class DataTab:
         self.box = ipw.VBox(
             [
                 _section("Folder"),
-                ipw.HBox([self.root, choose_root, use, refresh, self.auto]),
+                ipw.HBox([self.root, choose_root, use, refresh, self.auto], layout=_wrap()),
                 self.folder_note,
                 self.picker_buttons,
                 self.picker_box,
                 _section("Open a path"),
                 ipw.HBox([self.path, choose_file, choose_folder]),
-                ipw.HBox([self.scan_numbers, self.format]),
-                ipw.HBox([sniff, open_scan, open_set, load]),
+                ipw.HBox([self.scan_numbers, self.format], layout=_wrap()),
+                ipw.HBox([sniff, open_scan, open_set, load], layout=_wrap()),
                 self.sniffed,
                 _section("Beamtime profile"),
-                ipw.HBox([self.profile, self.sample, self.profile_scan, open_profile]),
+                ipw.HBox(
+                    [self.profile, self.sample, self.profile_scan, open_profile], layout=_wrap()
+                ),
                 _section("Demo data"),
                 ipw.HBox([self.demo, make_demo]),
             ]

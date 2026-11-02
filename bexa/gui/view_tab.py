@@ -46,7 +46,7 @@ class ViewTab:
         import ipywidgets as ipw
 
         self.app = app
-        self.pane = FigurePane((7.6, 5.0), interactive=app.interactive_figures)
+        self.pane = FigurePane((6.6, 4.5), interactive=app.interactive_figures)
         self._key: tuple[Any, ...] | None = None
         self._shown: xr.DataArray | None = None
         self._line_start: tuple[float, float] | None = None
@@ -219,7 +219,7 @@ class ViewTab:
             "pixel ranges: full-detector pixels, end excluded; motor ranges: values"
             + ("" if self.pane.interactive else " (no ipympl: type them)"),
         )
-        return ipw.VBox(
+        tools = ipw.VBox(
             [
                 ipw.HTML("<b>ROIs</b>"),
                 ipw.HBox(
@@ -236,6 +236,8 @@ class ViewTab:
                 ),
             ]
         )
+        tools.add_class("bexa-rois")
+        return tools
 
     def _extras(self) -> Any:
         import ipywidgets as ipw

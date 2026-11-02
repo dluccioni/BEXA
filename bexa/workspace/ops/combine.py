@@ -12,6 +12,7 @@ from bexa.workspace.objects import DataObject, ScanSet
 from bexa.workspace.ops._base import ANY, IMAGES, curve, curve_xy, new, require
 
 __all__ = [
+    "INTERP_METHODS",
     "OPERATORS",
     "align_images",
     "align_peaks",
@@ -20,11 +21,13 @@ __all__ = [
     "concatenate",
     "merge_scan_sets",
     "mosaic",
+    "resample_onto",
     "stack_objects",
     "stitch_curves",
 ]
 
 OPERATORS = ("+", "-", "*", "/")
+INTERP_METHODS = ("linear", "nearest", "cubic")
 
 
 def _on_grid_of(a: xr.DataArray, b: xr.DataArray, interpolate: bool) -> xr.DataArray:
@@ -305,6 +308,54 @@ def mosaic(
         "mosaic",
         parents=[o.name for o in objects],
         meta={"tiles": [o.name for o in objects], "positions_px": positions.tolist()},
+    )
+
+
+def resample_onto(
+    obj: DataObject,
+    reference: DataObject,
+    dims: Sequence[str] | None = None,
+    method: str = "linear",
+) -> DataObject:
+    """``obj`` interpolated onto the coordinates of ``reference``, along the dims they share
+    (or the ``dims`` named).
+
+    Points outside the range of ``obj`` are NaN. A scan's frames are read into memory
+    first (within the memory budget); a reference scan gives only its coordinates. The
+    uncertainties are interpolated as the values are (linearly for a cubic method).
+    """
+    require(obj, ("scan", *ANY), "Resample onto")
+    require(reference, ("scan", *ANY), "Resample onto")
+    if method not in INTERP_METHODS:
+        raise ValueError(f"method must be one of {INTERP_METHODS}, not {method!r}")
+    shared = [d for d in obj.dims if d in reference.dims and (not dims or d in dims)]
+    if not shared:
+        raise ValueError(
+            f"{obj.name} {obj.dims} and {reference.name} {reference.dims} share no dim"
+        )
+    data = obj.data.read() if obj.kind == "scan" else obj.array
+    sigma = None if obj.kind == "scan" else obj.sigma
+    data = data.assign_coords({d: obj.coord(d) for d in shared if d not in data.coords})
+    targets = {d: np.asarray(reference.coord(d), dtype=float) for d in shared}
+    moved = {
+        d: t
+        for d, t in targets.items()
+        if t.size != data.sizes[d] or not np.allclose(np.asarray(data.coords[d], float), t)
+    }
+    if moved:
+        data = data.interp(moved, method=method)
+    data = data.assign_coords(targets)  # the reference's values exactly, moved or not
+    if sigma is not None:
+        sigma = sigma.assign_coords({d: obj.coord(d) for d in shared if d not in sigma.coords})
+        smooth = "nearest" if method == "nearest" else "linear"
+        sigma = (sigma.interp(moved, method=smooth) if moved else sigma).assign_coords(targets)
+    return new(
+        obj,
+        data,
+        f"on_{reference.name}",
+        sigma=sigma,
+        parents=[obj.name, reference.name],
+        meta={"resampled_onto": reference.name, "along": list(moved), "method": method},
     )
 
 

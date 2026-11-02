@@ -20,7 +20,7 @@ class LogTab:
 
         self.app = app
         self.entries = ipw.HTML()
-        self.script = ipw.Textarea(rows=14, layout=ipw.Layout(width="100%"))
+        self.script = ipw.Textarea(rows=4, layout=ipw.Layout(width="100%"))
         show_script = ipw.Button(
             description="Show script",
             icon="code",
@@ -45,21 +45,30 @@ class LogTab:
         save_ws.on_click(lambda _b: self._save_workspace())
         open_ws.on_click(lambda _b: self._open_workspace())
         self.jobs = ipw.HTML()
-        self.box = ipw.VBox(
+        commands = ipw.VBox(
             [
                 ipw.HTML(
                     "<b title='each line runs the same in a notebook cell, with ws = app.ws'>"
                     "Commands</b>"
                 ),
                 self.entries,
+            ],
+            layout=ipw.Layout(flex="3 1 420px", padding="0 12px 0 0"),
+        )
+        files = ipw.VBox(
+            [
                 ipw.HBox([show_script, self.script_path, save_script]),
                 self.script,
                 ipw.HTML("<b>Workspace file</b>"),
                 ipw.HBox([self.ws_path, save_ws, open_ws]),
                 ipw.HTML("<b>Jobs</b>"),
                 self.jobs,
-            ]
+            ],
+            layout=ipw.Layout(flex="2 1 420px"),
         )
+        # a strip below the panels: the commands beside the script and the files
+        self.box = ipw.HBox([commands, files], layout=ipw.Layout(flex_flow="row wrap"))
+        self.box.add_class("bexa-log")
         self.refresh()
 
     def refresh(self) -> None:

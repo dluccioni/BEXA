@@ -132,7 +132,7 @@ class FitTab:
         self.peaks: list[PeakRow] = []
         self.last_fit: dict[str, Any] | None = None
         self._table: str | None = None  # the parameter table of the last fit
-        self.pane = FigurePane((4.5, 4.3), interactive=app.interactive_figures)
+        self.pane = FigurePane((5.4, 3.8), interactive=app.interactive_figures)
         style = {"description_width": "80px"}
         self.target = ipw.Dropdown(
             description="curve", style=style, layout=ipw.Layout(width="420px")
@@ -206,32 +206,27 @@ class FitTab:
         export = ipw.Button(description="Save parameters", icon="save")
         export.on_click(lambda _b: self._export())
         self.pane.on_click(self._clicked)
-        self.box = ipw.HBox(
+        wrap = ipw.Layout(flex_flow="row wrap")
+        self.box = ipw.VBox(  # one column: the curve and its fit first, then the settings
             [
-                ipw.VBox(
-                    [
-                        self.target,
-                        self.along,
-                        self.row,
-                        ipw.HBox([self.low, self.high]),
-                        self.use_sigma,
-                        self.background,
-                        self.bg_box,
-                        ipw.HBox([self.n_guess, self.guess_shape, guess]),
-                        ipw.HBox([add, self.click, draw_start]),
-                        ipw.HTML(
-                            "<b title='value (empty: guessed), min, max, fixed; centre and FWHM "
-                            "in x units, amplitude = height'>Peaks</b>"
-                        ),
-                        self.peak_box,
-                        ipw.HBox([fit, series]),
-                    ],
-                    layout=ipw.Layout(width="44%", padding="0 10px 0 0"),
+                self.target,
+                self.along,
+                self.row,
+                self.pane.widget,
+                ipw.HBox([fit, series]),
+                self.results,
+                ipw.HBox([self.low, self.high]),
+                self.use_sigma,
+                self.background,
+                self.bg_box,
+                ipw.HBox([self.n_guess, self.guess_shape, guess], layout=wrap),
+                ipw.HBox([add, self.click, draw_start], layout=wrap),
+                ipw.HTML(
+                    "<b title='value (empty: guessed), min, max, fixed; centre and FWHM "
+                    "in x units, amplitude = height'>Peaks</b>"
                 ),
-                ipw.VBox(
-                    [self.pane.widget, self.results, ipw.HBox([self.export_path, export])],
-                    layout=ipw.Layout(width="56%", overflow="auto"),
-                ),
+                self.peak_box,
+                ipw.HBox([self.export_path, export], layout=wrap),
             ]
         )
         self._background_rows()

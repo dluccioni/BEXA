@@ -108,6 +108,7 @@ class P:
     optional: bool = False
     kinds: tuple[str, ...] = ANY
     minimum: float | None = None
+    pixels: bool = False  # a scan's dims offered include its pixel dims (y, x)
 
     def __post_init__(self) -> None:
         self.label = self.label or self.name.replace("_", " ").capitalize()
@@ -448,12 +449,21 @@ OPS: list[Op] = [
         "Reduce Dims",
         "Extract",
         extract.reduce_dims,
-        [Input("obj", ANY, "Object")],
+        [Input("obj", ("scan", *ANY), "Scan or object")],
         [
-            P("dims", "Dims", "dims"),
-            P("how", "Combine as", "choice", "sum", ("sum", "mean", "max", "min", "std", "median")),
+            P("dims", "Dims", "dims", pixels=True, help="Any number of them; the others are kept"),
+            P(
+                "how",
+                "Combine as",
+                "choice",
+                "sum",
+                ("sum", "mean", "max", "min", "std", "median"),
+                help="std and median load a scan's frames into memory",
+            ),
+            P("roi", "ROI", "roi", optional=True, help=ROI_HELP + ". Its motor ranges pick frames"),
+            DOWNSAMPLE,
         ],
-        "Sum, average or take the max over the chosen dims.",
+        "Sum, average or take the max over any of the dims, inside an ROI.",
     ),
     _o(
         "profile",
@@ -825,6 +835,25 @@ OPS: list[Op] = [
             P("interpolate", "Put B on A's grid (interpolate)", "bool", True),
         ],
         "A + B, A - B, A x B or A / B, with errors. B can also be a number.",
+    ),
+    _o(
+        "resample_onto",
+        "Resample onto Another",
+        "Combine",
+        combine.resample_onto,
+        [Input("obj", ("scan", *ANY), "Resample"), Input("reference", ("scan", *ANY), "Onto")],
+        [
+            P(
+                "dims",
+                "Along",
+                "dims",
+                optional=True,
+                pixels=True,
+                help="Empty: every dim they share",
+            ),
+            P("method", "Method", "choice", "linear", combine.INTERP_METHODS),
+        ],
+        "Interpolate one object onto another's axes, along the dims they share.",
     ),
     _o(
         "average",

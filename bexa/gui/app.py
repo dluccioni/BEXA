@@ -1,4 +1,4 @@
-"""The bexa GUI: one notebook cell with the objects on the left and the tabs on the right.
+"""The bexa GUI in panels: data on the left, the View in the middle, analysis on the right.
 
 ``app = bexa.gui.App(root="X:/beamtime/RAW_DATA")`` then ``app`` shows it. The
 work runs in a background thread (progress and Cancel at the top), so the
@@ -23,12 +23,24 @@ log = get_logger(__name__)
 
 __all__ = ["App", "launch"]
 
-TABS = ("Data", "Browse", "View", "Analysis", "Fit", "Convert", "Log")
+LEFT_TABS = ("Data", "Browse", "Convert")
+RIGHT_TABS = ("Analysis", "Fit")
 CSS = """<style>
 .bexa-objects select, .bexa-files select, .bexa-h5tree select, .bexa-spec select,
 .bexa-ops select { font-family: monospace; font-size: 12px; }
 .bexa-app .widget-label { font-size: 12px; }
+/* a column fills the height left; its tab bar stays, the tab's contents scroll */
+.bexa-panel { min-height: 480px; overflow: auto; }
+.bexa-panel > .widget-tab { flex: 1 1 auto; min-height: 0; display: flex;
+  flex-direction: column; }
+.bexa-panel > .widget-tab > .widget-tab-contents { flex: 1 1 auto; min-height: 0;
+  overflow: auto; }
+.bexa-log { overflow: auto; max-height: 170px; }
 </style>"""
+# the three columns: how they share the width, and the width below which they wrap
+COLUMNS = (("1 1 380px", "360px"), ("1.5 1 520px", "460px"), ("1 1 400px", "380px"))
+# the height of the columns: the window less the header and the Log (open or folded away)
+COLUMN_HEIGHTS = ("calc(100vh - 300px)", "calc(100vh - 130px)")
 MESSAGE_COLOURS = {"info": "#424242", "ok": "#1b5e20", "error": "#b71c1c"}
 
 
@@ -112,9 +124,24 @@ class App:
         self.fit = FitTab(self)
         self.convert = ConvertTab(self)
         self.log = LogTab(self)
-        pages = [self.data, self.browse, self.view, self.analysis, self.fit, self.convert, self.log]
-        self.tabs = ipw.Tab(children=[p.box for p in pages])
-        self.tabs.titles = TABS
+        self.left_tabs = ipw.Tab(children=[self.data.box, self.browse.box, self.convert.box])
+        self.left_tabs.titles = LEFT_TABS
+        self.right_tabs = ipw.Tab(children=[self.analysis.box, self.fit.box])
+        self.right_tabs.titles = RIGHT_TABS
+        view = ipw.Tab(children=[self.view.box])
+        view.titles = ("View",)
+        self.bottom = ipw.Accordion(children=[self.log.box], selected_index=0)
+        self.bottom.set_title(0, "Log")
+        self.bottom.observe(lambda _c: self._fit_columns(), names="selected_index")
+        self.columns: list[Any] = []  # the three panels side by side
+        for parts, (flex, smallest) in zip(
+            ([self.objects.box, self.left_tabs], [view], [self.right_tabs]), COLUMNS, strict=True
+        ):
+            column = ipw.VBox(
+                parts, layout=ipw.Layout(flex=flex, min_width=smallest, height=COLUMN_HEIGHTS[0])
+            )
+            column.add_class("bexa-panel")  # scrolls on its own
+            self.columns.append(column)
         figures_note = (
             "interactive figures (ipympl)" if self.interactive_figures else "figures as pictures"
         )
@@ -132,12 +159,12 @@ class App:
                 ipw.HTML(CSS),
                 header,
                 self.message,
+                # side by side; on a narrow screen (a notebook) a column wraps below
                 ipw.HBox(
-                    [
-                        ipw.Box([self.objects.box], layout=ipw.Layout(width="27%")),
-                        ipw.Box([self.tabs], layout=ipw.Layout(width="73%")),
-                    ]
+                    self.columns,
+                    layout=ipw.Layout(flex_flow="row wrap", align_items="flex-start"),
                 ),
+                self.bottom,
             ]
         )
         self.box.add_class("bexa-app")
@@ -174,8 +201,23 @@ class App:
 
         display(self.box)
 
+    def _fit_columns(self) -> None:
+        """The panels take the height the Log leaves: more of it when the Log is folded."""
+        height = COLUMN_HEIGHTS[0 if self.bottom.selected_index == 0 else 1]
+        for column in self.columns:
+            column.layout.height = height
+
     def show_tab(self, name: str) -> None:
-        self.tabs.selected_index = TABS.index(name)
+        """Bring a tab forward: Data, Browse or Convert on the left, Analysis or Fit on the
+        right; the View is always shown, the Log opens."""
+        if name in LEFT_TABS:
+            self.left_tabs.selected_index = LEFT_TABS.index(name)
+        elif name in RIGHT_TABS:
+            self.right_tabs.selected_index = RIGHT_TABS.index(name)
+        elif name == "Log":
+            self.bottom.selected_index = 0
+        elif name != "View":
+            raise ValueError(f"no tab {name!r}: {(*LEFT_TABS, 'View', *RIGHT_TABS, 'Log')}")
 
     def say(self, text: str, kind: str = "info") -> None:
         """A message under the header (errors in red)."""

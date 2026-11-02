@@ -31,7 +31,7 @@ class ObjectsPanel:
         self.search = ipw.Text(placeholder="filter by name", layout=ipw.Layout(width="150px"))
         self.filter.observe(lambda _c: self.refresh(), names="value")
         self.search.observe(lambda _c: self.refresh(), names="value")
-        self.listing = ipw.SelectMultiple(options=[], rows=16, layout=ipw.Layout(width="100%"))
+        self.listing = ipw.SelectMultiple(options=[], rows=8, layout=ipw.Layout(width="100%"))
         self.listing.add_class("bexa-objects")
         self.listing.observe(self._selected, names="value")
         self.new_name = ipw.Text(placeholder="new name", layout=ipw.Layout(width="140px"))
@@ -61,6 +61,14 @@ class ObjectsPanel:
         save_notes.on_click(lambda _b: self._save_notes())
         self.details = ipw.HTML(layout=ipw.Layout(width="100%"))
         self.rois = ipw.HTML()
+        # what is selected, its notes and the ROIs: folded away, the list kept short
+        self.more = ipw.Accordion(
+            children=[
+                ipw.VBox([self.details, self.notes, save_notes, ipw.HTML("<b>ROIs</b>"), self.rois])
+            ],
+            selected_index=None,
+        )
+        self.more.set_title(0, "Details")
         self.box = ipw.VBox(
             [
                 ipw.HTML(
@@ -69,17 +77,15 @@ class ObjectsPanel:
                 ),
                 ipw.HBox([self.filter, self.search]),
                 self.listing,
-                ipw.HBox([self.new_name, rename]),
-                ipw.HBox([duplicate, self.delete, self.confirm]),
-                self.notes,
-                save_notes,
-                ipw.HTML("<b>Selected</b>"),
-                self.details,
-                ipw.HTML("<b>ROIs</b>"),
-                self.rois,
+                ipw.HBox(
+                    [self.new_name, rename, duplicate, self.delete, self.confirm],
+                    layout=ipw.Layout(flex_flow="row wrap"),
+                ),
+                self.more,
             ],
-            layout=ipw.Layout(width="100%", padding="0 8px 0 0"),
+            layout=ipw.Layout(width="100%", padding="0 0 6px 0", flex="0 0 auto"),
         )
+        self.box.add_class("bexa-objects-panel")
         self.refresh()
 
     # ------------------------------------------------------------------ listing

@@ -38,8 +38,8 @@ class AnalysisTab:
         self.only_fitting = ipw.Checkbox(
             value=False, indent=False, description="for the selection only"
         )
-        self.search = ipw.Text(placeholder="search", layout=ipw.Layout(width="240px"))
-        self.listing = ipw.Select(options=[], rows=16, layout=ipw.Layout(width="100%"))
+        self.search = ipw.Text(placeholder="search", layout=ipw.Layout(width="200px"))
+        self.listing = ipw.Select(options=[], rows=9, layout=ipw.Layout(width="100%"))
         self.listing.add_class("bexa-ops")
         self.group.observe(lambda _c: self._fill(), names="value")
         self.only_fitting.observe(lambda _c: self._fill(), names="value")
@@ -61,31 +61,22 @@ class AnalysisTab:
         preview = ipw.Button(description="Show command", layout=ipw.Layout(width="130px"))
         preview.on_click(lambda _b: self._preview())
         self.command = ipw.HTML()
-        self.box = ipw.VBox(
+        self.box = ipw.VBox(  # one column: the list above the form of the operation picked
             [
                 self.group,
+                ipw.HBox([self.search, self.only_fitting], layout=ipw.Layout(flex_flow="row wrap")),
+                self.listing,
+                self.title,
+                self.help,
+                ipw.HTML("<b>Inputs</b>"),
+                self.inputs,
+                ipw.HTML("<b>Settings</b>"),
+                self.form_box,
                 ipw.HBox(
-                    [
-                        ipw.VBox(
-                            [ipw.HBox([self.search]), self.only_fitting, self.listing],
-                            layout=ipw.Layout(width="32%", padding="0 10px 0 0"),
-                        ),
-                        ipw.VBox(
-                            [
-                                self.title,
-                                self.help,
-                                ipw.HTML("<b>Inputs</b>"),
-                                self.inputs,
-                                ipw.HTML("<b>Settings</b>"),
-                                self.form_box,
-                                ipw.HBox([self.run_button, self.name, preview]),
-                                self.each,
-                                self.command,
-                            ],
-                            layout=ipw.Layout(width="68%"),
-                        ),
-                    ]
+                    [self.run_button, self.name, preview], layout=ipw.Layout(flex_flow="row wrap")
                 ),
+                self.each,
+                self.command,
             ]
         )
         self._fill()

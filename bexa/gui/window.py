@@ -32,7 +32,7 @@ log = get_logger(__name__)
 
 __all__ = ["GuiServer", "app_notebook", "find_browser", "serve", "start"]
 
-WINDOW_SIZE = (1500, 950)
+WINDOW_SIZE = (1800, 1000)  # before it is maximized
 START_TIMEOUT = 60.0  # seconds for Voilà to listen; the App itself appears ~10 s later
 NOTEBOOK_NAME = "bexa.ipynb"  # Voilà titles the window after the notebook
 BROWSERS = {  # executables by platform, in order of preference
@@ -167,6 +167,7 @@ def window_command(
         f"--app={url}",
         f"--user-data-dir={profile}",
         f"--window-size={size[0]},{size[1]}",
+        "--start-maximized",  # three panels side by side
         "--no-first-run",
         "--no-default-browser-check",
         "--disable-sync",
