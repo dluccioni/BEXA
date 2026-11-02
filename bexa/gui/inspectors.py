@@ -2,7 +2,10 @@
 
 Each inspector reads only what it shows: an HDF5 group's children when it is
 opened, one slice of a dataset per slider move, the first rows of a SPEC scan.
-A file of hundreds of gigabytes browses as fast as a small one.
+A file of hundreds of gigabytes browses as fast as a small one. Both help to find
+the variables of interest: an HDF5 file is searched by name (a motor's value shown
+in every scan that has it), a SPEC session lists its motors (where each was, which
+moved), counters, columns and header fields, filtered by name.
 """
 
 from __future__ import annotations
@@ -18,9 +21,18 @@ from bexa._log import get_logger
 
 log = get_logger(__name__)
 
-__all__ = ["H5Inspector", "SpecInspector", "array_preview", "attrs_table", "tiff_summary"]
+__all__ = [
+    "H5Inspector",
+    "SpecInspector",
+    "array_preview",
+    "attrs_table",
+    "spec_variables",
+    "tiff_summary",
+]
 
 MAX_LINES = 3000  # tree lines listed at once
+MAX_FOUND = 1000  # names found in an HDF5 file, listed at once
+MAX_VARIABLES = 300  # rows of a SPEC session's variables, shown at once
 PREVIEW_PIXELS = 1024  # an image preview is cut to about this many pixels a side
 
 
@@ -74,6 +86,21 @@ def array_preview(pane: Any, values: np.ndarray, title: str = "") -> None:
     pane.draw()
 
 
+def _value(node: Any) -> str:
+    """`` = value`` of a dataset holding one value (a motor's position), else nothing."""
+    if node.size != 1 or node.dtype.kind not in "biufSUO":
+        return ""
+    try:
+        value = node[()] if node.shape == () else node[(0,) * node.ndim]
+    except Exception:
+        return ""
+    if isinstance(value, bytes):
+        value = value.decode(errors="replace")
+    if isinstance(value, (int, float, np.number)):
+        return f" = {float(value):.6g}"
+    return f" = {str(value)[:40]}"
+
+
 def _stride(shape: tuple[int, ...]) -> tuple[slice, ...]:
     """A strided slice that keeps about :data:`PREVIEW_PIXELS` per image axis."""
     return tuple(slice(None, None, max(1, n // PREVIEW_PIXELS)) for n in shape)
@@ -93,6 +120,12 @@ class H5Inspector:
         self.expanded: set[str] = {"/"}
         self.selected: str | None = None
         self.sliders: list[Any] = []
+        self.find = ipw.Text(
+            placeholder="find a name in the file: a motor, a counter, a dataset (Enter)",
+            continuous_update=False,
+            layout=ipw.Layout(width="100%"),
+        )
+        self.find.observe(lambda _c: self._fill(), names="value")
         self.tree = ipw.Select(options=[], rows=18, layout=ipw.Layout(width="100%"))
         self.tree.add_class("bexa-h5tree")
         self.tree.observe(self._picked, names="value")
@@ -109,7 +142,7 @@ class H5Inspector:
         load.on_click(lambda _b: self._load())
         convert.on_click(lambda _b: self._convert())
         self.actions = ipw.HBox([self.index, load, convert], layout=ipw.Layout(display="none"))
-        self.box = ipw.VBox([self.tree, self.info, self.slider_box, self.actions])
+        self.box = ipw.VBox([self.find, self.tree, self.info, self.slider_box, self.actions])
         self._fill()
 
     def close(self) -> None:
@@ -117,9 +150,33 @@ class H5Inspector:
             self.file.close()
 
     # ------------------------------------------------------------------ the tree
+    def _found(self, needle: str) -> list[tuple[str, str]]:
+        """Every group and dataset whose path holds ``needle``, a scalar with its value."""
+        import h5py
+
+        found: list[tuple[str, str]] = []
+
+        def visit(name: str, node: Any) -> bool | None:
+            if len(found) >= MAX_FOUND:
+                return True  # stops the walk
+            if needle in name.lower():
+                where = f"/{name}"
+                if isinstance(node, h5py.Group):
+                    found.append((f"{where}/  ({len(node)})", where))
+                else:
+                    found.append((f"{where}  {node.shape} {node.dtype}{_value(node)}", where))
+            return None
+
+        self.file.visititems(visit)  # links to other files are not followed
+        more = " (the first ones)" if len(found) >= MAX_FOUND else ""
+        return [(f"{len(found)} found for {needle!r}{more}", ""), *found]
+
     def _lines(self) -> list[tuple[str, str]]:
         import h5py
 
+        needle = self.find.value.strip().lower()
+        if needle:
+            return self._found(needle)
         lines: list[tuple[str, str]] = []
 
         def walk(group: Any, prefix: str, depth: int) -> None:
@@ -177,9 +234,13 @@ class H5Inspector:
             self.info.value = f"<span style='color:#b71c1c'>{html.escape(str(exc))}</span>"
             return
         if isinstance(node, h5py.Group):
-            if path != "/":
+            if self.find.value.strip():  # a group found: the tree, opened down to it
+                parts = path.strip("/").split("/")
+                self.expanded |= {"/" + "/".join(parts[: k + 1]) for k in range(len(parts))}
+                self.find.value = ""  # the tree again (filled by the observer)
+            elif path != "/":
                 self.expanded ^= {path}
-            self._fill()
+                self._fill()
             nx = node.attrs.get("NX_class", b"")
             nx = nx.decode() if isinstance(nx, bytes) else str(nx)
             self.info.value = (
@@ -301,7 +362,9 @@ class H5Inspector:
 
 
 class SpecInspector:
-    """A SPEC session: its scans, a scan's header and columns, a column plotted against another."""
+    """A SPEC session: its scans; its variables, found by name (every motor with where it was
+    in the scan picked and over the session, which moved first; the counters, the scan's
+    columns and header fields); a scan's header and columns, a column against another."""
 
     def __init__(self, tab: Any, path: Path) -> None:
         import ipywidgets as ipw
@@ -315,7 +378,7 @@ class SpecInspector:
             (f"#S {n:4d}  {s.n_rows:5d} pts  {s.command}"[:110], n)
             for n, s in self.spec.scans.items()
         ]
-        self.scans = ipw.Select(options=options, rows=14, layout=ipw.Layout(width="100%"))
+        self.scans = ipw.Select(options=options, rows=8, layout=ipw.Layout(width="100%"))
         self.scans.add_class("bexa-spec")
         self.scans.observe(lambda c: self._scan(c["new"]), names="value")
         self.x = ipw.Dropdown(description="x", layout=ipw.Layout(width="260px"))
@@ -329,11 +392,26 @@ class SpecInspector:
             f"{len(self.spec.motor_names)} motors"
         )
         self.details = ipw.HTML()
-        self.box = ipw.VBox(
-            [self.info, self.scans, ipw.HBox([self.x, self.y, open_button]), self.details]
+        self.moves = _motor_moves(self.spec)
+        self.find = ipw.Text(
+            placeholder="find a motor, counter, column or header field",
+            layout=ipw.Layout(width="100%"),
         )
-        if options:
+        self.find.observe(lambda _c: self._variables(), names="value")
+        self.variables = ipw.HTML()
+        self.box = ipw.VBox(
+            [
+                self.info,
+                self.scans,
+                self.find,
+                self.variables,
+                ipw.HBox([self.x, self.y, open_button], layout=ipw.Layout(flex_flow="row wrap")),
+                self.details,
+            ]
+        )
+        if options:  # the first scan shown: a Select starts on it, so no change says so
             self.scans.value = options[0][1]
+            self._scan(options[0][1])
 
     def close(self) -> None:
         return None
@@ -362,7 +440,34 @@ class SpecInspector:
             f"{' (aborted)' if scan.aborted else ''}<table style='font-size:11px'>{header}</table>"
             f"<div style='overflow:auto;max-height:240px;font-size:11px'>{rows}</div>"
         )
+        self._variables()
         self._plot()
+
+    def _variables(self) -> None:
+        """The table of variables, for the scan picked and the name typed."""
+        number = self.scans.value
+        scan = self.spec.scans.get(number) if number is not None else None
+        needle = self.find.value.strip().lower()
+        rows = [
+            r
+            for r in spec_variables(self.spec, scan, self.moves)
+            if needle in r[1].lower() + r[2].lower()
+        ]
+        cells = "".join(
+            "<tr>" + "".join(f"<td>{html.escape(str(v))}</td>" for v in row) + "</tr>"
+            for row in rows[:MAX_VARIABLES]
+        )
+        more = f" (the first {MAX_VARIABLES})" if len(rows) > MAX_VARIABLES else ""
+        head = "".join(
+            f"<th>{h}</th>"
+            for h in ("kind", "name", "label", f"in #S {number}", "session", "moved in")
+        )
+        count = f"{len(rows)} variable{'' if len(rows) == 1 else 's'}{more}"
+        self.variables.value = (
+            f"<div style='font-size:11px'>{count}</div>"
+            f"<div style='overflow:auto;max-height:260px;font-size:11px'>"
+            f"<table style='border-spacing:8px 1px'><tr>{head}</tr>{cells}</table></div>"
+        )
 
     def _plot(self) -> None:
         number = self.scans.value
@@ -388,6 +493,61 @@ class SpecInspector:
             lambda: [self.tab.app.ws.open_scan(str(self.path), scan=int(number))],
             done=self.tab.app.show_results,
         )
+
+
+def _motor_moves(spec: Any) -> dict[str, tuple[float, float, int]]:
+    """Every motor's lowest and highest position over the session's scans, and in how many
+    scans it stood elsewhere than in the scan before."""
+    scans = [spec.scans[n] for n in sorted(spec.scans)]
+    out = {}
+    for name in spec.motor_names:
+        values = np.array([s.positions.get(name, np.nan) for s in scans], dtype=float)
+        values = values[np.isfinite(values)]
+        if not values.size:
+            out[name] = (np.nan, np.nan, 0)
+            continue
+        tolerance = 1e-9 * max(1.0, float(np.abs(values).max()))
+        moved = int((np.abs(np.diff(values)) > tolerance).sum())
+        out[name] = (float(values.min()), float(values.max()), moved)
+    return out
+
+
+def spec_variables(
+    spec: Any, scan: Any, moves: dict[str, tuple[float, float, int]] | None = None
+) -> list[tuple[str, str, str, str, str, str]]:
+    """The variables of a SPEC session as rows ``(kind, name, label, in the scan, over the
+    session, moved in)``: its motors (the ones that moved first), counters, the columns of
+    ``scan`` and its header fields. ``moves`` is :func:`_motor_moves` (made when missing)."""
+    moves = moves if moves is not None else _motor_moves(spec)
+    labels = dict(zip(spec.motor_names, spec.motor_labels, strict=False))
+    total = len(spec.scans)
+    motors = []
+    for name in spec.motor_names:
+        low, high, moved = moves.get(name, (np.nan, np.nan, 0))
+        here = scan.positions.get(name) if scan is not None else None
+        motors.append(
+            (
+                "motor",
+                name,
+                labels.get(name, ""),
+                "" if here is None else f"{here:.6g}",
+                "" if np.isnan(low) else f"{low:.6g} .. {high:.6g}",
+                f"{moved} of {total} scans",
+            )
+        )
+    motors.sort(key=lambda row: -int(row[5].split()[0]))  # the ones that moved first
+    rows = list(motors)
+    for name, label in zip(spec.counter_names, spec.counter_labels, strict=False):
+        rows.append(("counter", name, label, "", "", ""))
+    if scan is not None:
+        for k, label in enumerate(scan.labels):
+            column = scan.rows[:, k] if scan.n_rows and k < scan.rows.shape[1] else None
+            span = "" if column is None else f"{np.nanmin(column):.6g} .. {np.nanmax(column):.6g}"
+            rows.append(("column", label, "", span, "", ""))
+        for block, fields in scan.header.items():
+            for field_name, value in dict(fields).items():
+                rows.append(("header", f"{block} {field_name}", "", str(value)[:40], "", ""))
+    return rows
 
 
 def tiff_summary(path: Path, page: int = 0) -> tuple[str, np.ndarray | None, int]:

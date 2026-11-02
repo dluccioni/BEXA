@@ -36,7 +36,7 @@ lists the everyday jobs with the function that does each.
 - [Find a function by task](#find-a-function-by-task)
 - [Function reference](#function-reference)
   - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.status](#bexacorestatus-the-state-of-a-scan) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.scan_table](#bexacorescan_table-the-rows-of-a-datasets-table) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
-  - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.survey](#bexaiosurvey-every-dataset-under-a-folder) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.spec_tiff](#bexaioenginesspec_tiff-aps-7-id-spec-sessions-with-a-tiff-per-point) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.layer](#bexaiolayer-one-layer-of-a-scan-as-a-source) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
+  - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.survey](#bexaiosurvey-every-dataset-under-a-folder) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.spec_tiff](#bexaioenginesspec_tiff-aps-7-id-spec-sessions-with-a-tiff-per-point) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.layer](#bexaiolayer-a-scans-frames-on-a-grid-of-its-own-a-layer-a-reshape) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
   - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis) · [bexa.analysis.curves](#bexaanalysiscurves-peak-positions-widths-smoothing-backgrounds-stitching) · [bexa.analysis.peakfit](#bexaanalysispeakfit-peaks-of-any-shape-on-a-background-bounds-and-fixed-values) · [bexa.analysis.imaging](#bexaanalysisimaging-gaussian-peak-maps-kam-orientation-colours-strain) · [bexa.analysis.xrd](#bexaanalysisxrd-powder-geometry-azimuthal-integration-cakes-scherrer) · [bexa.analysis.xrr](#bexaanalysisxrr-momentum-transfer-footprint-critical-angle-film-thickness)
   - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.sliders](#bexavizsliders-what-the-slider-browsers-share) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers) · [bexa.notebook.picker](#bexanotebookpicker-choosing-scans-in-a-notebook) · [bexa.notebook.listing](#bexanotebooklisting-the-scans-listed-and-a-selection-across-folders) · [bexa.notebook.selection](#bexanotebookselection-scans-chosen-in-several-dataset-folders) · [bexa.notebook.picker_state](#bexanotebookpicker_state-what-a-picker-remembers) · [bexa.notebook.picker_widgets](#bexanotebookpicker_widgets-the-widget-views-of-the-picker) · [bexa.notebook.selection_panel](#bexanotebookselection_panel-the-selected-scans-of-every-folder)
   - Pipelines: [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set) · [bexa.pipelines.xfel_cube](#bexapipelinesxfel_cube-pal-xfel-point-files-to-a-laser-onoff-cube) · [bexa.pipelines.cube_report](#bexapipelinescube_report-figures-and-gifs-of-one-cube) · [bexa.pipelines.auto_process](#bexapipelinesauto_process-the-beamtime-watcher) · [bexa.pipelines.benchmark](#bexapipelinesbenchmark-timings-and-baselines)
@@ -913,7 +913,7 @@ folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"  #
 ```
 
 #### `open`
-`bexa.core.scan.open(path=None, *, profile=None, sample=None, dataset=None, format=None, scan=None, detector=None, overrides=None, energy_keV=None, geometry=None, crystal=None, cache=True, cache_reductions=None, motors=None, layer=None, **kwargs)`
+`bexa.core.scan.open(path=None, *, profile=None, sample=None, dataset=None, format=None, scan=None, detector=None, overrides=None, energy_keV=None, geometry=None, crystal=None, cache=True, cache_reductions=None, motors=None, layer=None, reshape=None, **kwargs)`
 
 Open a measurement and return a `Scan` (top-level name `bexa.open`). `path` is a dataset
 folder, its master file, a `scanNNNN` folder, a PAL-XFEL run folder, a cube file, a scan package
@@ -941,6 +941,8 @@ through `open_profile`.
   `Scan.with_dims`); layouts with a master file only.
 - `layer`: `(dim, index)`, or a list of them: one layer of the scan, its frames at that point
   of a motor dim (`Scan.layer`); this is how a worker reopens a layer.
+- `reshape`: a list of `[dim, axes, snake]`: the scan reshaped (`Scan.reshaped`) before any
+  layer is taken; this is how a worker reopens a reshaped scan.
 - Other keywords go to the engine, for example `coords=` for a generic stack.
 - The scan remembers how it was opened in `Scan.recipe` (`path`, `scan`, the name of the
   matched spec, `detector`, `overrides`, `motors`, `layer` and the extra keywords), so
@@ -1327,6 +1329,28 @@ splits into single frames.
 layers = scan.layers("chi")
 len(layers), layers[2].dims                     # (6, ('mu', 'y', 'x'))
 bexa.stack(layers, [bexa.acc.Sum()], dim="chi")["sum"].dims   # ('chi', 'y', 'x')
+```
+
+#### `Scan.reshaped`
+`bexa.core.scan.Scan.reshaped(dim, axes, snake=False)`
+
+The motor dim `dim` split into new dims: a frame series as the raster it was. `axes` holds each
+new dim, slow first, as `(name, first, last, points)`, its coordinates running evenly from
+`first` to `last`: `[("a", 0, 1, 11), ("b", 0, 2, 21)]` turns 231 frames (`frame x y x x`) into
+`a x b x y x x`, `b` fastest; `snake` runs `b` backwards on every other row (a serpentine
+raster). A grid with more points than frames has its last ones missing (a raster stopped
+early); one with fewer, or a new name that is already a dim, raises `ValueError`. The frames
+are read through this scan (`bexa.io.layer.ReshapedSource`), so every streaming reduction
+takes it; the reshape goes into the recipe (`reshape`, which `bexa.open` applies before any
+layer) and into the cache keys.
+
+```python
+# a frame series of 12 frames (an APS loop scan): a 3 x 4 raster, a serpentine
+import tempfile
+from bexa.testing import make_aps_session
+loop = bexa.open(make_aps_session(tempfile.mkdtemp(), scans=[(1, "loopscan 12 1 0.1", {})]).root, scan=1, cache=False)
+grid = loop.reshaped("frame", [("a", 0.0, 0.2, 3), ("b", 1.0, 1.3, 4)], snake=True)
+grid.dims, grid.structure.frame_index[1].tolist()   # (('a', 'b', 'y', 'x'), [7, 6, 5, 4])
 ```
 
 #### `Scan.close`
@@ -4578,16 +4602,17 @@ by_scan = MultiScanSource([bexa.open(made[0].dataset_dir, scan=s).source for s i
 by_scan.structure().motor_dims, by_scan.structure().motor_shape  # (('scan', 'chi', 'mu'), (2, 3, 8))
 ```
 
-### bexa.io.layer: one layer of a scan as a source
+### bexa.io.layer: a scan's frames on a grid of its own: a layer, a reshape
 
 The reverse of `MultiScanSource`: the frames of one scan at one point of a motor dim, read as a
 scan of their own. A z-scan (`uz x chi x mu`) holds a mosaicity scan at every height; its layer
 at one `uz` point has the grid `chi x mu` and `uz` as a fixed positioner, so the layers of one
-scan stack like the scans of a z-stack. `Scan.layer` and `Scan.layers` build them.
+scan stack like the scans of a z-stack. `Scan.layer` and `Scan.layers` build them. A frame
+series taken as a raster is that raster reshaped (`Scan.reshaped`).
 
 ```python
 import bexa
-from bexa.io.layer import LayerSource
+from bexa.io.layer import LayerSource, ReshapedSource
 
 scan = bexa.demo("mosa")                 # synthetic chi x mu scan, 6 x 16 frames of 64 x 80 pixels
 ```
@@ -4610,6 +4635,31 @@ number and dataset name (`LABELS`) label the layer. Attributes: `parent`, `dim`,
 src = LayerSource(scan.source, "chi", 2)
 src.dim, src.index, round(src.value, 3)         # ('chi', 2, -0.1)
 src.structure().motor_dims, src.cache_records()[-1]   # (('mu',), {'path': '', 'layer': 'chi', 'index': 2, 'value': -0.1})
+```
+
+#### `GridSource`
+`bexa.io.layer.GridSource(parent)`
+
+The frames of the source `parent`, read through it, on a grid of its own: the base of
+`LayerSource` and `ReshapedSource`. A subclass gives `regrid(whole)` (the new structure, from
+the parent's) and `record()` (what its cache records add to the parent's). `files`,
+`frame_shape`, `n_frames`, `dtype`, `chunk_frames`, `status` and `aux_tables()` are the
+parent's; `read_frames` reads through it with the frame ids unchanged; `refresh()` re-reads the
+parent and makes the grid again; `close()` closes the parent's files. The parent's scan number
+and dataset name (`LABELS`) label it.
+
+#### `ReshapedSource`
+`bexa.io.layer.ReshapedSource(parent, dim, axes, snake=False)`
+
+The frames of `parent` with its motor dim `dim` split into new dims (`Structure.split`): `axes`
+holds each as `(name, first, last, points)`, `snake` runs the last backwards on every other
+row. What `Scan.reshaped` reads; `cache_records()` ends with the reshape (`reshape`, `into`,
+`snake`). Attributes: `parent`, `dim`, `axes`, `snake`.
+
+```python
+# scan: the demo chi x mu scan; its 16 mu points as a 4 x 4 raster
+src = ReshapedSource(scan.source, "mu", [("a", 0, 3, 4), ("b", 0, 3, 4)])
+src.structure().motor_dims, src.cache_records()[-1]["into"][0]   # (('chi', 'a', 'b'), ['a', 0.0, 3.0, 4])
 ```
 
 ### bexa.io.inspect: HDF5 trees and path summaries
@@ -10043,6 +10093,26 @@ Multi-scan, "Split into Layers"; in code `ws.run("layers", ...)`.
 multiscan.layers(mosa, "chi").describe()        # 'scan set of 6 scans'
 ```
 
+#### `reshape`
+`bexa.workspace.ops.multiscan.reshape(obj, dim=None, a_name="a", a_range=None, a_points=None, b_name="b", b_range=None, b_points=None, snake=False)`
+
+A frame series as the raster it was: `frame x y x x` reshaped into `a x b x y x x`. `dim`
+(default: the first dim, the frames of a series) is split into the new dims `a_name` and
+`b_name`, `b` fastest (no `b_name`: one dim, new coordinates only). Each runs evenly over its
+range, `(first, last)` (none: 0, 1, 2...), in its number of points; one number may be left out,
+then it is the points of `dim` over the other (`ValueError` when they do not divide, or when
+both are left out). `snake`: `b` runs backwards on every other row. A grid with more points
+than `dim` has its last ones missing (NaN in an array). A scan stays a scan (`Scan.reshaped`:
+read through the original, so every streaming operation takes it); a stack, map or curve is
+reshaped in memory. On the Analysis tab: Multi-scan, "Reshape Frames"; in code
+`ws.run("reshape", ...)`.
+
+```python
+# the mosa demo's 16 mu points as a 4 x 4 raster named after two stages
+(mosa,) = ws.demo("mosa")
+multiscan.reshape(mosa, "mu", "samy", (0, 0.3), 4, "samz", (1, 1.3)).describe()   # 'scan fscan2d chi[6] x samy[4] x samz[4] x y[64] x x[80]'
+```
+
 #### `stack_per_scan`
 `bexa.workspace.ops.multiscan.stack_per_scan(scan_set, per_scan, base)`
 
@@ -11571,7 +11641,8 @@ from bexa.gui import App
 
 app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
 (rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
-from bexa.gui.inspectors import H5Inspector, SpecInspector, array_preview, attrs_table, tiff_summary
+from bexa.gui.inspectors import (H5Inspector, SpecInspector, array_preview, attrs_table,
+                                  spec_variables, tiff_summary)
 from bexa.testing import make_aps_session
 import tempfile
 master = next(rock.data.files[0].parent.glob("*.h5"))  # the scan's master file
@@ -11583,8 +11654,10 @@ session = make_aps_session(tempfile.mkdtemp())  # a synthetic APS SPEC session
 
 An HDF5 file as an expandable `tree` (a `Select`; a
 group toggles open when chosen), `info` (a dataset's facts and attributes), sliders for the
-leading axes of an N-D dataset, `index` and the Load and Convert buttons. `close()` closes the
-file.
+leading axes of an N-D dataset, `index` and the Load and Convert buttons. `find` searches the
+whole file by name (Enter): the tree lists every group and dataset whose path holds it, a
+dataset of one value with that value (a motor's position in every scan that has it); a group
+found opens the tree down to it. `close()` closes the file.
 
 ```python
 # the tree of the master file, one level open
@@ -11598,12 +11671,29 @@ inspector.close()
 `bexa.gui.inspectors.SpecInspector(tab, path)`
 
 A SPEC session: its scans, a scan's header and first
-rows, a column plotted against another (`x`, `y`), and Open this scan.
+rows, a column plotted against another (`x`, `y`), and Open this scan; the first scan is
+shown at once. `variables` lists what the session records (`spec_variables`), filtered by
+the name typed in `find`: to find the motors and counters of interest. `moves` holds every
+motor's range over the session and how many scans it moved in.
 
 ```python
 # the synthetic session
 spec = SpecInspector(app.browse, session.path)
-len(spec.scans.options), spec.x.value           # (5, None)
+len(spec.scans.options), spec.x.value           # (5, 'Time')
+```
+
+#### `spec_variables`
+`bexa.gui.inspectors.spec_variables(spec, scan, moves=None)`
+
+The variables of a SPEC session (a `SpecFile`) as rows `(kind, name, label, in the scan,
+over the session, moved in)`: every motor (its mnemonic, its name, its position in `scan`, its
+range over the session and in how many scans it moved, the ones that moved first), every
+counter, the columns of `scan` (their range in it) and its header fields.
+
+```python
+# the synthetic session at its scan 2
+rows = spec_variables(spec.spec, spec.spec.scans[2])
+rows[0][:4], sorted({row[0] for row in rows})   # (('motor', 'phi', 'Phi', '8.8'), ['column', 'counter', 'header', 'motor'])
 ```
 
 #### `attrs_table`
@@ -14661,6 +14751,10 @@ internal cache. Members:
   becomes a fixed positioner in `scalars` (the energy when `dim` is the energy), the frame ids
   keep their numbering and the plan is dropped (what `Scan.layer` reads). A name that is not a
   motor dim raises `ValueError`, an index past the end `IndexError`.
+- `split(dim, axes, snake=False)`: the motor dim `dim` split into new dims, slow first: `axes`
+  holds each new dim's name and coordinates; the points of `dim` fill the new grid in order,
+  the last dim fastest (`raster_order`), the frame ids keep their numbering and the plan is
+  dropped (what `Scan.reshaped` reads). A new name that is already a dim raises `ValueError`.
 - `describe()`: the summary printed by `bexa info` and `scan.info()` (type, dims, shape, frames
   of the planned ones, missing points, title, motor ranges with units, energy, fixed
   positioners).
@@ -14682,6 +14776,20 @@ part = st.sub((slice(0, 2), slice(4, 12)))      # chi indices 0-1, mu indices 4-
 row = st.layer("chi", 2)                        # chi index 2 alone: its 16 mu points, chi a positioner
 row.motor_dims, row.scalars["chi"], row.frame_index[:3]   # (('mu',), -0.1, [32, 33, 34])
 Structure.stack([st, st], "energy", [17.00, 17.02]).dims   # ('energy', 'chi', 'mu', 'y', 'x')
+```
+
+#### `raster_order`
+`bexa.core.structure.raster_order(n, sizes, snake=False)`
+
+Which of `n` points in a row sits at every position of a grid of `sizes`: the points fill the
+grid in order, the last dim fastest; `snake` runs the last dim backwards on every other row
+(a serpentine raster). Positions past the `n` points hold `MISSING`; a grid with fewer
+positions than points raises `ValueError`.
+
+```python
+# five points on a 2 x 3 grid, then six in a serpentine
+from bexa.core.structure import raster_order
+raster_order(5, (2, 3)).tolist(), raster_order(6, (2, 3), snake=True).tolist()   # ([[0, 1, 2], [3, 4, -1]], [[0, 1, 2], [5, 4, 3]])
 ```
 
 #### `Structure.from_grid`

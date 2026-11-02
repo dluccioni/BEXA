@@ -22,6 +22,27 @@ BINNED_PIXEL_DIMS: tuple[str, str] = ("yb", "xb")
 MISSING = -1
 
 
+def raster_order(n: int, sizes: Sequence[int], snake: bool = False) -> np.ndarray:
+    """Which of ``n`` points in a row sits at every position of a grid of ``sizes``.
+
+    The points fill the grid in order, the last dim fastest; ``snake`` runs the last
+    dim backwards on every other row (a serpentine raster). Positions past the ``n``
+    points hold ``MISSING``; a grid with fewer positions than points is refused.
+    """
+    sizes = tuple(int(s) for s in sizes)
+    total = int(np.prod(sizes)) if sizes else 1
+    if total < n:
+        grid = " x ".join(str(s) for s in sizes)
+        raise ValueError(f"a {grid} grid has {total} points for {n}: give more points")
+    order = np.arange(total, dtype=np.int64).reshape(sizes)
+    if snake and len(sizes) > 1:
+        rows = order.reshape(-1, sizes[-1])
+        rows[1::2] = rows[1::2, ::-1].copy()
+        order = rows.reshape(sizes)
+    order[order >= n] = MISSING
+    return order
+
+
 def _pair(frame_shape: Sequence[int]) -> tuple[int, int]:
     """Validate and normalise a ``(height, width)`` pair."""
     if len(frame_shape) != 2:
@@ -212,6 +233,46 @@ class Structure:
             frame_index=frame_index,
             scalars=scalars,
             energy_keV=value if dim == ENERGY_DIM else self.energy_keV,
+            planned_shape=None,
+            planned_frames=None,
+            _grid_of_frame=None,
+        )
+
+    def split(self, dim: str, axes: Sequence[tuple[str, Any]], snake: bool = False) -> Structure:
+        """The motor dim ``dim`` split into new dims, slow first: a frame series as the
+        raster it was.
+
+        ``axes`` holds each new dim's name and coordinates, ``[("a", a_values), ("b",
+        b_values)]``. The points of ``dim`` fill the new grid in order, the last dim fastest
+        (:func:`raster_order`; ``snake`` for a serpentine raster); a grid with more points
+        than ``dim`` has its last ones missing (a raster stopped early). The frame ids keep
+        their numbering, and the split grid is not the plan any more.
+        """
+        if dim not in self.motor_dims:
+            raise ValueError(f"{dim!r} is not a motor dim; the dims are {self.motor_dims}")
+        names = [str(name) for name, _ in axes]
+        taken = [n for n in names if (n in self.motor_dims and n != dim) or n in PIXEL_DIMS]
+        if not names or taken or len(set(names)) < len(names):
+            raise ValueError(f"the new dims {names} must be new names, none of {self.dims}")
+        values = [np.asarray(v, dtype=float) for _, v in axes]
+        axis = self.motor_dims.index(dim)
+        order = raster_order(self.motor_shape[axis], [len(v) for v in values], snake)
+        # the frame ids along dim, one more for a missing position, picked in raster order
+        along = np.moveaxis(self.frame_index, axis, -1)
+        along = np.concatenate([along, np.full((*along.shape[:-1], 1), MISSING)], axis=-1)
+        index = along[..., np.where(order >= 0, order, along.shape[-1] - 1)]
+        new_axes = range(along.ndim - 1, along.ndim - 1 + len(names))
+        index = np.moveaxis(index, list(new_axes), list(range(axis, axis + len(names))))
+        dims = (*self.motor_dims[:axis], *names, *self.motor_dims[axis + 1 :])
+        coords = {d: self.coords[d] for d in self.motor_dims if d != dim}
+        coords.update(zip(names, values, strict=True))
+        return replace(
+            self,
+            motor_dims=dims,
+            motor_shape=tuple(index.shape),
+            coords=coords,
+            frame_index=index,
+            units={k: v for k, v in self.units.items() if k != dim},
             planned_shape=None,
             planned_frames=None,
             _grid_of_frame=None,

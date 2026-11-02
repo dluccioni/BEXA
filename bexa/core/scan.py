@@ -26,7 +26,7 @@ from bexa.core.status import ScanStatus
 from bexa.core.structure import Structure
 from bexa.io.base import Source
 from bexa.io.formats import FormatSpec, best_spec, load_spec, match_spec
-from bexa.io.layer import LayerSource
+from bexa.io.layer import LayerSource, ReshapedSource
 from bexa.io.multi import MultiScanSource
 
 log = get_logger(__name__)
@@ -170,6 +170,26 @@ class Scan:
             )
         size = structure.motor_shape[structure.motor_dims.index(dim)]
         return [self.layer(dim, i) for i in range(size)]
+
+    def reshaped(
+        self, dim: str, axes: Sequence[tuple[str, float, float, int]], snake: bool = False
+    ) -> Scan:
+        """The motor dim ``dim`` split into new dims: a frame series as the raster it was.
+
+        ``axes`` holds each new dim, slow first, as ``(name, first, last, points)``; its
+        coordinates run evenly from ``first`` to ``last``. ``[("a", 0, 1, 11), ("b", 0, 2,
+        21)]`` turns a series of 231 frames (``frame x y x x``) into ``a x b x y x x``, ``b``
+        fastest; ``snake`` runs ``b`` backwards on every other row. A grid with more points
+        than frames has its last ones missing. The frames are read through this scan; the
+        reshape goes into the recipe, so a worker reopens it, and into the cache keys.
+        """
+        steps = [(str(n), float(a), float(b), int(k)) for n, a, b, k in axes]
+        made = self._around(ReshapedSource(self.source, dim, steps, snake))
+        if self.recipe is not None:
+            earlier = list(self.recipe.get("reshape") or [])
+            step = [str(dim), [list(s) for s in steps], bool(snake)]
+            made.recipe = {**self.recipe, "reshape": [*earlier, step]}
+        return made
 
     def _around(self, source: Source) -> Scan:
         """A scan with this one's spec, geometry, crystal, cache and ROI, reading ``source``."""
@@ -546,6 +566,7 @@ def open(
     cache_reductions: bool | None = None,
     motors: Sequence[str] | None = None,
     layer: tuple[str, int] | Sequence[tuple[str, int]] | None = None,
+    reshape: Sequence[Any] | None = None,
     **kwargs: Any,
 ) -> Scan:
     """Open a scan from a path, or from a beamtime profile and a sample name.
@@ -582,6 +603,9 @@ def open(
         ``(dim, index)``, or a list of them: one layer of the scan, its frames
         at that point of a motor dim (see :meth:`Scan.layer`). The recipe of a
         layer says so, which is how a worker reopens it.
+    reshape
+        A list of ``[dim, axes, snake]``: the scan reshaped (see :meth:`Scan.reshaped`)
+        before any layer is taken; the recipe of a reshaped scan says so.
     """
     if motors is not None:
         kwargs["motors"] = [str(m) for m in motors]
@@ -600,7 +624,7 @@ def open(
             cache=None if cache is True else cache,
             **kwargs,
         )
-        return _layered(profiled, layer)
+        return _layered(profiled, layer, reshape)
     if format is None and "::" in str(path):  # file.h5::/dataset shortcut
         format = "generic_stack"
     spec = _resolve_spec(Path(str(path).split("::")[0]), format, overrides)
@@ -634,11 +658,15 @@ def open(
         "overrides": overrides,
         **kwargs,
     }
-    return _layered(opened, layer)
+    return _layered(opened, layer, reshape)
 
 
-def _layered(scan: Scan, layer: Any) -> Scan:
-    """``scan``, or its layer when ``layer`` names one: ``(dim, index)`` or a list of them."""
+def _layered(scan: Scan, layer: Any, reshape: Any = None) -> Scan:
+    """``scan`` reshaped as ``reshape`` says (a list of ``[dim, axes, snake]``), then its layer
+    when ``layer`` names one: ``(dim, index)`` or a list of them. A layer may be of a dim a
+    reshape made, so the reshapes come first."""
+    for dim, axes, snake in reshape or ():
+        scan = scan.reshaped(str(dim), [tuple(a) for a in axes], bool(snake))
     if layer is None:
         return scan
     steps = [layer] if len(layer) == 2 and isinstance(layer[0], str) else list(layer)

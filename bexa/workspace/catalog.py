@@ -1035,6 +1035,24 @@ OPS: list[Op] = [
         [P("dim", "Along", "dim")],
         "Split a scan along one motor into a scan set, one scan per point.",
     ),
+    _o(
+        "reshape",
+        "Reshape Frames",
+        "Multi-scan",
+        multiscan.reshape,
+        [Input("obj", ("scan", *ANY), "Scan or object")],
+        [
+            P("dim", "Dim to split", "dim", optional=True, help="Empty: the first (frame)"),
+            P("a_name", "A name", "text", "a"),
+            P("a_range", "A from, to", "range", optional=True, help="Empty: 0, 1, 2..."),
+            P("a_points", "A points", "int", optional=True, minimum=1, help="Empty: frames / B"),
+            P("b_name", "B name", "text", "b", optional=True, help="Empty: no B, one dim"),
+            P("b_range", "B from, to", "range", optional=True, help="Empty: 0, 1, 2..."),
+            P("b_points", "B points", "int", optional=True, minimum=1, help="Empty: frames / A"),
+            P("snake", "Serpentine raster", "bool", False, help="B backwards every other row"),
+        ],
+        "Split a series of frames into a grid of two new dims (A slow, B fast) and their values.",
+    ),
     # --- Fit -------------------------------------------------------------------------------
     _o(
         "fit_peaks",

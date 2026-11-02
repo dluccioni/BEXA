@@ -22,6 +22,7 @@ from bexa.workspace.ops._base import new, require
 __all__ = [
     "STACK_QUANTITIES",
     "layers",
+    "reshape",
     "same_grid",
     "scan_table",
     "series",
@@ -153,6 +154,69 @@ def layers(obj: DataObject, dim: str) -> DataObject:
     values = scan.structure.coords[dim]
     labels = [f"{obj.name} {dim}={float(v):.5g}" for v in values]
     return DataObject(f"{obj.name}_{dim}_layers", ScanSet(parts, labels), parents=[obj.name])
+
+
+def reshape(
+    obj: DataObject,
+    dim: str | None = None,
+    a_name: str = "a",
+    a_range: tuple[float | None, float | None] | None = None,
+    a_points: int | None = None,
+    b_name: str | None = "b",
+    b_range: tuple[float | None, float | None] | None = None,
+    b_points: int | None = None,
+    snake: bool = False,
+) -> DataObject:
+    """A frame series as the raster it was: ``frame x y x x`` reshaped into ``a x b x y x x``.
+
+    ``dim`` (default: the first dim, the frames of a series) is split into the new dims
+    ``a_name`` and ``b_name``, ``b`` fastest (no ``b_name``: one dim, new coordinates
+    only). Each runs evenly over its range, ``(first, last)`` (none: 0, 1, 2...), in its
+    number of points; one number may be left out, then it is the points of ``dim`` over
+    the other. ``snake``: ``b`` runs backwards on every other row. A grid with more points
+    than ``dim`` has its last ones missing. A scan stays a scan (read through the
+    original, so every streaming operation takes it); an array is reshaped in memory.
+    """
+    require(obj, ("scan", "stack", "image", "map", "curve", "volume"), "Reshape Frames")
+    dim = dim or obj.dims[0]
+    if dim not in obj.dims:
+        raise ValueError(f"{obj.name} has no dim {dim!r}; its dims: {obj.dims}")
+    n = dict(zip(obj.dims, obj.shape, strict=True))[dim]
+    names = [str(a_name)] + ([str(b_name)] if b_name else [])
+    ranges = [a_range, b_range][: len(names)]
+    points = [a_points, b_points][: len(names)]
+    unknown = [i for i, p in enumerate(points) if not p]
+    if len(unknown) > 1:
+        raise ValueError("give the number of points of a or of b")
+    if unknown:
+        known = int(np.prod([p for p in points if p]))
+        if n % known:
+            raise ValueError(f"{n} points of {dim} are not a multiple of {known}: give both")
+        points[unknown[0]] = n // known
+    axes = []
+    for name, span, k in zip(names, ranges, points, strict=True):
+        first, last = span if span else (0.0, float(k) - 1)
+        if first is None or last is None:
+            raise ValueError(f"{name}: give both ends of its range, or neither")
+        axes.append((name, float(first), float(last), int(k)))
+    suffix = "_".join(names)
+    meta = {"reshaped": {"dim": dim, "into": [list(a) for a in axes], "snake": bool(snake)}}
+    if obj.kind == "scan":
+        made = obj.data.reshaped(dim, axes, snake)
+        return new(obj, made, suffix, meta=meta)
+    from bexa.core.structure import raster_order
+
+    order = raster_order(n, [k for *_, k in axes], snake)
+    picked = xr.DataArray(np.where(order >= 0, order, 0), dims=names)
+    coords = {name: np.linspace(a, b, k) for name, a, b, k in axes}
+    keep = xr.DataArray(order >= 0, dims=names)
+
+    def reshaped(da: xr.DataArray) -> xr.DataArray:
+        out = da.isel({dim: picked}).where(keep)  # a point past the frames: NaN
+        return out.drop_vars(dim, errors="ignore").assign_coords(coords)
+
+    sigma = None if obj.sigma is None else reshaped(obj.sigma)
+    return new(obj, reshaped(obj.array), suffix, sigma=sigma, meta=meta)
 
 
 def stack_per_scan(

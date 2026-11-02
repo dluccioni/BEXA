@@ -94,7 +94,7 @@ class BrowseTab:
         up.on_click(lambda _b: self.go(self.folder.parent))
         enter.on_click(lambda _b: self._enter())
         use.on_click(lambda _b: self._use())
-        self.listing = ipw.Select(options=[], rows=12, layout=ipw.Layout(width="100%"))
+        self.listing = ipw.Select(options=[], rows=8, layout=ipw.Layout(width="100%"))
         self.listing.add_class("bexa-files")
         self.listing.observe(lambda c: self._picked(c["new"]), names="value")
         self.head = ipw.HTML()
