@@ -146,11 +146,12 @@ class App:
     def _figures(figures: str) -> bool:
         if figures == "static":
             return False
+        from importlib.util import find_spec
+
         from bexa._log import in_kernel
 
-        try:
-            import ipympl  # noqa: F401
-        except ImportError:
+        # looked for, not imported: importing ipympl switches matplotlib to its backend
+        if find_spec("ipympl") is None:
             if figures == "interactive":
                 log.warning("ipympl is not installed: figures are pictures")
             return False

@@ -10,6 +10,8 @@ Analysis (every operation of :mod:`bexa.workspace.catalog`), Fit (peaks with
 bounds and fixed values), Convert (formats and exports), Log (commands, the
 script, workspace files). Needs ipywidgets; ipympl makes the figures
 interactive (ROIs drawn with the mouse, peaks placed by a click).
+``bexa gui`` (:mod:`bexa.gui.window`) shows the same GUI in a window of its
+own, through Voila.
 """
 
 from __future__ import annotations

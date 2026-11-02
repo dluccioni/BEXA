@@ -366,11 +366,34 @@ OPS: list[Op] = [
                 "Channels",
                 "channels",
                 optional=True,
-                help="Empty: every recorded channel",
-            )
+                help="Empty: every recorded channel but the scanned motors",
+            ),
+            P(
+                "x",
+                "Against",
+                "channel",
+                optional=True,
+                help="Empty: the scanned motor (Time in a loop scan); or any recorded channel",
+            ),
+            P(
+                "monitor",
+                "Divide by monitor",
+                "channel",
+                optional=True,
+                help="A monitor channel (I0, IC_1) the other channels are divided by",
+            ),
+            P(
+                "monitor_dark",
+                "Monitor dark (counts/s)",
+                "number",
+                0.0,
+                help="The monitor's rate without beam, taken off times the count time first",
+            ),
         ],
-        "The per-frame channels (counters, monitors, readbacks) on the scan's grid, without "
-        "reading a frame. On a scan set: one map per channel over the scans.",
+        "The counters, monitors and readbacks of every point, without reading a frame: curves "
+        "for a scan of one motor (a SPEC scan's rows without a saved frame too), maps on the "
+        "grid of a mesh; optionally divided by a monitor less its dark rate. On a scan set: "
+        "stacked over the scans when their grids agree.",
     ),
     _o(
         "point_table",

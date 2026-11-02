@@ -192,7 +192,10 @@ class DataTab:
 
         def work() -> list[Any]:
             if as_set or (numbers is not None and len(numbers) > 1):
-                return ws.open_scans(path, numbers, as_set=as_set, **options)
+                # scans named by number open whatever their status (a SPEC scan whose frames
+                # were not copied still has its counters); all scans: the finished ones
+                status = "any" if numbers is not None else "finished"
+                return ws.open_scans(path, numbers, as_set=as_set, status=status, **options)
             if numbers is not None:
                 return [ws.open_scan(path, scan=numbers[0], **options)]
             try:  # a dataset of several scans gives one object per scan; anything else, one scan

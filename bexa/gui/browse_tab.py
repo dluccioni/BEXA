@@ -271,11 +271,14 @@ class BrowseTab:
     def _open_bar_compact(self, path: Path) -> Any:
         import ipywidgets as ipw
 
+        from bexa.io.engines.spec_tiff import frame_point
         from bexa.io.formats import match_spec
 
         scored = match_spec(path)
-        if scored and scored[0][0] >= 1.0:
-            button = ipw.Button(description=f"Open its scan ({scored[0][1].name})", icon="share")
+        spec = scored[0][1] if scored and scored[0][0] >= 1.0 else None
+        # beside a SPEC file only a frame named <file>_S<scan>_<point>.tif belongs to a scan
+        if spec is not None and (spec.engine != "spec_tiff" or frame_point(path) >= 0):
+            button = ipw.Button(description=f"Open its scan ({spec.name})", icon="share")
             button.on_click(lambda _b: self.app.data_path(path))
             return button
         return ipw.HTML("")

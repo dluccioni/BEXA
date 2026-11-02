@@ -301,18 +301,117 @@ def projections(obj: DataObject, roi: ROI | None = None) -> list[DataObject]:
     return [_from_scan(obj, result[n], f"proj_{n}", meta={"quantity": n}) for n in result.data_vars]
 
 
-def counters(obj: DataObject, channels: Sequence[str] | None = None) -> list[DataObject]:
-    """Per-frame channels (counters, monitors, readbacks) on the scan's grid: curves or maps.
+def counters(
+    obj: DataObject,
+    channels: Sequence[str] | None = None,
+    x: str | None = None,
+    monitor: str | None = None,
+    monitor_dark: float = 0.0,
+) -> list[DataObject]:
+    """Per-point channels (counters, monitors, readbacks) as curves or maps, without a frame read.
 
-    Without ``channels`` every channel that is not a scanned motor is given.
+    A scan of one motor whose source keeps every recorded point (a SPEC scan,
+    whose rows without a saved frame count too) gives curves against ``x``: its
+    motor by default (``Time`` for a loop scan), or any recorded channel. Other
+    scans give their per-frame channels on the motor grid (``x`` is refused
+    there: the motors are the axes). Without ``channels``
+    every channel but the scanned motors. ``monitor`` divides the other channels
+    by a monitor channel less ``monitor_dark`` (its counts per second without
+    beam) times the count time (``Seconds``, ``sec``...); points without beam
+    become NaN.
     """
     require(obj, ("scan",), "Counters")
-    s = obj.data.structure
+    scan = obj.data
+    s = scan.structure
+    rows = _point_rows(scan)
+    if rows is not None and x is None:  # the motor; a loop scan's "frame" dim is no column
+        recorded = [d for d in s.motor_dims if d in rows and d not in BOOKKEEPING]
+        x = recorded[0] if recorded else ("Time" if "Time" in rows else "point")
+    if rows is not None and x in rows:
+        return _counter_curves(obj, rows, x, channels, monitor, monitor_dark)
+    if x is not None:  # on the grid of a scan the motors are the axes: nothing to choose
+        if rows is not None:
+            raise ValueError(
+                f"Against {x!r}: no such column; the scan records {list(rows.columns)}"
+            )
+        raise ValueError(
+            f"Against {x!r}: only a scan of one motor with every point recorded (a SPEC scan) "
+            "takes another axis; this scan gives its channels on its motor grid"
+        )
     names = list(channels) if channels else [c for c in s.per_frame if c not in s.motor_dims]
+    beam = None
+    if monitor:
+        beam = _beam(lambda c: channel_on_grid(scan, c), list(s.per_frame), monitor, monitor_dark)
     out = []
     for name in names:
-        values = channel_on_grid(obj.data, name)
-        out.append(_from_scan(obj, values, name, meta={"quantity": name}))
+        values = channel_on_grid(scan, name)
+        meta: dict[str, Any] = {"quantity": name}
+        if beam is not None and name != monitor:
+            values = (values / beam).rename(name)
+            meta.update(normalized_by=monitor, monitor_dark=float(monitor_dark))
+        out.append(_from_scan(obj, values, name, meta=meta))
+    return out
+
+
+COUNT_TIMES = ("Seconds", "sec", "count_time", "acq_time", "exposure_time", "integration_time")
+BOOKKEEPING = ("point", "frame")  # columns of a point table that number the rows
+
+
+def _point_rows(scan: Any) -> pd.DataFrame | None:
+    """Every point a scan of one motor recorded, frames or not (a SPEC scan), else ``None``."""
+    table_of = getattr(scan.source, "point_table", None)
+    if table_of is None or len(scan.structure.motor_dims) > 1:
+        return None
+    table = table_of()
+    return table if isinstance(table, pd.DataFrame) and len(table) else None
+
+
+def _beam(get: Any, names: Sequence[str], monitor: str, dark: float) -> Any:
+    """``get(monitor)`` less ``dark`` counts per second times the count time; no beam is NaN."""
+    if monitor not in names:
+        raise ValueError(f"no channel {monitor!r} to divide by; the scan records {sorted(names)}")
+    beam = get(monitor)
+    if dark:
+        time_name = next((n for n in COUNT_TIMES if n in names), None)
+        if time_name is None:
+            raise ValueError(
+                f"a monitor dark rate needs the count time; the scan records none of {COUNT_TIMES}"
+            )
+        beam = beam - float(dark) * get(time_name)
+    if isinstance(beam, xr.DataArray):
+        return beam.where(beam > 0)
+    return np.where(beam > 0, beam, np.nan)
+
+
+def _counter_curves(
+    obj: DataObject,
+    rows: pd.DataFrame,
+    x: str,
+    channels: Sequence[str] | None,
+    monitor: str | None,
+    dark: float,
+) -> list[DataObject]:
+    """One curve per channel against ``x``, from every recorded point."""
+    motors = set(obj.data.structure.motor_dims)
+    skip = {*BOOKKEEPING, x, *motors}
+    names = list(channels) if channels else [c for c in rows.columns if c not in skip]
+    missing = [c for c in names if c not in rows]
+    if missing:
+        raise ValueError(f"no channel {missing}; the scan records {list(rows.columns)}")
+    xs = rows[x].to_numpy(dtype=float)
+    keep = np.isfinite(xs)
+    beam = None
+    if monitor:
+        beam = _beam(lambda c: rows[c].to_numpy(dtype=float), list(rows.columns), monitor, dark)
+    out = []
+    for name in names:
+        values = rows[name].to_numpy(dtype=float)
+        meta: dict[str, Any] = {"quantity": name, "points": int(keep.sum())}
+        if beam is not None and name != monitor:
+            values = values / beam
+            meta.update(normalized_by=monitor, monitor_dark=float(dark))
+        data = curve(xs[keep], values[keep], x, name)
+        out.append(_from_scan(obj, data, name, meta=meta))
     return out
 
 

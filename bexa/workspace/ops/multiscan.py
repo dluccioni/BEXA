@@ -22,6 +22,7 @@ from bexa.workspace.ops._base import new, require
 __all__ = [
     "STACK_QUANTITIES",
     "layers",
+    "same_grid",
     "scan_table",
     "series",
     "stack_per_scan",
@@ -162,8 +163,9 @@ def stack_per_scan(
     ``per_scan[i]`` holds the results for scan ``i``, named ``<base>_<suffix>``
     (the operation ran on each scan under the set's name ``base``). Result ``k``
     of every scan is stacked along the set's axis (the positioner that
-    differs, else ``scan``) when they are arrays of one shape and dims;
-    otherwise each scan's result is kept on its own, named after its scan.
+    differs, else ``scan``) when they are arrays on one grid (see
+    :func:`same_grid`); otherwise each scan's result is kept on its own, named
+    after its scan.
     """
     axis, values = scan_set.axis()
     out: list[DataObject] = []
@@ -175,8 +177,7 @@ def stack_per_scan(
     for k in range(counts.pop()):
         column = [results[k] for results in per_scan]
         first = column[0]
-        same = all(c.is_array and c.dims == first.dims and c.shape == first.shape for c in column)
-        if not same or axis in first.dims:
+        if not same_grid(column) or axis in first.dims:
             out.extend(
                 _relabelled(c, label, base)
                 for c, label in zip(column, scan_set.labels, strict=True)
@@ -195,6 +196,36 @@ def stack_per_scan(
         meta.update({"scans": list(scan_set.labels), "stacked_on": axis})
         out.append(DataObject(first.name, data, sigma=sigma, meta=meta, parents=[base]))
     return out
+
+
+def same_grid(objects: Sequence[DataObject]) -> bool:
+    """True when the objects are arrays with the first one's dims, shape and coordinates.
+
+    Numeric coordinates may differ by a quarter of their smallest step (the
+    readback jitter of one grid); rocking curves over other ranges are other
+    grids, which stacking would put on the first one's axis.
+    """
+    first = objects[0]
+    if not all(o.is_array and o.dims == first.dims and o.shape == first.shape for o in objects):
+        return False
+    for dim in first.dims:
+        if dim not in first.array.coords:
+            continue
+        ref = np.asarray(first.array.coords[dim].values)
+        others = [
+            np.asarray(o.array.coords[dim].values) for o in objects[1:] if dim in o.array.coords
+        ]
+        if ref.dtype.kind not in "fiu":
+            if not all(np.array_equal(other, ref) for other in others):
+                return False
+            continue
+        steps = np.abs(np.diff(ref.astype(float)))
+        steps = steps[steps > 0]
+        tolerance = 0.25 * float(steps.min()) if steps.size else 0.0
+        for other in others:
+            if not np.allclose(other.astype(float), ref.astype(float), rtol=0.0, atol=tolerance):
+                return False
+    return True
 
 
 def _relabelled(obj: DataObject, label: str, base: str) -> DataObject:

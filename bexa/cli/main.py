@@ -227,7 +227,8 @@ def cache_clear() -> None:
 
 # ------------------------------------------------------------- sub-commands
 def _register_subapps() -> None:
-    """Attach the scan, cube, auto, crystal and optics groups when their modules exist."""
+    """Attach the scan, cube, auto, crystal, optics, bench and gui commands when their modules
+    exist."""
     for module_name, attr, name in (
         ("bexa.cli.scan_cmd", "scan_app", "scan"),
         ("bexa.cli.cube_cmd", "cube_app", "cube"),
@@ -235,6 +236,7 @@ def _register_subapps() -> None:
         ("bexa.cli.crystal_cmd", "crystal_app", "crystal"),
         ("bexa.cli.optics_cmd", "optics_app", "optics"),
         ("bexa.cli.bench_cmd", "register", None),
+        ("bexa.cli.gui_cmd", "register", None),
     ):
         try:
             module = importlib.import_module(module_name)
