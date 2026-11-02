@@ -233,7 +233,7 @@ def _o(*args: Any, **kwargs: Any) -> Op:
     return Op(*args, **kwargs)
 
 
-ROI_HELP = "A named ROI (draw or type one on the View tab); none: the whole frame"
+ROI_HELP = "Draw or type one on the View tab. Empty: the whole frame"
 DOWNSAMPLE = P(
     "downsample",
     "Bin pixels while reading",
@@ -241,7 +241,7 @@ DOWNSAMPLE = P(
     None,
     optional=True,
     minimum=1,
-    help="Read every frame binned this many times (faster, smaller); empty: full resolution",
+    help="Bin the pixels while reading. Empty: full resolution",
 )
 
 OPS: list[Op] = [
@@ -259,19 +259,18 @@ OPS: list[Op] = [
                 "choice",
                 "sum",
                 ("sum", "mean", "max", "min", "std", "median"),
-                help="A scan streams sum, mean, max or min; std and median need a stack in memory",
+                help="std and median load every frame into memory",
             ),
             P(
                 "roi",
                 "ROI",
                 "roi",
                 optional=True,
-                help=ROI_HELP + "; its motor ranges limit the frames",
+                help=ROI_HELP + ". Its motor ranges also pick the frames",
             ),
             DOWNSAMPLE,
         ],
-        "One image from the frames of a scan or stack: their sum (with Poisson uncertainties), "
-        "mean, maximum or minimum. A scan is read in one streaming pass, whatever its size.",
+        "Combine all frames into one image: sum, mean, max, min, std or median.",
     ),
     _o(
         "read_volume",
@@ -280,8 +279,7 @@ OPS: list[Op] = [
         extract.read_volume,
         [Input("obj", SCAN, "Scan")],
         [P("roi", "ROI", "roi", optional=True, help=ROI_HELP), DOWNSAMPLE],
-        "The scan's frames in memory as a stack (motors..., y, x), cut to the ROI. Refused when "
-        "it would not fit the memory budget: add an ROI or bin.",
+        "Load the frames into memory as a stack. Use an ROI or binning for large scans.",
     ),
     _o(
         "preview",
@@ -290,7 +288,7 @@ OPS: list[Op] = [
         extract.preview,
         [Input("obj", SCAN, "Scan")],
         [P("bin", "Binning", "int", 4, minimum=1), P("log", "log10(1 + I)", "bool", False)],
-        "The frames binned bin x bin: a light stack to browse, cached on disk for the next time.",
+        "A binned copy of the frames for quick browsing, cached on disk.",
     ),
     _o(
         "roi_curves",
@@ -299,25 +297,24 @@ OPS: list[Op] = [
         extract.roi_curves,
         [Input("obj", SCANS, "Scan or stack")],
         [
-            P("rois", "ROIs", "rois", help="One curve (or map) per ROI, all in one pass"),
+            P("rois", "ROIs", "rois", help="One curve or map per ROI"),
             P("quantity", "Quantity", "choice", "sum", ("sum", "mean", "max")),
             P(
                 "background",
                 "Background ROI",
                 "roi",
                 optional=True,
-                help="Its mean per pixel is subtracted from every ROI, frame by frame",
+                help="Its mean per pixel is subtracted from each ROI",
             ),
             P(
                 "normalize",
                 "Divide by channel",
                 "channel",
                 optional=True,
-                help="A monitor or counter recorded with every frame",
+                help="A monitor or counter recorded with each frame",
             ),
         ],
-        "The intensity of each ROI at every point of the scan: a rocking curve for one motor, a "
-        "map for a mesh. Uncertainties from the counts.",
+        "Intensity in each ROI at every scan point: a curve for one motor, a map for two.",
     ),
     _o(
         "com_maps",
@@ -326,13 +323,12 @@ OPS: list[Op] = [
         extract.com_maps,
         [Input("obj", SCANS, "Scan or stack")],
         [
-            P("axes", "Motor axes", "dims", optional=True, help="Empty: every motor of the scan"),
+            P("axes", "Motor axes", "dims", optional=True, help="Empty: all motors"),
             P("sigma", "Smoothing (pixels)", "number", 3.0, minimum=0),
             P("roi", "ROI", "roi", optional=True),
             DOWNSAMPLE,
         ],
-        "The DFXM maps: per pixel the intensity-weighted mean motor position (com_<motor>) and "
-        "spread (width_<motor>), and the total intensity; one streaming pass.",
+        "Centre-of-mass and width maps along each motor, plus the total intensity.",
     ),
     _o(
         "frame_stats",
@@ -341,8 +337,7 @@ OPS: list[Op] = [
         extract.frame_stats,
         [Input("obj", SCAN, "Scan")],
         [P("roi", "ROI", "roi", optional=True)],
-        "Per frame: the sum, mean, maximum and centre of mass on the detector, on the motor grid "
-        "(curves for one motor, maps for two).",
+        "Sum, mean, max and centre of mass of each frame.",
     ),
     _o(
         "projections",
@@ -351,8 +346,7 @@ OPS: list[Op] = [
         extract.projections,
         [Input("obj", SCAN, "Scan")],
         [P("roi", "ROI", "roi", optional=True)],
-        "Intensity projected on every pair of axes: the summed image, motor x pixel maps and motor "
-        "x motor maps, in one pass.",
+        "Sum the intensity onto every pair of axes.",
     ),
     _o(
         "counters",
@@ -366,34 +360,31 @@ OPS: list[Op] = [
                 "Channels",
                 "channels",
                 optional=True,
-                help="Empty: every recorded channel but the scanned motors",
+                help="Empty: all except the scanned motors",
             ),
             P(
                 "x",
                 "Against",
                 "channel",
                 optional=True,
-                help="Empty: the scanned motor (Time in a loop scan); or any recorded channel",
+                help="Empty: the scanned motor (Time in a loop scan)",
             ),
             P(
                 "monitor",
                 "Divide by monitor",
                 "channel",
                 optional=True,
-                help="A monitor channel (I0, IC_1) the other channels are divided by",
+                help="Divide the other channels by this monitor (I0, IC_1)",
             ),
             P(
                 "monitor_dark",
                 "Monitor dark (counts/s)",
                 "number",
                 0.0,
-                help="The monitor's rate without beam, taken off times the count time first",
+                help="Monitor rate without beam, subtracted first",
             ),
         ],
-        "The counters, monitors and readbacks of every point, without reading a frame: curves "
-        "for a scan of one motor (a SPEC scan's rows without a saved frame too), maps on the "
-        "grid of a mesh; optionally divided by a monitor less its dark rate. On a scan set: "
-        "stacked over the scans when their grids agree.",
+        "Counter and monitor values at every scan point, without reading frames.",
     ),
     _o(
         "point_table",
@@ -402,7 +393,7 @@ OPS: list[Op] = [
         extract.point_table,
         [Input("obj", SCAN, "Scan")],
         [],
-        "The scan's side tables (every SPEC row of an APS scan), or its per-frame channels.",
+        "The values recorded at each scan point, as a table.",
     ),
     _o(
         "histogram",
@@ -415,7 +406,7 @@ OPS: list[Op] = [
             P("low", "From", "number", optional=True),
             P("high", "To", "number", optional=True),
         ],
-        "How many pixels have each value (all frames of a scan).",
+        "Histogram of the pixel values of all frames.",
     ),
     _o(
         "crop",
@@ -424,7 +415,7 @@ OPS: list[Op] = [
         extract.crop,
         [Input("obj", ANY, "Object")],
         [P("roi", "ROI", "roi")],
-        "The part inside an ROI (pixel ranges and any other dim's range).",
+        "Keep the region inside an ROI.",
     ),
     _o(
         "select_range",
@@ -437,7 +428,7 @@ OPS: list[Op] = [
             P("low", "From", "number", optional=True),
             P("high", "To", "number", optional=True),
         ],
-        "Keep the points of one dim between two coordinate values.",
+        "Keep the points between two values of one dim.",
     ),
     _o(
         "take_slice",
@@ -450,7 +441,7 @@ OPS: list[Op] = [
             P("index", "Index", "int", optional=True, minimum=0),
             P("value", "Or nearest to value", "number", optional=True),
         ],
-        "One slice along a dim: a frame of a stack, a curve of a map.",
+        "One slice along a dim, such as one frame of a stack.",
     ),
     _o(
         "reduce_dims",
@@ -462,7 +453,7 @@ OPS: list[Op] = [
             P("dims", "Dims", "dims"),
             P("how", "Combine as", "choice", "sum", ("sum", "mean", "max", "min", "std", "median")),
         ],
-        "Sum (average, ...) over the chosen dims: a stack to an image, a map to a curve.",
+        "Sum, average or take the max over the chosen dims.",
     ),
     _o(
         "profile",
@@ -475,7 +466,7 @@ OPS: list[Op] = [
             P("roi", "Within ROI", "roi", optional=True),
             P("how", "Combine as", "choice", "sum", ("sum", "mean")),
         ],
-        "A curve along one dim, every other dim summed inside the ROI.",
+        "A curve along one dim, summed over the others inside the ROI.",
     ),
     _o(
         "line_profile",
@@ -491,7 +482,7 @@ OPS: list[Op] = [
             P("width", "Width (pixels)", "int", 1, minimum=1),
             P("points", "Points", "int", optional=True, minimum=2),
         ],
-        "The values along a straight line between two points (draw it on the View tab).",
+        "Values along a line between two points. Draw the line on the View tab.",
     ),
     _o(
         "roi_statistics",
@@ -500,7 +491,7 @@ OPS: list[Op] = [
         extract.roi_statistics,
         [Input("obj", ("image", "map", "stack"), "Image or stack")],
         [P("rois", "ROIs", "rois")],
-        "Sum, mean, spread, extremes and centroid of each ROI, as a table.",
+        "Sum, mean, std, min, max and centroid of each ROI, as a table.",
     ),
     # --- Process ---------------------------------------------------------------------------
     _o(
@@ -516,7 +507,7 @@ OPS: list[Op] = [
                 "choice",
                 "max",
                 process.NORMALIZE_BY,
-                help="range: (v - min) / (max - min); monitor: a curve, relative to its mean",
+                help="range: (v - min) / (max - min); monitor: divide by a curve over its mean",
             ),
             P("value", "Value", "number", optional=True, help="For 'number'"),
             P("monitor", "Monitor", "object", optional=True, kinds=CURVE, help="For 'monitor'"),
@@ -532,10 +523,10 @@ OPS: list[Op] = [
                 "Make it",
                 "number",
                 1.0,
-                help="The value the reference becomes (100: percent)",
+                help="The value the reference becomes (100 for percent)",
             ),
         ],
-        "Divide by the maximum, range, integral, mean, a point, a number or a monitor curve.",
+        "Divide by the max, range, integral, mean, one point, a number or a monitor.",
     ),
     _o(
         "subtract_dark",
@@ -548,7 +539,7 @@ OPS: list[Op] = [
             P("scale", "Scale", "number", 1.0),
             P("clip", "Negative values to 0", "bool", False),
         ],
-        "Subtract a dark image (a dark stack is averaged first) from an image or every frame.",
+        "Subtract a dark image from an image or from every frame.",
     ),
     _o(
         "flat_field",
@@ -559,9 +550,15 @@ OPS: list[Op] = [
         [
             P("flat", "Flat", "object", kinds=(*DETECTOR, "map")),
             P("dark", "Dark of the flat", "object", optional=True, kinds=(*DETECTOR, "map")),
-            P("minimum", "Leave out below", "number", 0.05, help="Of the flat's mean"),
+            P(
+                "minimum",
+                "Leave out below",
+                "number",
+                0.05,
+                help=("Pixels where the flat is below this fraction of its mean are masked"),
+            ),
         ],
-        "Divide by a flat field normalised to a mean of 1.",
+        "Divide by a flat field scaled to a mean of 1.",
     ),
     _o(
         "subtract_background",
@@ -582,12 +579,12 @@ OPS: list[Op] = [
                 "Regions (x)",
                 "numbers",
                 optional=True,
-                help="Pairs of x values holding background only: 1, 2, 9, 10; empty: the ends",
+                help="x pairs that hold only background: 1, 2, 9, 10. Empty: the ends",
             ),
             P("order", "Order", "int", 2, minimum=0),
             P("value", "Value", "number", optional=True),
         ],
-        "Fit a background to the background regions of a curve and subtract it.",
+        "Fit a background to chosen regions of a curve and subtract it.",
     ),
     _o(
         "remove_hot_pixels",
@@ -599,7 +596,7 @@ OPS: list[Op] = [
             P("threshold", "Threshold (x noise)", "number", 8.0, minimum=0),
             P("size", "Neighbourhood", "int", 3, minimum=3),
         ],
-        "Replace pixels far above their neighbours by the local median (every frame of a stack).",
+        "Replace hot pixels with the local median.",
     ),
     _o(
         "mask_pixels",
@@ -613,7 +610,7 @@ OPS: list[Op] = [
             P("rois", "Keep ROIs", "rois", optional=True),
             P("inside", "Leave out inside the ROIs instead", "bool", False),
         ],
-        "Set pixels to NaN so every later step leaves them out: by value, outside or inside ROIs.",
+        "Mask pixels by value or by ROI. Later steps ignore them.",
     ),
     _o(
         "smooth",
@@ -635,11 +632,11 @@ OPS: list[Op] = [
                 "number",
                 2.0,
                 minimum=0,
-                help="Gaussian: sigma; others: the window",
+                help="Gaussian: sigma; others: window size",
             ),
-            P("order", "Order", "int", 2, minimum=0, help="Savitzky-Golay (curves)"),
+            P("order", "Order", "int", 2, minimum=0, help="For Savitzky-Golay"),
         ],
-        "Smooth a curve, an image or every frame of a stack.",
+        "Smooth a curve, an image or every frame.",
     ),
     _o(
         "bin_pixels",
@@ -660,7 +657,7 @@ OPS: list[Op] = [
         process.transform,
         [Input("obj", (*DETECTOR, "map", "rgb"), "Object")],
         [P("how", "Transform", "choice", "rotate 90", process.TRANSFORMS)],
-        "Flip, rotate (counter-clockwise) or transpose; the coordinates follow the pixels.",
+        "Flip, rotate or transpose. The coordinates follow.",
     ),
     _o(
         "apply_function",
@@ -669,7 +666,7 @@ OPS: list[Op] = [
         process.apply_function,
         [Input("obj", ANY, "Object")],
         [P("function", "Function", "choice", "log10", process.FUNCTIONS)],
-        "A function of every value, with the uncertainties propagated.",
+        "Apply log, sqrt, exp or another function to every value, with errors.",
     ),
     _o(
         "clip_values",
@@ -685,7 +682,7 @@ OPS: list[Op] = [
                 "Replace with",
                 "number",
                 optional=True,
-                help="Empty: the limit; or 0, nan",
+                help="Value for clipped points (0, nan). Empty: the limit",
             ),
         ],
         "Limit values to a range.",
@@ -697,7 +694,7 @@ OPS: list[Op] = [
         process.replace_nan,
         [Input("obj", ANY, "Object")],
         [P("value", "Value", "number", 0.0)],
-        "Fill masked or missing points with a number.",
+        "Replace NaN values with a number.",
     ),
     _o(
         "resample",
@@ -720,7 +717,7 @@ OPS: list[Op] = [
         process.derivative,
         [Input("obj", CURVE, "Curve")],
         [],
-        "dy/dx with uncertainties (an edge scan becomes a peak).",
+        "dy/dx with errors. Turns an edge into a peak.",
     ),
     _o(
         "cumulative_integral",
@@ -729,7 +726,7 @@ OPS: list[Op] = [
         process.cumulative_integral,
         [Input("obj", CURVE, "Curve")],
         [],
-        "The integral of a curve from its first point.",
+        "Integral of a curve from its first point.",
     ),
     _o(
         "shift_axis",
@@ -744,7 +741,7 @@ OPS: list[Op] = [
             P("new_name", "New name", "text", ""),
             P("units", "Units", "text", ""),
         ],
-        "x -> scale x + offset along a dim, optionally renamed (a relative axis, other units).",
+        "Scale and shift a dim's coordinates, and optionally rename it.",
     ),
     _o(
         "convert_axis",
@@ -760,10 +757,10 @@ OPS: list[Op] = [
                 "Energy (keV)",
                 "number",
                 optional=True,
-                help="Empty: the object's own",
+                help="Empty: the object's own energy",
             ),
         ],
-        "Convert a curve's x between scattering angle, Bragg angle, momentum transfer and d.",
+        "Convert x between 2theta, theta, q and d.",
     ),
     _o(
         "align_peak",
@@ -778,15 +775,14 @@ OPS: list[Op] = [
                 "choice",
                 "maximum",
                 PEAK_METHODS,
-                help="refined: the top of the parabola through the highest points; "
-                "com: of the top half",
+                help="refined: parabola through the top points; com: centre of the top half",
             ),
             P("target", "Move the peak to", "choice", "zero", ("zero", "a value", "another curve")),
             P("value", "Value", "number", optional=True),
             P("reference", "Other curve", "object", optional=True, kinds=CURVE),
             P("x_range", "Search range", "range", optional=True),
         ],
-        "Shift a curve along x so its peak sits at zero, at a value or at another curve's peak.",
+        "Shift a curve so its peak sits at zero, a set value or another curve's peak.",
     ),
     _o(
         "merge_points",
@@ -795,7 +791,7 @@ OPS: list[Op] = [
         process.merge_points,
         [Input("obj", CURVE, "Curve")],
         [P("tolerance", "Tolerance (x)", "number", optional=True)],
-        "Sort by x and average the points at the same x.",
+        "Average the points that share an x.",
     ),
     _o(
         "shift_image",
@@ -804,7 +800,7 @@ OPS: list[Op] = [
         process.shift_image,
         [Input("obj", (*DETECTOR, *IMAGES), "Image")],
         [P("rows", "Rows", "number", 0.0), P("columns", "Columns", "number", 0.0)],
-        "Move by fractions of a pixel.",
+        "Shift an image by fractions of a pixel.",
     ),
     _o(
         "equalize_histogram",
@@ -813,7 +809,7 @@ OPS: list[Op] = [
         process.equalize_histogram,
         [Input("obj", (*IMAGES, "stack"), "Image")],
         [],
-        "Spread the values evenly over 0..1 by rank: faint topograph contrast becomes visible.",
+        "Histogram equalization, to bring out faint contrast.",
     ),
     # --- Combine ---------------------------------------------------------------------------
     _o(
@@ -828,8 +824,7 @@ OPS: list[Op] = [
             P("number", "or B (number)", "number", optional=True),
             P("interpolate", "Put B on A's grid (interpolate)", "bool", True),
         ],
-        "A + B, A - B, A x B, A / B with uncertainties: same shapes, an image with every frame of "
-        "a stack, a curve with a value per frame, curves on other x interpolated, or a number.",
+        "A + B, A - B, A x B or A / B, with errors. B can also be a number.",
     ),
     _o(
         "average",
@@ -838,7 +833,7 @@ OPS: list[Op] = [
         combine.average,
         [Input("objects", ANY, "Objects", many=True)],
         [P("how", "Combine as", "choice", "mean", ("mean", "sum", "weighted"))],
-        "The mean, sum or uncertainty-weighted mean of the selected objects (repeated scans).",
+        "Mean, sum or weighted mean of the selected objects.",
     ),
     _o(
         "concatenate",
@@ -847,7 +842,7 @@ OPS: list[Op] = [
         combine.concatenate,
         [Input("objects", ANY, "Objects", many=True)],
         [P("dim", "Along dim", "dim", optional=True)],
-        "Join along a dim: curves point after point, stacks frame after frame.",
+        "Join objects end to end along a dim.",
     ),
     _o(
         "stack_objects",
@@ -856,7 +851,7 @@ OPS: list[Op] = [
         combine.stack_objects,
         [Input("objects", ANY, "Objects", many=True)],
         [P("dim", "New dim", "text", "index"), P("values", "Its values", "numbers", optional=True)],
-        "Objects of one shape along a new dim: images to a stack, curves to a map (a waterfall).",
+        "Stack objects of one shape along a new dim, such as curves into a map.",
     ),
     _o(
         "stitch_curves",
@@ -868,7 +863,7 @@ OPS: list[Op] = [
             P("scale", "Scale each to match", "bool", True),
             P("overlap", "Where they overlap", "choice", "average", ("average", "first", "last")),
         ],
-        "One curve from curves of neighbouring ranges (XRR segments, 2theta ranges).",
+        "Join curves of neighbouring ranges into one.",
     ),
     _o(
         "align_peaks",
@@ -882,7 +877,7 @@ OPS: list[Op] = [
             P("value", "Value", "number", optional=True),
             P("x_range", "Search range", "range", optional=True),
         ],
-        "Shift curves so their peaks coincide; Average / Sum can then add them.",
+        "Shift curves so their peaks line up.",
     ),
     _o(
         "align_images",
@@ -891,7 +886,7 @@ OPS: list[Op] = [
         combine.align_images,
         [Input("objects", IMAGES, "Images", many=True)],
         [P("max_shift", "Largest shift (pixels)", "int", optional=True, minimum=0)],
-        "Shift images onto the first by phase correlation.",
+        "Align images to the first by phase correlation.",
     ),
     _o(
         "mosaic",
@@ -912,7 +907,7 @@ OPS: list[Op] = [
             P("pixel_mm", "Pixel at the sample (mm)", "number", 0.0),
             P("how", "Overlaps", "choice", "mean", ("mean", "max", "sum")),
         ],
-        "Images placed side by side by pixel offsets or by their recorded stage positions.",
+        "Tile images by pixel offsets or stage positions.",
     ),
     _o(
         "merge_scan_sets",
@@ -921,7 +916,7 @@ OPS: list[Op] = [
         combine.merge_scan_sets,
         [Input("objects", ("scan", "scanset"), "Scans", many=True)],
         [],
-        "One scan set from scans and scan sets, to process them together.",
+        "Combine scans and scan sets into one scan set.",
     ),
     # --- Multi-scan ------------------------------------------------------------------------
     _o(
@@ -948,15 +943,14 @@ OPS: list[Op] = [
                     "argmax",
                     "energy_com",
                 ),
-                help="What every scan gives, stacked over the scans",
+                help="What to compute for each scan",
             ),
             P(
                 "dim",
                 "Stack on",
                 "text",
                 "auto",
-                help="auto: the positioners that differ (height, energy, temperature); "
-                "a name; scan",
+                help="auto: what differs between the scans (height, energy...); a name; scan",
             ),
             P("sigma", "COM smoothing (pixels)", "number", 3.0, minimum=0),
             P("roi", "ROI", "roi", optional=True),
@@ -965,9 +959,7 @@ OPS: list[Op] = [
             P("rois", "ROI curves too", "rois", optional=True),
             P("workers", "Parallel processes", "int", optional=True, minimum=1),
         ],
-        "Reduce every scan of a set the same way (one streaming pass each, in parallel with "
-        "workers) and stack the results on the positioners that differ: z-stacks, energy "
-        "series, temperature series.",
+        "Reduce each scan of a set and stack the results, such as over height or energy.",
     ),
     _o(
         "series",
@@ -976,8 +968,7 @@ OPS: list[Op] = [
         multiscan.series,
         [Input("obj", ("scanset",), "Scan set")],
         [P("dim", "New dim", "text", "auto", help="auto, energy, scan or a positioner")],
-        "Join scans that share a grid into one scan with a new leading dim: an energy series "
-        "becomes energy x motors x pixels, read and reduced as one scan.",
+        "Join scans on the same grid into one scan with a new dim, such as energy.",
     ),
     _o(
         "scan_table",
@@ -986,7 +977,7 @@ OPS: list[Op] = [
         multiscan.scan_table,
         [Input("obj", ("scanset",), "Scan set")],
         [],
-        "One row per scan: type, motors, grid, frames, energy and every positioner.",
+        "One row per scan: type, motors, grid, frames, energy, positions.",
     ),
     _o(
         "subset",
@@ -994,8 +985,8 @@ OPS: list[Op] = [
         "Multi-scan",
         multiscan.subset,
         [Input("obj", ("scanset",), "Scan set")],
-        [P("indices", "Positions", "ints", help="From 0, in the set's order: 0-3, 7")],
-        "Some scans of a set as a set of their own.",
+        [P("indices", "Positions", "ints", help="Positions in the set, from 0: 0-3, 7")],
+        "Pick scans from a scan set.",
     ),
     _o(
         "layers",
@@ -1004,7 +995,7 @@ OPS: list[Op] = [
         multiscan.layers,
         [Input("obj", SCAN, "Scan")],
         [P("dim", "Along", "dim")],
-        "A scan split along one motor, one layer per point, as a scan set (a z-scan's heights).",
+        "Split a scan along one motor into a scan set, one scan per point.",
     ),
     # --- Fit -------------------------------------------------------------------------------
     _o(
@@ -1022,7 +1013,7 @@ OPS: list[Op] = [
                 "Centres",
                 "numbers",
                 optional=True,
-                help="Empty: the most prominent peaks",
+                help="Empty: the strongest peaks",
             ),
             P("x_range", "Fit range", "range", optional=True),
             P("use_sigma", "Weight by the uncertainties", "bool", True),
@@ -1036,8 +1027,7 @@ OPS: list[Op] = [
                 help="Set on the Fit tab",
             ),
         ],
-        "Peaks on a background: the best fit and a table of centres, widths, heights, areas with "
-        "errors. The Fit tab gives every parameter with bounds and fixed values.",
+        "Fit peaks on a background. Use the Fit tab to set bounds or fix parameters.",
     ),
     _o(
         "fit_series",
@@ -1055,8 +1045,7 @@ OPS: list[Op] = [
             P("warm_start", "Start from the previous fit", "bool", True),
             P("peaks", "Peaks", "spec", optional=True, help="Set on the Fit tab"),
         ],
-        "Fit every curve of a map along a dim: the peak's centre, width, height and area against "
-        "the other dims (a rocking curve per height, a peak per temperature).",
+        "Fit the curve at every point of a map along one dim.",
     ),
     _o(
         "fit_many",
@@ -1072,7 +1061,7 @@ OPS: list[Op] = [
             P("x_range", "Fit range", "range", optional=True),
             P("use_sigma", "Weight by the uncertainties", "bool", True),
         ],
-        "The same model fitted to every selected curve: one table, a row per curve.",
+        "Fit the same model to each selected curve; one table row per curve.",
     ),
     _o(
         "find_peaks",
@@ -1084,7 +1073,7 @@ OPS: list[Op] = [
             P("n", "At most", "int", 5, minimum=1),
             P("prominence", "Least prominence", "number", 0.0),
         ],
-        "The most prominent maxima: position, height, FWHM.",
+        "Find the strongest peaks: position, height, FWHM.",
     ),
     # --- Imaging ---------------------------------------------------------------------------
     _o(
@@ -1094,7 +1083,7 @@ OPS: list[Op] = [
         imaging.moments_maps,
         [Input("obj", ("stack",), "Stack")],
         [P("dim", "Along", "dim"), P("sigma", "Smoothing (pixels)", "number", 0.0, minimum=0)],
-        "Per pixel: centre of mass, spread, FWHM, skewness and kurtosis along one motor.",
+        "Per-pixel centre, width, FWHM, skewness and kurtosis along one motor.",
     ),
     _o(
         "peak_maps",
@@ -1106,7 +1095,7 @@ OPS: list[Op] = [
             P("dim", "Along", "dim"),
             P("threshold", "Points above (of the maximum)", "number", 0.1, minimum=0),
         ],
-        "A Gaussian fitted to every pixel's curve, all pixels at once: centre, FWHM, height maps.",
+        "Fit a Gaussian at every pixel: centre, FWHM and height maps.",
     ),
     _o(
         "argmax_map",
@@ -1115,7 +1104,7 @@ OPS: list[Op] = [
         imaging.argmax_map,
         [Input("obj", ("stack",), "Stack")],
         [P("dim", "Along", "dim")],
-        "The motor value of the brightest frame at every pixel.",
+        "Motor position of the brightest frame at each pixel.",
     ),
     _o(
         "orientation_map",
@@ -1127,7 +1116,7 @@ OPS: list[Op] = [
             P("span", "Full colour at", "number", optional=True, help="Empty: the 95th percentile"),
             P("intensity", "Brightness from", "object", optional=True, kinds=IMAGES),
         ],
-        "Two tilt (COM) maps as one colour picture: hue the direction, saturation the size.",
+        "Two tilt maps as one colour map: hue for direction, saturation for size.",
     ),
     _o(
         "kam_map",
@@ -1139,7 +1128,7 @@ OPS: list[Op] = [
             P("b", "Tilt map B", "object", optional=True, kinds=IMAGES),
             P("size", "Kernel", "int", 3, minimum=3),
         ],
-        "Kernel average misorientation: the mean tilt difference to each pixel's neighbours.",
+        "Kernel average misorientation: mean tilt difference to neighbouring pixels.",
     ),
     _o(
         "strain",
@@ -1152,7 +1141,7 @@ OPS: list[Op] = [
             P("reference", "Unstrained value", "number", optional=True, help="Empty: the median"),
             P("theta_deg", "Bragg angle (deg)", "number", optional=True),
         ],
-        "Lattice strain from a Bragg-angle, 2theta or energy centre-of-mass map.",
+        "Lattice strain from a theta, 2theta or energy centre-of-mass map.",
     ),
     _o(
         "align_frames",
@@ -1161,7 +1150,7 @@ OPS: list[Op] = [
         imaging.align_frames,
         [Input("obj", ("stack",), "Stack")],
         [P("dim", "Along", "dim"), P("max_shift", "Largest shift (pixels)", "int", 5, minimum=1)],
-        "Shift every frame onto the first by phase correlation.",
+        "Align every frame to the first by phase correlation.",
     ),
     _o(
         "segment",
@@ -1173,7 +1162,7 @@ OPS: list[Op] = [
             P("clusters", "Clusters", "int", 4, minimum=2),
             P("method", "Method", "choice", "kmeans", ("kmeans", "dbscan")),
         ],
-        "Grains or domains: pixels clustered by their two tilt maps (needs scikit-learn).",
+        "Group pixels into grains by their two tilt maps. Needs scikit-learn.",
     ),
     _o(
         "gradient_maps",
@@ -1182,7 +1171,7 @@ OPS: list[Op] = [
         imaging.gradient_maps,
         [Input("obj", IMAGES, "Map")],
         [],
-        "The derivatives of a map along its two dims.",
+        "Derivatives of a map along its two dims.",
     ),
     # --- XRD -------------------------------------------------------------------------------
     _o(
@@ -1201,7 +1190,7 @@ OPS: list[Op] = [
                 "Energy (keV)",
                 "number",
                 optional=True,
-                help="Empty: the object's own",
+                help="Empty: the object's own energy",
             ),
             P("unit", "x axis", "choice", "2theta", ("2theta", "q", "d")),
             P("bins", "Bins", "int", optional=True, minimum=2),
@@ -1217,10 +1206,10 @@ OPS: list[Op] = [
                 "number",
                 0.0,
                 optional=True,
-                help="0 unpolarised, 0.95-0.99 a synchrotron; empty: no correction",
+                help="0: unpolarised; 0.95-0.99: synchrotron; empty: none",
             ),
         ],
-        "The powder pattern: mean intensity in rings of equal 2theta, q or d, with uncertainties.",
+        "Azimuthal integration: intensity against 2theta, q or d.",
     ),
     _o(
         "cake",
@@ -1241,7 +1230,7 @@ OPS: list[Op] = [
             P("tilt_deg", "Detector tilt (deg)", "number", 0.0),
             P("tilt_plane_deg", "Tilt plane (deg)", "number", 0.0),
         ],
-        "The image unrolled into azimuth against 2theta: texture and strain show along chi.",
+        "Unroll the image into azimuth against 2theta.",
     ),
     _o(
         "calibrate_ring",
@@ -1255,7 +1244,7 @@ OPS: list[Op] = [
             P("energy_keV", "Energy (keV)", "number", optional=True),
             P("percentile", "Ring pixels above percentile", "number", 99.0),
         ],
-        "Beam centre and distance from one powder ring of a known reflection (Si 111: 3.1356 A).",
+        "Beam centre and detector distance from one powder ring of known d.",
     ),
     # --- XRR -------------------------------------------------------------------------------
     _o(
@@ -1274,7 +1263,7 @@ OPS: list[Op] = [
             P("x", "Against", "choice", "q", ("q", "theta")),
             P("theta_offset", "theta offset (deg)", "number", 0.0),
         ],
-        "A specular reflectivity curve: over I0, footprint-corrected, against q_z or theta.",
+        "Specular reflectivity over I0, footprint-corrected, against q_z or theta.",
     ),
     _o(
         "footprint_correction",
@@ -1288,7 +1277,7 @@ OPS: list[Op] = [
             P("profile", "Beam profile", "choice", "gaussian", ("gaussian", "rectangular")),
             P("energy_keV", "Energy (keV)", "number", optional=True),
         ],
-        "Divide by the share of the beam that falls on the sample.",
+        "Correct for the part of the beam that misses the sample.",
     ),
     _o(
         "critical_angle",
@@ -1297,7 +1286,7 @@ OPS: list[Op] = [
         scattering.critical_angle,
         [Input("obj", CURVE, "XRR curve")],
         [P("energy_keV", "Energy (keV)", "number", optional=True)],
-        "Where the reflectivity falls fastest: theta_c, q_c and the electron density.",
+        "Critical angle from the steepest drop: theta_c, q_c, electron density.",
     ),
     _o(
         "kiessig_thickness",
@@ -1309,7 +1298,7 @@ OPS: list[Op] = [
             P("q_low", "Fringes from q", "number", optional=True),
             P("q_high", "to q", "number", optional=True),
         ],
-        "The thickness from the spacing of the Kiessig fringes (2 pi / delta q).",
+        "Film thickness from the spacing of the Kiessig fringes.",
     ),
     # --- Calculators -----------------------------------------------------------------------
     _o(
@@ -1322,7 +1311,7 @@ OPS: list[Op] = [
             P("energy_keV", "Energy (keV)", "number", 17.0, optional=True),
             P("wavelength_A", "or wavelength (A)", "number", optional=True),
         ],
-        "Energy, wavelength, wavevector and the monochromator angles of Si, Ge and C crystals.",
+        "Convert between energy and wavelength; monochromator angles of Si, Ge and C.",
     ),
     _o(
         "reflections",
@@ -1342,7 +1331,7 @@ OPS: list[Op] = [
             P("max_index", "Largest index", "int", 4, minimum=1),
             P("max_two_theta", "Up to 2theta (deg)", "number", 90.0),
         ],
-        "d-spacings, 2theta and q of the allowed reflections, one row per family.",
+        "d, 2theta and q of the allowed reflections of a lattice.",
     ),
     _o(
         "bragg",
@@ -1354,7 +1343,7 @@ OPS: list[Op] = [
             P("d_spacings", "d-spacings (A)", "numbers", [3.1356]),
             P("energy_keV", "Energy (keV)", "number", 17.0),
         ],
-        "theta and 2theta of d-spacings at an energy.",
+        "Bragg angles of d-spacings at an energy.",
     ),
     _o(
         "scherrer_size",
@@ -1369,7 +1358,7 @@ OPS: list[Op] = [
             P("shape_factor", "Shape factor K", "number", 0.9),
             P("instrumental_deg", "Instrumental width (deg)", "number", 0.0),
         ],
-        "The Scherrer crystallite size of peaks.",
+        "Scherrer crystallite size from peak widths.",
     ),
     _o(
         "transmission",
@@ -1388,7 +1377,7 @@ OPS: list[Op] = [
             P("thickness", "Thickness", "text", "500um"),
             P("energies_keV", "Energies (keV)", "numbers", [8.0, 12.0, 17.0, 25.0]),
         ],
-        "Transmission and attenuation length (needs xraydb).",
+        "Transmission and attenuation length of a material. Needs xraydb.",
     ),
     _o(
         "photons",
@@ -1400,7 +1389,7 @@ OPS: list[Op] = [
             P("pulse_energy_uJ", "Pulse energy (uJ)", "number", 100.0),
             P("energy_keV", "Energy (keV)", "number", 9.5),
         ],
-        "Photons in a pulse of an XFEL.",
+        "Photons per XFEL pulse, from the pulse energy and the photon energy.",
     ),
 ]
 

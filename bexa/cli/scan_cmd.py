@@ -150,8 +150,6 @@ def scan_reduce(
     out: Path = typer.Option(..., "-o", "--out", help="Output file (.h5 or .zarr)."),
 ) -> None:
     """Run accumulators in one pass and save every result."""
-    import xarray as xr
-
     from bexa.core import reductions
     from bexa.io.cube import save
 
@@ -176,7 +174,7 @@ def scan_reduce(
         results = s.reduce(
             accs, roi=parse_roi(roi), downsample=parse_downsample(downsample), show_progress=True
         )
-        dataset = xr.Dataset(results)
+        dataset = results.copy()  # xarray 2026 refuses xr.Dataset(a Dataset)
         dataset.attrs.update(next(iter(results.values())).attrs)
         typer.echo(f"saved {sorted(results)} to {save(dataset, out)}")
 

@@ -494,7 +494,7 @@ class Dataset:
         for name, value in positioners.items():
             if name not in table.columns:
                 raise ValueError(f"no column {name!r} in the table; columns: {list(table.columns)}")
-            if table[name].dtype == object:  # a text column such as dataset
+            if pd.api.types.is_string_dtype(table[name].dtype):  # text (object, or pandas 3's str)
                 table = table[table[name] == value]
                 continue
             column = pd.to_numeric(table[name], errors="coerce")

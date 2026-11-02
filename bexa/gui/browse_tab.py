@@ -70,8 +70,14 @@ class BrowseTab:
         self.app = app
         self.folder = Path(root) if root else Path.cwd()
         self.inspector: Any = None
-        self.path = ipw.Text(value=str(self.folder), layout=ipw.Layout(width="72%"))
+        self.path = ipw.Text(value=str(self.folder), layout=ipw.Layout(width="62%"))
         go = ipw.Button(description="Go", layout=ipw.Layout(width="50px"))
+        choose = ipw.Button(
+            icon="ellipsis-h",
+            tooltip="choose a file",
+            layout=ipw.Layout(width="40px", display="" if app.dialogs else "none"),
+        )
+        choose.on_click(lambda _b: app.choose_path("file", self.go, self.folder))
         up = ipw.Button(
             icon="arrow-up", tooltip="the parent folder", layout=ipw.Layout(width="40px")
         )
@@ -99,7 +105,7 @@ class BrowseTab:
         self.box = ipw.HBox(
             [
                 ipw.VBox(
-                    [ipw.HBox([up, self.path, go]), ipw.HBox([enter, use]), self.listing],
+                    [ipw.HBox([up, self.path, go, choose]), ipw.HBox([enter, use]), self.listing],
                     layout=ipw.Layout(width="38%", padding="0 8px 0 0"),
                 ),
                 ipw.VBox(

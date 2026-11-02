@@ -67,6 +67,12 @@ class DataTab:
             tooltip=f"refresh every {AUTO_SECONDS:.0f} s",
             layout=ipw.Layout(width="70px"),
         )
+
+        def small() -> Any:  # a button of the system's dialogs, hidden on a remote kernel
+            return ipw.Layout(width="40px", display="" if app.dialogs else "none")
+
+        choose_root = ipw.Button(icon="ellipsis-h", tooltip="choose the folder", layout=small())
+        choose_root.on_click(lambda _b: app.choose_path("folder", self.use_folder))
         use.on_click(lambda _b: self.use_folder(self.root.value))
         refresh.on_click(lambda _b: self.refresh())
         self.auto.observe(lambda change: self._auto_changed(change["new"]), names="value")
@@ -101,6 +107,10 @@ class DataTab:
         self.format = ipw.Text(
             description="format", placeholder="auto", layout=ipw.Layout(width="320px"), style=label
         )
+        choose_file = ipw.Button(icon="file-o", tooltip="choose a file", layout=small())
+        choose_folder = ipw.Button(icon="folder-o", tooltip="choose a folder", layout=small())
+        choose_file.on_click(lambda _b: app.choose_path("file", self._chosen))
+        choose_folder.on_click(lambda _b: app.choose_path("folder", self._chosen))
         sniff = ipw.Button(description="What is it?", icon="search")
         open_scan = ipw.Button(
             description="Open scan(s)", button_style="primary", tooltip="one object per scan"
@@ -143,12 +153,12 @@ class DataTab:
         self.box = ipw.VBox(
             [
                 _section("Folder"),
-                ipw.HBox([self.root, use, refresh, self.auto]),
+                ipw.HBox([self.root, choose_root, use, refresh, self.auto]),
                 self.folder_note,
                 self.picker_buttons,
                 self.picker_box,
                 _section("Open a path"),
-                self.path,
+                ipw.HBox([self.path, choose_file, choose_folder]),
                 ipw.HBox([self.scan_numbers, self.format]),
                 ipw.HBox([sniff, open_scan, open_set, load]),
                 self.sniffed,
@@ -251,6 +261,11 @@ class DataTab:
         if not path:
             raise ValueError("type a path first")
         return path
+
+    def _chosen(self, path: str) -> None:
+        """A path chosen in the system's dialog: typed in, and what it is said at once."""
+        self.path.value = path
+        self._sniff()
 
     def _sniff(self) -> None:
         def look() -> str:

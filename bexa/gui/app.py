@@ -77,6 +77,7 @@ class App:
         from bexa.gui.browse_tab import BrowseTab
         from bexa.gui.convert_tab import ConvertTab
         from bexa.gui.data_tab import DataTab
+        from bexa.gui.dialogs import available
         from bexa.gui.fit_tab import FitTab
         from bexa.gui.log_tab import LogTab
         from bexa.gui.objects_panel import ObjectsPanel
@@ -85,6 +86,7 @@ class App:
         self.ws = workspace if workspace is not None else Workspace(cache=cache)
         self.selection: list[str] = []
         self.folder: Path | None = None  # the folder worked in (Data tab, Use folder)
+        self.dialogs = available()  # the system's file dialogs can open (a local kernel)
         self.interactive_figures = self._figures(figures)
         self._main = threading.main_thread()
         self._loop = _kernel_loop() if background else None
@@ -303,6 +305,29 @@ class App:
             function()
         else:
             self._loop.add_callback(function)
+
+    def choose_path(
+        self, kind: str, then: Callable[[str], None], start: str | Path | None = None
+    ) -> None:
+        """The system's dialog for a ``"file"`` or a ``"folder"`` (:mod:`bexa.gui.dialogs`);
+        ``then(path)`` follows in the main thread, nothing on Cancel. The dialog waits in a
+        thread of its own, so the GUI keeps working while it is open."""
+        from bexa.gui.dialogs import choose
+
+        def ask() -> None:
+            try:
+                path = choose(kind, start or self.folder)
+            except Exception as exc:
+                message = f"{type(exc).__name__}: {exc}"
+                self._soon(lambda: self.say(message, "error"))
+                return
+            if path:
+                self._soon(lambda: self.guarded(lambda: then(path)))
+
+        if self._loop is None:
+            ask()
+        else:
+            threading.Thread(target=ask, name="bexa-dialog", daemon=True).start()
 
     def later(self, seconds: float, function: Callable[[], None]) -> Any:
         """Run ``function`` in the main thread in ``seconds``; ``None`` without a kernel loop

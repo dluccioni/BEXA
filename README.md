@@ -621,7 +621,7 @@ app  # the last line of the cell shows it
 | Tab | What it does |
 |---|---|
 | Data | the folder to work in, scans or not yet: the scan picker of its datasets (running scans included), its selection added as scans, a scan set or a series; Refresh (or auto, every 10 s) lists new scans and reads the new points of the opened scans still being written; open a path (the layout is sniffed) as one scan, every scan of a dataset or one scan set; a beamtime profile; demo data |
-| Browse | walk folders and look inside files before opening anything: HDF5/NeXus trees with shapes, chunks, compression and attributes and a preview of one slice at a time, SPEC sessions (scans, headers, columns), TIFF tags, arrays, text; load any dataset or slice as an object |
+| Browse | walk folders, or choose a file in the system's dialog, and look inside files before opening anything: HDF5/NeXus trees with shapes, chunks, compression and attributes and a preview of one slice at a time, SPEC sessions (scans, headers, columns), TIFF tags, arrays, text; load any dataset or slice as an object |
 | View | a scan's raw frames with a slider per motor (one frame read per move), stacks, images and maps on their coordinates (colour map, limits, log, ROIs), curves overlaid with error bars and fits, maps as curves, volumes, colour pictures, tables; ROIs typed or drawn; line profiles; the value under the mouse; 3-D rendering of a stack |
 | Analysis | every operation of `bexa.workspace.catalog` (Extract, Process, Combine, Multi-scan, Fit, Imaging, XRD, XRR, Calculators), each with its help, its inputs and a form; Run in the background; "Run on each selected object" for a batch |
 | Fit | peaks of any shape on a background, each parameter with a start value, bounds or fixed; guess, add, or click to place peaks; data, fit, components and residuals; refit from the fitted values; fit every curve of a map |
@@ -10885,7 +10885,8 @@ The GUI. `root` is the folder to work in (`DataTab.use_folder`), scans or not ye
 thread (scripts, tests); `figures` is `"auto"`, `"interactive"` or `"static"`. Its parts are
 attributes: `objects` (`ObjectsPanel`), `data`, `browse`, `view`, `analysis`, `fit`, `convert`,
 `log` (the tabs), `jobs` (`bexa.workspace.jobs.JobRunner`), `tabs`, `box` (what the cell shows),
-`folder` (the folder worked in, or `None`).
+`folder` (the folder worked in, or `None`), `dialogs` (whether the system's file dialogs can
+open: `bexa.gui.dialogs.available`).
 Members:
 
 - `current`: Property: the first selected object.
@@ -10895,6 +10896,7 @@ Members:
 - `say(text, kind="info")`: a message under the header (`kind` `info`, `ok` or `error`, in red).
 - `guarded(function, show=None)`: run a callable now; a failure becomes a red message instead of a traceback.
 - `submit(label, function, done=None, *, quiet=False)`: run a callable in the background; `done(result)` follows in the main thread. `quiet`: no message when it starts (the header still shows the job).
+- `choose_path(kind, then, start=None)`: the system's dialog for a `"file"` or a `"folder"` (`bexa.gui.dialogs.choose`), waiting in a thread of its own; `then(path)` follows in the main thread, nothing on Cancel.
 - `later(seconds, function)`: run a callable in the main thread in `seconds`, through the kernel's loop; `None` without one. `cancel_later(handle)` takes it back.
 - `run_op(key, inputs, values, name=None, then=None)`: run an operation of the catalog in the background; its results are selected and drawn, then `then(results)`.
 - `data_path(path)`: put a path in the Data tab and show it.
@@ -11053,6 +11055,54 @@ window.serve("X:/beamtime/RAW_DATA")            # bexa GUI in its window (http:/
 - `START_TIMEOUT`: `60.0` seconds for Voilà to listen (the App appears about ten seconds later).
 - `NOTEBOOK_NAME`: `"bexa.ipynb"`; Voilà titles the window after the notebook.
 - `BROWSERS`: the browsers looked for, by platform (`win32`, `darwin`, `linux`), in order.
+
+### bexa.gui.dialogs: the system's file and folder dialogs
+
+The **...** buttons of the Data and Browse tabs open the system's own dialog to choose a file or
+a folder. A browser does not give the kernel the full path of a file chosen in it, so the kernel
+opens the dialog itself, in a process of its own: tkinter's (the Explorer dialogs on Windows),
+else PowerShell's on Windows, AppleScript's on macOS, zenity's or kdialog's on Linux. That needs
+the kernel on the computer in front of the user (`bexa gui`, a local JupyterLab, ssh with X
+forwarding); on a remote kernel the buttons are hidden and paths are typed.
+
+```python
+from bexa.gui import dialogs
+```
+
+#### `available`
+`bexa.gui.dialogs.available()`
+
+Whether `choose` can show a dialog here: a desktop session (Windows: an interactive logon;
+Linux: `DISPLAY` or `WAYLAND_DISPLAY`; macOS: not over ssh) and one of the dialog programs.
+
+```python
+dialogs.available()                             # True on a desktop
+```
+
+#### `choose`
+`bexa.gui.dialogs.choose(kind="file", start=None, title=None)`
+
+Show the dialog for a `"file"` or a `"folder"`, starting in the folder `start`; the path chosen,
+in the system's form, or `None` on Cancel. It blocks until the dialog closes (`App.choose_path`
+waits in a thread of its own); `RuntimeError` where no dialog can be shown.
+
+```python
+folder = dialogs.choose("folder", "X:/beamtime")   # the dialog opens; None on Cancel
+```
+
+#### `dialog_command`
+`bexa.gui.dialogs.dialog_command(kind, start=None, title=None)`
+
+The command `choose` runs here and the environment variables it adds, `(argv, env)`, or `None`
+without a desktop. `ValueError` for a kind other than `"file"` and `"folder"`.
+
+```python
+argv, env = dialogs.dialog_command("file")
+argv[0]                                         # this Python (tkinter's dialog), or powershell, osascript, zenity, kdialog
+```
+
+- `TITLES`: the dialogs' titles by kind.
+- `TK_SCRIPT`, `POWERSHELL_SCRIPT`: the programs that show tkinter's and PowerShell's dialogs.
 
 ### bexa.gui.figures: figures inside the GUI
 
@@ -11310,7 +11360,9 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 The tab: `root` (the folder field), `folder_note` (how many datasets, or none yet), `datasets`
 and `picker` (the folder's datasets and their scan picker, `None` without any), `auto` (the
 toggle), `path`, `scan_numbers`, `format`, `sniffed` (what "What is it?" found), `profile`,
-`sample`, `demo`. Its buttons call the workspace through `App.submit`. Members:
+`sample`, `demo`. Its buttons call the workspace through `App.submit`; on a local kernel the
+**...** next to the folder chooses it in the system's dialog, and the file and folder buttons
+next to the path fill it in and say what it is (`App.choose_path`). Members:
 
 - `use_folder(path)`: work in this folder, whatever it holds yet: it becomes `App.folder`, the
   Browse tab and the path field go there, and `refresh()` lists it.
@@ -11364,7 +11416,8 @@ master = next(rock.data.files[0].parent.glob("*.h5"))  # the scan's master file
 
 The tab: `path`, `listing` (the folder), `head`, `body`,
 `pane` (the preview figure), `inspector` (the `H5Inspector` or `SpecInspector` of the file shown).
-`go(folder)` lists a folder (a file: its folder, the file selected); **Use this folder** makes
+`go(folder)` lists a folder (a file: its folder, the file selected); **...** chooses a file in
+the system's dialog and goes to it (on a local kernel); **Use this folder** makes
 the folder listed the one to work in (`DataTab.use_folder`), scans or not; `show_figure()`,
 `show_text(text)` and `show_html(markup)` fill the preview area.
 
