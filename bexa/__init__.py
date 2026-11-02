@@ -39,6 +39,7 @@ __all__ = [
     "crystal",
     "demo",
     "geometry",
+    "gui",
     "help",
     "io",
     "list_scans",
@@ -59,6 +60,7 @@ __all__ = [
     "testing",
     "to_host",
     "viz",
+    "workspace",
     "write_package",
 ]
 
@@ -94,12 +96,14 @@ _LAZY_MODULES: dict[str, str] = {
     "analysis": "bexa.analysis",
     "crystal": "bexa.crystal",
     "geometry": "bexa.geometry",
+    "gui": "bexa.gui",
     "io": "bexa.io",
     "notebook": "bexa.notebook",
     "optics": "bexa.optics",
     "pipelines": "bexa.pipelines",
     "testing": "bexa.testing",
     "viz": "bexa.viz",
+    "workspace": "bexa.workspace",
 }
 
 if TYPE_CHECKING:  # pragma: no cover - static analysis only
