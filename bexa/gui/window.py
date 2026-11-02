@@ -22,19 +22,33 @@ import sys
 import tempfile
 import time
 import webbrowser
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 from bexa._log import get_logger
 
 log = get_logger(__name__)
 
-__all__ = ["GuiServer", "app_notebook", "find_browser", "serve", "start"]
+__all__ = [
+    "GuiServer",
+    "app_notebook",
+    "can_show_window",
+    "find_browser",
+    "free_port",
+    "serve",
+    "start",
+    "tunnel_hint",
+]
 
 WINDOW_SIZE = (1800, 1000)  # before it is maximized
 START_TIMEOUT = 60.0  # seconds for Voilà to listen; the App itself appears ~10 s later
 NOTEBOOK_NAME = "bexa.ipynb"  # Voilà titles the window after the notebook
+# a window process that ends sooner handed the page to another one, or could not open
+WINDOW_GRACE = 8.0
+TUNNEL_PORTS = range(8866, 8876)  # over ssh: the same port, so the same tunnel, each time
 BROWSERS = {  # executables by platform, in order of preference
     "win32": (
         r"%ProgramFiles(x86)%\Microsoft\Edge\Application\msedge.exe",
@@ -130,11 +144,36 @@ def find_browser(name: str | Path | None = None) -> Path | None:
     return None
 
 
-def free_port() -> int:
-    """A TCP port nobody listens on (the system picks it)."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("127.0.0.1", 0))
-        return int(s.getsockname()[1])
+def free_port(preferred: Sequence[int] = ()) -> int:
+    """A TCP port nobody listens on: the first of ``preferred`` that is free, else one the
+    system picks."""
+    for candidate in [*preferred, 0]:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", candidate))
+            except OSError:
+                continue
+            return int(s.getsockname()[1])
+    raise OSError("no free port")
+
+
+def can_show_window() -> bool:
+    """Whether a window can open here: on Linux a display (``DISPLAY``, ``WAYLAND_DISPLAY``),
+    which an ssh session has only with X forwarding."""
+    if sys.platform.startswith("linux"):
+        return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    return True
+
+
+def tunnel_hint(port: int) -> str:
+    """What to run on one's own computer to reach a GUI served here over ssh."""
+    import getpass
+
+    host = socket.getfqdn()
+    return (
+        f"from your computer: ssh -L {port}:127.0.0.1:{port} {getpass.getuser()}@{host}\n"
+        f"then open the address above there (127.0.0.1 is this machine only)"
+    )
 
 
 def voila_command(notebook: Path, port: int, token: str) -> list[str]:
@@ -197,6 +236,22 @@ class GuiServer:
             window_command(found, self.url, self.folder / "window-profile", size)
         )
         return True
+
+    @property
+    def port(self) -> int:
+        return int(urlsplit(self.url).port or 0)
+
+    def window_kept(self, grace: float = WINDOW_GRACE) -> bool:
+        """Whether the window's process still runs after ``grace`` seconds. A browser that
+        hands the page to a window it has open, or cannot open one, ends at once: it is then
+        forgotten, and :meth:`wait` waits for the server instead (Ctrl+C)."""
+        end = time.monotonic() + grace
+        while self.window is not None and time.monotonic() < end:
+            if self.window.poll() is not None:
+                self.window = None
+                return False
+            time.sleep(0.25)
+        return self.window is not None
 
     def running(self) -> bool:
         return self.process.poll() is None
@@ -296,20 +351,34 @@ def serve(
 
     ``window=False`` only prints the address (open it in any browser on this
     computer; Ctrl+C stops). ``browser`` names the Chromium browser to use.
+    Without a display (an ssh session) no window is tried, the port is one of
+    ``TUNNEL_PORTS`` and the ssh tunnel to reach it is printed. A window process
+    that ends at once does not stop the GUI; a server that stops shows its log.
     """
+    over_ssh = bool(os.environ.get("SSH_CONNECTION"))
+    if window and not can_show_window():
+        print("no display here (an ssh session without X?): no window", flush=True)
+        window = False
+    if over_ssh and not window and not port:
+        port = free_port(TUNNEL_PORTS)
     server = start(root, workspace, port=port, figures=figures)
     try:
         # flushed: the address must reach a log file at once (nohup, an ssh session)
-        if window and server.open_window(browser):
+        if window and server.open_window(browser) and server.window_kept():
             print(f"bexa GUI in its window ({server.url}); close the window to stop", flush=True)
         else:
             if window:
                 print(
-                    "no Edge, Chrome or Chromium found: the GUI opens in the default browser",
+                    "no window of its own stayed open (no Edge, Chrome or Chromium, or the "
+                    "browser showed the page in a window it had open): the GUI keeps running",
                     flush=True,
                 )
             print(f"bexa GUI at {server.url} ; Ctrl+C here stops it", flush=True)
+            if over_ssh:
+                print(tunnel_hint(server.port), flush=True)
         server.wait()
+        if not server.running():
+            print(f"the GUI server stopped:\n{server.log_tail()}", flush=True)
     finally:
         server.stop()
 

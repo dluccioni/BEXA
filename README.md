@@ -11018,13 +11018,34 @@ window.find_browser()                           # WindowsPath('C:/Program Files 
 ```
 
 #### `free_port`
-`bexa.gui.window.free_port()`
+`bexa.gui.window.free_port(preferred=())`
 
-A TCP port of 127.0.0.1 that nobody listens on (the system picks it).
+A TCP port of 127.0.0.1 that nobody listens on: the first of `preferred` that is free, else
+one the system picks.
 
 ```python
 # a port for the server
 1024 < window.free_port() < 65536               # True
+```
+
+#### `can_show_window`
+`bexa.gui.window.can_show_window()`
+
+Whether a window can open here: on Linux a display (`DISPLAY` or `WAYLAND_DISPLAY`), which
+an ssh session has only with X forwarding; elsewhere `True`.
+
+```python
+window.can_show_window()                       # True on a desktop
+```
+
+#### `tunnel_hint`
+`bexa.gui.window.tunnel_hint(port)`
+
+What to run on one's own computer to reach a GUI served over ssh: the `ssh -L` tunnel of
+`port` to this machine (the server listens on its 127.0.0.1 only).
+
+```python
+window.tunnel_hint(8866).splitlines()[0].split("@")[0]   # 'from your computer: ssh -L 8866:127.0.0.1:8866 <user>'
 ```
 
 #### `voila_command`
@@ -11056,9 +11077,10 @@ window.window_command(Path("msedge.exe"), "http://127.0.0.1:8866/?token=t", Path
 
 A running GUI server (what `start` returns): `url` (with its token), `process` (Voilà),
 `folder` (the notebook, the server's log and the window's profile), `window` (the browser's
-process once opened), `log_file`. Members:
+process once opened), `log_file`, `port` (a property). Members:
 
 - `open_window(browser=None, size=WINDOW_SIZE)`: show the page as an application window; `False` when it went to the default browser instead.
+- `window_kept(grace=WINDOW_GRACE)`: whether the window's process still runs after `grace` seconds. A browser that hands the page to a window it already has open, or cannot open one, ends at once: the window is then forgotten and `wait` waits for the server (Ctrl+C), so that the page it shows stays served.
 - `running()`: whether the server still runs.
 - `wait()`: until the window closes (without one: until the server stops, or Ctrl+C).
 - `log_tail(lines=30)`: the end of the server's log.
@@ -11094,7 +11116,12 @@ except RuntimeError as exc:
 
 What `bexa gui` runs: `start`, then the application window (`browser` names one), then waits and
 stops everything when the window is closed. `window=False` only prints the address (any browser
-on this computer; Ctrl+C stops it).
+on this computer; Ctrl+C stops it). A window process that ends within `WINDOW_GRACE` seconds
+does not stop the GUI (some browsers hand the page to another process and return at once,
+which before showed "127.0.0.1 refused to connect"); the address is printed and Ctrl+C stops
+it. Without a display (an ssh session without X) no window is tried, the port is the first
+free one of `TUNNEL_PORTS` and `tunnel_hint` says how to reach it. A server that stops on its
+own prints the end of its log.
 
 ```python
 # from a script: the window opens, the call returns when it is closed
@@ -11104,6 +11131,8 @@ window.serve("X:/beamtime/RAW_DATA")            # bexa GUI in its window (http:/
 - `WINDOW_SIZE`: `(1800, 1000)`, the window's size in pixels before it is maximized
   (`--start-maximized`: three panels side by side).
 - `START_TIMEOUT`: `60.0` seconds for Voilà to listen (the App appears about ten seconds later).
+- `WINDOW_GRACE`: `8.0` seconds: a window process that ends sooner did not keep a window.
+- `TUNNEL_PORTS`: `range(8866, 8876)`, the ports tried over ssh (the same tunnel each time).
 - `NOTEBOOK_NAME`: `"bexa.ipynb"`; Voilà titles the window after the notebook.
 - `BROWSERS`: the browsers looked for, by platform (`win32`, `darwin`, `linux`), in order.
 
