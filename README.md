@@ -2437,6 +2437,25 @@ res = scan.reduce([bexa.acc.MotorCOM(axes=("chi", "mu"), sigma=3.0, moments=4)],
 res["com_mu"].attrs["units"]                  # 'deg'
 ```
 
+#### `DimCOM`
+`bexa.core.reductions.DimCOM(along, over, sigma=3.0, clip=1e-10)`
+
+Centre of mass and width along any of the scan's dims, as maps over others: `along` names the
+dims of the COM, motors and pixels alike, `over` the dims of the maps, and the other dims are
+summed. `("y", "x")` along an `a x b` scan's motors over gives every frame's centre on the
+detector, both coordinates from the frame's own (bivariate) distribution, as `a x b` maps; the
+motors along and `("y", "x")` over are the maps of `MotorCOM`. With weights `w` (the frames
+smoothed by `sigma` pixels, clipped to `clip`) and coordinates `c` (full-resolution pixel indices,
+or the motor values of each frame): `com = sum(w c) / sum(w)`, `width = sqrt(sum(w c^2) / sum(w)
+- com^2)`. One pass; each batch is summed over its pixel axes first, then folded into the kept
+grid points. Results: `total`, `com_<dim>` and `width_<dim>`; a point without a frame is NaN.
+
+```python
+# scan: the demo chi x mu scan; every frame's centre on the detector, as chi x mu maps
+com = scan.reduce([bexa.acc.DimCOM(("y", "x"), ("chi", "mu"))])
+com["com_x"].dims, sorted(com.data_vars)       # ('chi', 'mu'), ['com_x', 'com_y', 'total', 'width_x', 'width_y']
+```
+
 #### `EnergyCOM`
 `bexa.core.reductions.EnergyCOM(**kwargs)`
 
@@ -9337,16 +9356,24 @@ curve.describe(), round(float(curve.sigma[12]), 1)  # ('curve mu[25] float64 +/-
 ```
 
 #### `com_maps`
-`bexa.workspace.ops.extract.com_maps(obj, axes=None, sigma=3.0, roi=None, downsample=None)`
+`bexa.workspace.ops.extract.com_maps(obj, axes=None, sigma=3.0, roi=None, downsample=None, over=None)`
 
-Centre-of-mass and width maps per motor axis, and the total intensity.  The DFXM maps: for every
-pixel the intensity-weighted mean motor position (`com_<axis>`) and spread (`width_<axis>`).
-Frames are smoothed by `sigma` pixels first (scans; 0 to switch off). On the Analysis tab:
-Extract, "COM Maps"; in code `ws.run("com_maps", ...)`.
+Centre-of-mass and width maps along any dims, and the total intensity. `axes` are the dims the
+COM is taken along, motors and pixels alike (default: every motor); `over` the dims of the maps
+(default: the pixels for a COM along motors, the other motors summed; else every dim not in
+`axes`); the other dims are summed. The defaults are the DFXM maps: for every pixel the
+intensity-weighted mean motor position (`com_<axis>`) and spread (`width_<axis>`). `("y",
+"x")` of an `a x b` scan gives every frame's centre on the detector (bivariate) as `a x b`
+maps; `("mu",)` over `("chi", "x")` the rocking centre per chi and detector column. A scan
+is streamed (`MotorCOM`, or `DimCOM` for other dims), a stack, map or volume reduced in memory.
+Frames are smoothed by `sigma` pixels first (0 to switch off). `ValueError` when no dim is left
+for the maps. On the Analysis tab: Extract, "COM Maps"; in code `ws.run("com_maps", ...)`.
 
 ```python
 # mosa: the centre-of-mass maps of both tilts
 [o.name for o in extract.com_maps(mosa, sigma=1.0)]  # ['demo_mosa_total', 'demo_mosa_com_chi', 'demo_mosa_width_chi', 'demo_mosa_com_mu', 'de...
+# every frame's centre on the detector, as chi x mu maps
+[o.dims for o in extract.com_maps(mosa, axes=["y", "x"])][:2]   # [('chi', 'mu'), ('chi', 'mu')]
 ```
 
 #### `frame_stats`

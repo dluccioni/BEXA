@@ -235,14 +235,24 @@ def com_maps(
     sigma: float = 3.0,
     roi: ROI | None = None,
     downsample: int | None = None,
+    over: Sequence[str] | None = None,
 ) -> list[DataObject]:
-    """Centre-of-mass and width maps per motor axis, and the total intensity.
+    """Centre-of-mass and width maps along any dims, and the total intensity.
 
-    The DFXM maps: for every pixel the intensity-weighted mean motor position
-    (``com_<axis>``) and spread (``width_<axis>``). Frames are smoothed by
-    ``sigma`` pixels first (scans; 0 to switch off).
+    ``axes`` are the dims the COM is taken along, motors and pixels alike
+    (default: every motor); ``over`` the dims of the maps (default: the pixels for
+    a COM along motors, the other motors summed: the DFXM maps; else every dim not
+    in ``axes``). ``("y", "x")`` of an ``a x b`` scan gives every frame's centre on
+    the detector as ``a x b`` maps. Results: ``com_<dim>`` (the intensity-weighted
+    mean coordinate), ``width_<dim>`` (its spread) and ``total``. Frames are
+    smoothed by ``sigma`` pixels first (0 to switch off).
     """
-    require(obj, ("scan", "stack"), "COM Maps")
+    require(obj, ("scan", *ANY), "COM Maps")
+    along, over = _com_dims(obj, axes, over)
+    pixels = list(obj.dims[-2:]) if obj.kind == "scan" else list(pixel_dims(obj.array))
+    if over != pixels or any(d in pixels for d in along) or obj.kind not in ("scan", "stack"):
+        return _com_any(obj, along, over, sigma, roi, downsample)
+    axes = along
     if obj.kind == "scan":
         from bexa.core.reductions import MotorCOM
 
@@ -274,6 +284,83 @@ def com_maps(
             )
     total = reduce_over(data, other_dims(data), "sum").rename("total")
     out.append(new(obj, total, "total", meta={"quantity": "total"}))
+    return out
+
+
+def _com_dims(
+    obj: DataObject, axes: Sequence[str] | None, over: Sequence[str] | None
+) -> tuple[list[str], list[str]]:
+    """The dims of :func:`com_maps`: those the COM is along and those of the maps."""
+    dims = [str(d) for d in obj.dims]
+    pixels = dims[-2:] if obj.kind == "scan" else list(pixel_dims(obj.array))
+    motors = [d for d in dims if d not in pixels]
+    along = [str(d) for d in axes] if axes else motors
+    if over:
+        over = [str(d) for d in over]
+    elif pixels and all(d in motors for d in along):  # the DFXM maps: the other motors summed
+        over = pixels
+    else:
+        over = [d for d in dims if d not in along]
+    unknown = [d for d in (*along, *over) if d not in dims]
+    if unknown:
+        raise ValueError(f"{obj.name} has no dim {unknown}; its dims: {dims}")
+    if not along or not over or set(along) & set(over):
+        raise ValueError(
+            f"take the COM along some dims of {obj.name} {dims} and keep others for the maps"
+        )
+    return along, over
+
+
+def _com_any(
+    obj: DataObject,
+    along: list[str],
+    over: list[str],
+    sigma: float,
+    roi: ROI | None,
+    downsample: int | None,
+) -> list[DataObject]:
+    """:func:`com_maps` along any dims: a scan streamed (``DimCOM``), an array in memory."""
+    if obj.kind == "scan":
+        from bexa.core.reductions import DimCOM
+
+        ds = None if not downsample else (1,) * len(obj.data.dims[:-2]) + (downsample,) * 2
+        result = obj.data.reduce([DimCOM(along, over, sigma=sigma)], roi=roi, downsample=ds)
+        maps = {str(name): result[name] for name in result.data_vars}
+    else:
+        data, _ = windowed(obj, roi)
+        maps = _com_arrays(data, along, over, sigma)
+    names = [n for d in along for n in (f"com_{d}", f"width_{d}")] + ["total"]
+    meta = {"along": along, "over": over}
+    return [
+        _from_scan(obj, maps[n], n, meta={"quantity": n, **meta})
+        if obj.kind == "scan"
+        else new(obj, maps[n], n, meta={"quantity": n, **meta})
+        for n in names
+    ]
+
+
+def _com_arrays(
+    data: xr.DataArray, along: list[str], over: list[str], sigma: float
+) -> dict[str, xr.DataArray]:
+    """``com_<dim>``, ``width_<dim>`` and ``total`` of an array: the weights are the values,
+    smoothed over the pixel dims by ``sigma`` and clipped to 1e-10, the other dims summed."""
+    pixels = pixel_dims(data)
+    if sigma and pixels:
+        from scipy.ndimage import gaussian_filter
+
+        widths = [float(sigma) if d in pixels else 0.0 for d in data.dims]
+        data = data.copy(data=gaussian_filter(np.asarray(data.values, float), widths))
+    w = data.clip(min=1e-10).sum([d for d in data.dims if d not in along and d not in over])
+    total = w.sum(along)
+    out = {"total": total.transpose(*over).rename("total")}
+    for d in along:
+        c = xr.DataArray(_coord_values(w, d), dims=(d,))
+        c = c - float(c.mean())  # about the middle: the second moment keeps its precision
+        mean1 = (w * c).sum(along) / total
+        width = np.sqrt(((w * c**2).sum(along) / total - mean1**2).clip(min=0))
+        middle = float(_coord_values(w, d).mean())
+        out[f"com_{d}"] = (mean1 + middle).transpose(*over).rename(f"com_{d}")
+        out[f"width_{d}"] = width.transpose(*over).rename(f"width_{d}")
     return out
 
 

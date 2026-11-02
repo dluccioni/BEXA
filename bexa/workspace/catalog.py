@@ -322,14 +322,23 @@ OPS: list[Op] = [
         "COM Maps",
         "Extract",
         extract.com_maps,
-        [Input("obj", SCANS, "Scan or stack")],
+        [Input("obj", ("scan", *ANY), "Scan or object")],
         [
-            P("axes", "Motor axes", "dims", optional=True, help="Empty: all motors"),
+            P("axes", "COM along", "dims", optional=True, pixels=True, help="Empty: every motor"),
+            P(
+                "over",
+                "Maps over",
+                "dims",
+                optional=True,
+                pixels=True,
+                help="Empty: y and x for a COM along motors (the other motors summed), "
+                "else the other dims",
+            ),
             P("sigma", "Smoothing (pixels)", "number", 3.0, minimum=0),
             P("roi", "ROI", "roi", optional=True),
             DOWNSAMPLE,
         ],
-        "Centre-of-mass and width maps along each motor, plus the total intensity.",
+        "Centre-of-mass and width along any dims, as maps over others, plus the total.",
     ),
     _o(
         "frame_stats",

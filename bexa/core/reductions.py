@@ -43,6 +43,7 @@ AUTO_PROGRESS_FRAMES = 200  # longer passes show a progress bar in interactive s
 __all__ = [
     "Accumulator",
     "ArgmaxMotor",
+    "DimCOM",
     "EnergyCOM",
     "FrameStats",
     "Histogram",
@@ -790,6 +791,121 @@ class MotorCOM(Accumulator):
                 fourth = mean4 - 4 * mean1 * mean3 + 6 * mean1**2 * mean2 - 3 * mean1**4
                 kurt = fourth / xp.clip(var**2, 1e-30, None) - 3.0
                 out[f"kurtosis_{axis}"] = self._image(kurt, f"kurtosis_{axis}", motor=axis, **attrs)
+        return out
+
+
+@register_accumulator("dim_com")
+class DimCOM(Accumulator):
+    """Centre of mass and width along any of the scan's dims, as maps over others.
+
+    ``along`` names the dims the COM is taken along, motors and pixels alike; ``over``
+    the dims the results are laid out over; the other dims are summed. ``("y", "x")``
+    along the motors over gives every frame's centre on the detector (both from the
+    frame's own distribution); the motors along and ``("y", "x")`` over are the maps of
+    :class:`MotorCOM`. For each point, with weights ``w`` and coordinates ``c``::
+
+        com   = sum(w * c) / sum(w)
+        width = sqrt(sum(w * c^2) / sum(w) - com^2)
+
+    Weights are the frames after Gaussian smoothing of ``sigma`` pixels, clipped to
+    ``clip``; pixel coordinates are full-resolution indices (``window.coords``).
+    Results: ``total``, ``com_<dim>`` and ``width_<dim>``; a point without a frame is NaN.
+    """
+
+    name = "dim_com"
+    live_copies = 3
+
+    def __init__(
+        self, along: Sequence[str], over: Sequence[str], sigma: float = 3.0, clip: float = 1e-10
+    ) -> None:
+        super().__init__(along=list(along), over=list(over), sigma=sigma, clip=clip)
+        self.along = tuple(str(d) for d in along)
+        self.over = tuple(str(d) for d in over)
+        self.sigma = float(sigma)
+        self.clip = clip
+
+    def _allocate(self) -> None:
+        plan = self.plan
+        unknown = [d for d in (*self.along, *self.over) if d not in plan.dims]
+        if unknown:
+            raise ValueError(f"no dim {unknown} in this scan; its dims: {list(plan.dims)}")
+        if not self.along or set(self.along) & set(self.over):
+            raise ValueError("take the COM along one dim or more, none of them a map dim")
+        self.kept_motors = [i for i, d in enumerate(plan.motor_dims) if d in self.over]
+        # the batch's pixel axes summed: those of no map (the COM ones among them)
+        self.summed = tuple(1 + i for i, d in enumerate(PIXEL_DIMS) if d not in self.over)
+        pixels = plan.window.coords()
+        self.pixels = {d: self.xp.asarray(pixels[d], dtype=np.float64) for d in PIXEL_DIMS}
+        # coordinates about their middle: the second moment keeps its precision
+        self.origin = {
+            d: float(np.mean(pixels[d] if d in PIXEL_DIMS else plan.coords[d])) for d in self.along
+        }
+        shape = [plan.grid_shape[i] for i in self.kept_motors]
+        shape += [n for d, n in zip(PIXEL_DIMS, plan.window.shape, strict=True) if d in self.over]
+        self.s0 = self._zeros(shape)
+        self.s1 = {d: self._zeros(shape) for d in self.along}
+        self.s2 = {d: self._zeros(shape) for d in self.along}
+
+    def _pixel_sum(self, w: Any, dim: str | None = None, power: int = 0) -> Any:
+        """``w`` (times the coordinate of the pixel ``dim`` to ``power``) summed over the
+        summed pixel axes: ``(n, map pixels...)``."""
+        if dim is None:
+            return w.sum(axis=self.summed) if self.summed else w
+        axis = 1 + PIXEL_DIMS.index(dim)
+        weighted = self.xp.tensordot(w, (self.pixels[dim] - self.origin[dim]) ** power, (axis, 0))
+        rest = tuple(a if a < axis else a - 1 for a in self.summed if a != axis)
+        return weighted.sum(axis=rest) if rest else weighted
+
+    def update(self, frames: Any, frame_ids: np.ndarray) -> None:
+        xp = self.xp
+        w = frames if frames.dtype.kind == "f" else frames.astype(self.dtype)
+        w = xp.clip(backend.gaussian_frames(w, self.sigma), self.clip, None).astype(np.float64)
+        positions = self.plan.grid_positions(frame_ids)
+        index = tuple(xp.asarray(positions[i]) for i in self.kept_motors)
+
+        def fold(target: Any, part: Any) -> None:
+            if index:
+                _scatter(xp, "add", target, index, part)
+            else:  # every motor summed: the batch folds into one array
+                target += part.sum(axis=0)
+
+        s0 = self._pixel_sum(w)
+        fold(self.s0, s0)
+        for d in self.along:
+            if d in PIXEL_DIMS:
+                fold(self.s1[d], self._pixel_sum(w, d, 1))
+                fold(self.s2[d], self._pixel_sum(w, d, 2))
+                continue
+            m = np.asarray(self.plan.motor_values(d, frame_ids), dtype=np.float64) - self.origin[d]
+            m = xp.asarray(m).reshape((-1,) + (1,) * (s0.ndim - 1))
+            fold(self.s1[d], s0 * m)
+            fold(self.s2[d], s0 * m * m)
+        self.n_frames_seen += len(frame_ids)
+
+    def result(self) -> dict[str, xr.DataArray]:
+        xp, plan = self.xp, self.plan
+        dims = [plan.motor_dims[i] for i in self.kept_motors]
+        dims += [d for d in PIXEL_DIMS if d in self.over]
+        coords = plan.all_coords()
+        total = xp.where(self.s0 > 0, self.s0, xp.nan)  # 0: no frame at that point
+        attrs = {"sigma": self.sigma, "along": list(self.along), "over": list(self.over)}
+
+        def array(data: Any, name: str, **more: Any) -> xr.DataArray:
+            return xr.DataArray(
+                backend.to_host(data),
+                dims=dims,
+                coords={d: coords[d] for d in dims},
+                name=name,
+                attrs={**attrs, **more},
+            )
+
+        out = {"total": array(total, "total")}
+        for d in self.along:
+            mean1 = self.s1[d] / total
+            width = xp.sqrt(xp.clip(self.s2[d] / total - mean1**2, 0, None))
+            unit = self.plan.structure.units.get(d, "px" if d in PIXEL_DIMS else "")
+            out[f"com_{d}"] = array(mean1 + self.origin[d], f"com_{d}", dim=d, units=unit)
+            out[f"width_{d}"] = array(width, f"width_{d}", dim=d, units=unit)
         return out
 
 
