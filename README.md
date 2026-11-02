@@ -16,7 +16,8 @@ notebook and batch use.
   magnifier optics.
 - Interfaces: `bexa` command line (`scan`, `cube`, `auto`, `crystal`, `optics`, `bench`),
   Python API (`bexa.open`, `bexa.open_profile`, `scan.reduce`), matplotlib plots with optional
-  plotly and napari front ends.
+  plotly and napari front ends, and a notebook GUI (`bexa.gui.App`: open, browse, view,
+  analyse, fit, convert) over a workspace of objects (`bexa.workspace`).
 
 This README is also the reference. [Function reference](#function-reference) documents every
 public function, class, method and property with its parameters, what it returns and an
@@ -31,13 +32,15 @@ lists the everyday jobs with the function that does each.
 - [Examples](#examples)
 - [Layout](#layout)
 - [Walkthrough: ID03 data on the ESRF Jupyter-SLURM service](#walkthrough-id03-data-on-the-esrf-jupyter-slurm-service)
+- [The notebook GUI](#the-notebook-gui)
 - [Find a function by task](#find-a-function-by-task)
 - [Function reference](#function-reference)
   - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.status](#bexacorestatus-the-state-of-a-scan) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.scan_table](#bexacorescan_table-the-rows-of-a-datasets-table) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
   - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.survey](#bexaiosurvey-every-dataset-under-a-folder) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.spec_tiff](#bexaioenginesspec_tiff-aps-7-id-spec-sessions-with-a-tiff-per-point) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.layer](#bexaiolayer-one-layer-of-a-scan-as-a-source) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
-  - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis)
+  - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis) · [bexa.analysis.curves](#bexaanalysiscurves-peak-positions-widths-smoothing-backgrounds-stitching) · [bexa.analysis.peakfit](#bexaanalysispeakfit-peaks-of-any-shape-on-a-background-bounds-and-fixed-values) · [bexa.analysis.imaging](#bexaanalysisimaging-gaussian-peak-maps-kam-orientation-colours-strain) · [bexa.analysis.xrd](#bexaanalysisxrd-powder-geometry-azimuthal-integration-cakes-scherrer) · [bexa.analysis.xrr](#bexaanalysisxrr-momentum-transfer-footprint-critical-angle-film-thickness)
   - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.sliders](#bexavizsliders-what-the-slider-browsers-share) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers) · [bexa.notebook.picker](#bexanotebookpicker-choosing-scans-in-a-notebook) · [bexa.notebook.listing](#bexanotebooklisting-the-scans-listed-and-a-selection-across-folders) · [bexa.notebook.selection](#bexanotebookselection-scans-chosen-in-several-dataset-folders) · [bexa.notebook.picker_state](#bexanotebookpicker_state-what-a-picker-remembers) · [bexa.notebook.picker_widgets](#bexanotebookpicker_widgets-the-widget-views-of-the-picker) · [bexa.notebook.selection_panel](#bexanotebookselection_panel-the-selected-scans-of-every-folder)
   - Pipelines: [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set) · [bexa.pipelines.xfel_cube](#bexapipelinesxfel_cube-pal-xfel-point-files-to-a-laser-onoff-cube) · [bexa.pipelines.cube_report](#bexapipelinescube_report-figures-and-gifs-of-one-cube) · [bexa.pipelines.auto_process](#bexapipelinesauto_process-the-beamtime-watcher) · [bexa.pipelines.benchmark](#bexapipelinesbenchmark-timings-and-baselines)
+  - Workspace and GUI: [bexa.workspace](#bexaworkspace-the-object-system-behind-the-gui) · [bexa.workspace.objects](#bexaworkspaceobjects-data-objects-and-scan-sets) · [bexa.workspace.workspace](#bexaworkspaceworkspace-the-workspace-its-rois-and-its-log) · [bexa.workspace.catalog](#bexaworkspacecatalog-the-operations-their-settings-and-their-help) · [bexa.workspace.ops.extract](#bexaworkspaceopsextract-scans-and-stacks-to-images-curves-maps-and-tables) · [bexa.workspace.ops.process](#bexaworkspaceopsprocess-one-object-in-a-new-one-out) · [bexa.workspace.ops.combine](#bexaworkspaceopscombine-several-objects-in) · [bexa.workspace.ops.multiscan](#bexaworkspaceopsmultiscan-many-scans-at-once) · [bexa.workspace.ops.fit](#bexaworkspaceopsfit-peaks-series-of-fits-peak-finding) · [bexa.workspace.ops.imaging](#bexaworkspaceopsimaging-per-pixel-maps-orientation-kam-strain-drift) · [bexa.workspace.ops.scattering](#bexaworkspaceopsscattering-powder-integration-cakes-reflectivity) · [bexa.workspace.ops.calculators](#bexaworkspaceopscalculators-tables-from-numbers-alone) · [bexa.workspace.ops._base](#bexaworkspaceops_base-what-the-operations-share) · [bexa.workspace.files](#bexaworkspacefiles-files-to-objects-and-objects-to-files) · [bexa.workspace.convert](#bexaworkspaceconvert-conversions-between-formats) · [bexa.workspace.jobs](#bexaworkspacejobs-background-work-with-progress-and-cancel) · [bexa.workspace.source](#bexaworkspacesource-python-source-for-logged-values) · [bexa.workspace.storage](#bexaworkspacestorage-reading-back-a-saved-workspace) · [bexa.gui](#bexagui-the-notebook-gui-package) · [bexa.gui.app](#bexaguiapp-the-notebook-gui) · [bexa.gui.figures](#bexaguifigures-figures-inside-the-gui) · [bexa.gui.forms](#bexaguiforms-the-forms-of-the-catalog) · [bexa.gui.drawing](#bexaguidrawing-objects-drawn-into-a-figure) · [bexa.gui.objects_panel](#bexaguiobjects_panel-the-objects-of-the-workspace) · [bexa.gui.data_tab](#bexaguidata_tab-opening-data) · [bexa.gui.browse_tab](#bexaguibrowse_tab-the-inside-of-folders-and-files) · [bexa.gui.inspectors](#bexaguiinspectors-hdf5-trees-spec-sessions-tiff) · [bexa.gui.view_tab](#bexaguiview_tab-drawing-the-selection) · [bexa.gui.analysis_tab](#bexaguianalysis_tab-every-operation-by-group) · [bexa.gui.fit_tab](#bexaguifit_tab-peaks-with-every-parameter-in-hand) · [bexa.gui.convert_tab](#bexaguiconvert_tab-conversions-and-exports) · [bexa.gui.log_tab](#bexaguilog_tab-commands-script-workspace-files-jobs)
   - Synthetic data: [bexa.testing.demo](#bexatestingdemo-bexademo-synthetic-data-in-one-call) · [bexa.testing.synthetic](#bexatestingsynthetic-small-valid-files-for-every-layout-with-the-planted-truth)
   - Geometry and crystallography: [bexa.geometry.conventions](#bexageometryconventions-named-lab-frames-and-motor-stacks) · [bexa.geometry.detector](#bexageometrydetector-detector-and-beam-geometry) · [bexa.geometry.transforms](#bexageometrytransforms-pixels-to-angles-to-q-to-hkl) · [bexa.crystal.lattice](#bexacrystallattice-cells-d-spacings-and-reflections) · [bexa.crystal.cif](#bexacrystalcif-cell-and-space-group-from-cif-files) · [bexa.crystal.diffractometer](#bexacrystaldiffractometer-four-circle-motor-solutions) · [bexa.crystal.zone_axis](#bexacrystalzone_axis-the-zone-axis-from-one-reflection) · [bexa.crystal.omega_search](#bexacrystalomega_search-omega-where-two-peaks-share-a-mu-window) · [bexa.crystal.sample_frame](#bexacrystalsample_frame-sample-to-grain-matrix)
   - Units and optics: [bexa.core.units](#bexacoreunits-physical-constants-and-unit-conversions) · [bexa.optics.conversions](#bexaopticsconversions-energy-wavelength-and-monochromator-angles) · [bexa.optics.attenuation](#bexaopticsattenuation-transmission-and-attenuation-lengths) · [bexa.optics.nist](#bexaopticsnist-nist-mass-attenuation-tables) · [bexa.optics.bragg_magnifier](#bexaopticsbragg_magnifier-asymmetric-bragg-magnifier)
@@ -79,11 +82,13 @@ the rest stays the same.
 | `12_esrf_dfxm_workflow.ipynb` | a notebook for an ID03 DFXM beamtime end to end: alignment scans, quick mosa scan, fine mosa scan, energy scan, z-stack, 3-D rendering with a slider per scanned motor |
 | `13_esrf_dfxm_general.ipynb` | one notebook for any ID03 dataset (a single mosaicity scan, a z-stack, an energy series, both, or several folders): it reads what varies between the scans and stacks on that; one streaming pass per scan (several scans at a time with `WORKERS`) gives the binned previews and the full-resolution maps, stacked into one file in the cache that every later cell reads block by block; section 10 also renders the total scattered intensity per voxel, and section 11 compares two sets of scans from any folders, B minus A pair by pair (intensity and tilt changes) |
 | `14_aps_7id_session.ipynb` | an APS 7-ID-C SPEC session from the counters to the maps: every scan in a table, the log of the session (filters, timing), the counters of any scan with or without its frames, normalised by the monitor; Gaussian fits of every rocking curve, peaks or edges of the stage scans, time zero and the pump-probe step of every delay scan, the loop scans; the frames checked against their rows, and the summed image and COM maps of a scan with frames; one scan as a package read back. Runs on the sample data set of the lab share, or on a synthetic session |
+| `15_notebook_gui.ipynb` | the notebook GUI: start it on any folder of data (or on synthetic data), then the same work in code: a rocking curve and its fit, COM, orientation and KAM maps, a z-stack as one scan set stacked and fitted at every height, an object's history, the session as a script, a scan package, exports and the saved workspace, and the table of every operation |
 
 ## Layout
 
 ```
-bexa/            the package (core, io, analysis, geometry, crystal, optics, viz, pipelines, cli)
+bexa/            the package (core, io, analysis, geometry, crystal, optics, viz, notebook,
+                 workspace: the object system, gui: the notebook GUI, pipelines, cli)
 configs/formats  format specs (YAML) - one per file layout
 configs/beamtimes  beamtime profiles (add yours; see bexa profile new)
 tests/           pytest suite with synthetic generators for every format
@@ -594,6 +599,64 @@ Reference entries: `Dataset.table`, `Dataset.problems`, `Dataset.refresh` in [be
 `ScanStatus` in [bexa.core.status](#bexacorestatus-the-state-of-a-scan); `Scan.refresh`, `Scan.info` in [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle); `bexa scan list`
 in [bexa scan](#bexa-scan-frame-stack-scans).
 
+## The notebook GUI
+
+`bexa.gui.App` puts bexa in one notebook cell: the objects of a workspace on the left, seven tabs
+on the right, a progress bar with Cancel on top. It reads every layout bexa reads (ESRF BLISS,
+APS 7-ID SPEC sessions with their TIFF frames, PAL, LCLS smalldata, EuXFEL, scan packages,
+cubes). It needs ipywidgets; with ipympl the figures zoom and pan, ROIs are drawn with the mouse
+and a click places a peak, and without it (the ESRF POWER nodes) the figures are pictures and
+every tool takes typed values instead. `examples/15_notebook_gui.ipynb` starts it on synthetic
+data and does the same work in code.
+
+```python
+import bexa
+bexa.notebook.setup()  # %matplotlib widget when ipympl is installed
+app = bexa.gui.App(root="/data/visitor/hc6293/id03/20260924/RAW_DATA")
+app  # the last line of the cell shows it
+```
+
+| Tab | What it does |
+|---|---|
+| Data | open a path (the layout is sniffed) as one scan, every scan of a dataset or one scan set; the scan picker of a beamtime folder, its selection added as scans, a scan set or a series; a beamtime profile; demo data |
+| Browse | walk folders and look inside files before opening anything: HDF5/NeXus trees with shapes, chunks, compression and attributes and a preview of one slice at a time, SPEC sessions (scans, headers, columns), TIFF tags, arrays, text; load any dataset or slice as an object |
+| View | a scan's raw frames with a slider per motor (one frame read per move), stacks, images and maps on their coordinates (colour map, limits, log, ROIs), curves overlaid with error bars and fits, maps as curves, volumes, colour pictures, tables; ROIs typed or drawn; line profiles; the value under the mouse; 3-D rendering of a stack |
+| Analysis | every operation of `bexa.workspace.catalog` (Extract, Process, Combine, Multi-scan, Fit, Imaging, XRD, XRR, Calculators), each with its help, its inputs and a form; Run in the background; "Run on each selected object" for a batch |
+| Fit | peaks of any shape on a background, each parameter with a start value, bounds or fixed; guess, add, or click to place peaks; data, fit, components and residuals; refit from the fitted values; fit every curve of a map |
+| Convert | a scan or scan set to a scan package, a cube, NeXus, TIFF or NPY; a whole dataset or session scan by scan; an HDF5 dataset or slice to NPY, TIFF or CSV; a file to another format; objects to NeXus, CSV, NPY, TIFF, PNG |
+| Log | every command run, the script that replays the session, saving and opening the workspace, the jobs |
+
+**Objects, never the raw data.** Scans read from files are raw objects: no operation changes
+them. Every operation makes new objects (a stack, an image, a map, a curve, a volume, a colour
+picture, a table, a text report) that keep their uncertainties, metadata, the objects they were
+made from and the commands that made them, and that any later operation can take again (A - B,
+averages, joins, stacks, mosaics, fits of fits). Duplicate an object to try something on a copy.
+
+**Several scans at once.** A scan set is one object holding many scans: a z-stack, an energy
+series, a temperature series, a selection from the picker across folders. *Stack Scans* reduces
+each scan in one streaming pass (several at a time in processes with `workers`) and stacks the
+results on what differs between the scans; any operation made for one scan, given a scan set,
+runs on every scan and stacks the results (the ROI curve of every height as one volume, then
+*Fit Series* fits all of them).
+
+**Commands.** The GUI is a view of `app.ws`, a `bexa.workspace.Workspace`: every button runs a
+logged command (`ws.open_scan(...)`, `ws.set_roi(...)`, `ws.run("roi_curves", "scan_7",
+rois=["peak"])`) that works the same in a cell. The Log tab shows them and writes the session as
+a script; Save workspace keeps objects, ROIs, settings and log in one HDF5 file (scans by how to
+open them again).
+
+**Background work.** Operations run in a background thread with a progress bar; Cancel stops
+them at the next batch. The notebook stays usable meanwhile, and the cells can use `app.ws` too.
+
+```python
+ws = app.ws
+scan = ws.open_scan("/data/visitor/hc6293/id03/20260924/RAW_DATA/sample/dataset", scan=7)
+ws.set_roi("peak", y=(700, 1100), x=(800, 1200))
+(curve,) = ws.run("roi_curves", scan, rois=["peak"])
+fit, table = ws.run("fit_peaks", curve, shape="pseudo_voigt", background="linear")
+print(ws.script())
+```
+
 ## Find a function by task
 
 The everyday jobs and the functions that do them; each name has an entry in the
@@ -661,6 +724,12 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | points in reciprocal space (angles, Q, hkl) | `bexa.analysis.projections.rlp_points`, `bexa.geometry.transforms.build_coordinate_grids` |  |
 | laser on/off split and differential signal | `bexa.analysis.pump_probe.split_on_off`, `bexa.analysis.pump_probe.differential`, `OnOffSplit` |  |
 | combine runs, bin LCLS shots (cube triples or smalldata runs) | `bexa.analysis.pump_probe.combine_runs`, `bexa.analysis.pump_probe.bin_lcls`, `bexa.analysis.pump_probe.bin_events` |  |
+| fit peaks of any shape with bounds and fixed values, without lmfit | `bexa.analysis.peakfit.fit_peaks`, `bexa.analysis.peakfit.fit_series`; the Fit tab |  |
+| a curve's peak position, FWHM, background, smoothing, derivative | `bexa.analysis.curves.peak_position`, `fwhm`, `background`, `smooth`, `derivative` |  |
+| a Gaussian fitted to every pixel's rocking curve | `bexa.analysis.imaging.gaussian_peak_maps` |  |
+| KAM, orientation colours and strain from COM maps | `bexa.analysis.imaging.kam`, `orientation_rgb`, `strain_map` |  |
+| powder patterns and cakes from an area detector, ring calibration, crystallite size | `bexa.analysis.xrd.integrate_1d`, `integrate_2d`, `calibrate_from_ring`, `scherrer` |  |
+| reflectivity: q_z, footprint, critical angle, film thickness | `bexa.analysis.xrr.qz`, `footprint_fraction`, `critical_angle`, `kiessig_thickness` |  |
 
 **Plots**
 
@@ -678,6 +747,19 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | figures for a paper | `bexa.viz.style.use("paper")` |  |
 | the colour limits, colormap, colourbar or size of one plot | the `clim`, `cmap`, `colorbar`, `figsize` keywords of every plot function (`bexa.viz.images.show`) | §6, §7, §8, §9 |
 | the same for every plot of a notebook, or a figure already drawn | `bexa.viz.style.set`, `bexa.viz.style.context`, `bexa.viz.style.apply` | §2 |
+
+**The notebook GUI and the workspace**
+
+| I want to | Use | notebook 13 |
+|---|---|---|
+| everything in a GUI in a notebook: open data of any facility, browse files, view, analyse, fit, convert | `bexa.gui.App`; `examples/15_notebook_gui.ipynb` |  |
+| look inside an HDF5/NeXus file, a SPEC session or a TIFF before opening it | the Browse tab (`bexa.gui.inspectors.H5Inspector`, `SpecInspector`); `bexa.io.inspect.h5_tree` |  |
+| keep results as objects that remember how they were made, and replay the session as a script | `bexa.workspace.Workspace`, `Workspace.run`, `Workspace.script`, `Workspace.save`, `Workspace.load` |  |
+| run one analysis on many scans at once | `Workspace.open_scans` (a scan set), any operation run on the set, `bexa.workspace.ops.multiscan.stack_scans` |  |
+| repeat an operation over several objects | "Run on each selected object" on the Analysis tab |  |
+| every operation with its settings | the table of `bexa.workspace.catalog` |  |
+| convert between formats: a scan or session to packages, NeXus, TIFF or NPY; an HDF5 dataset to NPY, TIFF or CSV | the Convert tab; `Workspace.convert`, `bexa.workspace.convert.convert_scan`, `convert_session`, `convert_dataset` |  |
+| export results with their axes, uncertainties and history | `Workspace.export`, `Workspace.export_nexus`, `bexa.workspace.files.write_nexus` |  |
 
 **Pipelines and the beamtime**
 
@@ -778,8 +860,8 @@ functions that need them. Each name is documented in full under the module that 
 | `bexa.__version__` | the version string, `"1.0.0.dev0"` | |
 
 The sub-packages are imported on first use too: `bexa.analysis`, `bexa.crystal`,
-`bexa.geometry`, `bexa.io`, `bexa.notebook`, `bexa.optics`, `bexa.pipelines`, `bexa.testing`,
-`bexa.viz`.
+`bexa.geometry`, `bexa.gui`, `bexa.io`, `bexa.notebook`, `bexa.optics`, `bexa.pipelines`,
+`bexa.testing`, `bexa.viz`, `bexa.workspace`.
 
 ```python
 import bexa
@@ -5953,6 +6035,560 @@ Constants:
 
 - `LASER_COORD`: the `laser` coordinate of every cube, `np.array(["off", "on"])`.
 
+### bexa.analysis.curves: peak positions, widths, smoothing, backgrounds, stitching
+
+One-dimensional curve tools on plain arrays `x`, `y` and, where it matters, `sigma` (the
+standard uncertainty of every `y`), returned as numpy arrays. The workspace operations of
+`bexa.workspace.ops.process` and `bexa.workspace.ops.combine` wrap them for curve objects;
+smoothing works along the last axis of any array, so a map of curves is smoothed in one call.
+
+```python
+import numpy as np
+from bexa.analysis import curves
+
+x = np.linspace(-2, 2, 201)  # a motor axis in deg
+peak = 100 * np.exp(-4 * np.log(2) * ((x - 0.3) / 0.5) ** 2)  # a Gaussian peak at 0.3 deg, FWHM 0.5
+y = peak + 3 + 2 * x  # the same on a sloping background
+```
+
+#### `peak_position`
+`bexa.analysis.curves.peak_position(x, y, method="maximum", x_range=None)`
+
+Where a curve peaks: `"maximum"` is the x of the highest point,
+`"refined"` the top of the parabola through it and its two neighbours (between scan points),
+`"com"` the centre of mass of the points above half the maximum. `x_range` limits the search.
+Returns a float.
+
+```python
+# peak: the planted Gaussian; three ways to its position
+curves.peak_position(x, peak, "maximum")        # 0.3
+curves.peak_position(x, peak, "refined")        # 0.3
+curves.peak_position(x, y, "maximum", x_range=(-2, -1))  # -1.0
+```
+
+#### `fwhm`
+`bexa.analysis.curves.fwhm(x, y, baseline="min")`
+
+Full width at half maximum, the half-height crossings interpolated
+between points: `(width, left, right)`. `baseline="min"` measures the half height above the
+curve's minimum, `"zero"` above zero; NaN when the curve does not fall below half on both sides.
+
+```python
+# peak: a Gaussian of FWHM 0.5 deg
+curves.fwhm(x, peak)                            # (0.50015, 0.049923, 0.55008)
+```
+
+#### `smooth`
+`bexa.analysis.curves.smooth(y, method="gaussian", width=2.0, order=2)`
+
+Smooth along the last axis: `"gaussian"` (`width` is the standard
+deviation in points), `"moving average"`, `"savitzky-golay"` (polynomial `order`) or `"median"`
+(`width` is the window in points, made odd).
+
+```python
+# y with noise; a Gaussian smoothing of 2 points
+noisy = y + np.random.default_rng(0).normal(0, 2, x.size)
+float(np.std(curves.smooth(noisy, "gaussian", 2) - y))  # 0.89622
+curves.smooth(np.vstack([noisy, noisy]), "savitzky-golay", 7).shape  # (2, 201)
+```
+
+#### `derivative`
+`bexa.analysis.curves.derivative(x, y, sigma=None)`
+
+`dy/dx` by central differences (one-sided at the ends), and its
+uncertainty when `sigma` is given: `(dy, dsigma)` (`dsigma` is `None` without `sigma`). An edge
+scan becomes a peak.
+
+```python
+# x squared, errors of 0.1: the slope 2x and its error
+dy, ds = curves.derivative(x, x**2, np.full(x.size, 0.1))
+float(dy[150]), float(ds[150])                  # (2.0, 3.5355)
+```
+
+#### `cumulative_integral`
+`bexa.analysis.curves.cumulative_integral(x, y, sigma=None)`
+
+The running trapezoid integral from the first point, with its
+uncertainty: `(area, sigma)`.
+
+```python
+# a constant 1 over 4 deg: the area grows to 4
+area, err = curves.cumulative_integral(x, np.ones_like(x), np.full(x.size, 0.1))
+float(area[-1]), float(err[-1])                 # (4.0, 0.028249)
+```
+
+#### `background`
+`bexa.analysis.curves.background(x, y, method="linear", regions=None, order=2)`
+
+A background under the curve fitted to its background `regions`
+(`[(low, high), ...]` in x; default the first and last tenth of the points): `"constant"`,
+`"linear"`, `"polynomial"` (of `order`) by least squares, or `"minimum"`. Returns the background
+at every x.
+
+```python
+# y: the peak on 3 + 2x; the background from both ends
+bg = curves.background(x, y, "linear", regions=[(-2, -1.2), (1.5, 2)])
+float(bg[0]), float(bg[-1])                     # (-1.0, 7.0)
+```
+
+#### `interp_onto`
+`bexa.analysis.curves.interp_onto(x_from, y, x_to)`
+
+`y` given at `x_from` interpolated linearly at `x_to`; NaN outside
+the range of `x_from`.
+
+```python
+# the peak at two x values, one outside the curve
+curves.interp_onto(x, peak, [0.3, 5.0])         # array([100.0, nan])
+```
+
+#### `resample`
+`bexa.analysis.curves.resample(x, y, new_x, sigma=None)`
+
+Values and uncertainties interpolated onto `new_x`: `(values,
+sigma)`.
+
+```python
+# the peak on a coarser axis
+values, _ = curves.resample(x, peak, np.linspace(-1, 1, 5))
+values.round(2)                                 # array([0.0, 0.08, 36.86, 64.17, 0.44])
+```
+
+#### `merge_points`
+`bexa.analysis.curves.merge_points(x, y, sigma=None, tolerance=None)`
+
+Sort by x and average the points closer than `tolerance` (default
+1e-9 of the span); uncertainties combine as for a mean, `sqrt(sum(s^2)) / n`. Returns `(x, y,
+sigma)`.
+
+```python
+# two points at x = 1 averaged
+curves.merge_points([0, 1, 1, 2], [1, 2, 4, 3], [1, 1, 1, 1])  # (array(list of 3), array(list of 3), array(list of 3))
+```
+
+#### `stitch`
+`bexa.analysis.curves.stitch(curves, scale=True, overlap="average")`
+
+One curve from curves of neighbouring ranges, `[(x, y, sigma or None),
+...]`, taken in order of their first x. With `scale` each curve is multiplied to match the stitched
+part where they overlap (the ratio of their means there); `overlap` keeps the points of both
+(`"average"`: equal x averaged), of the `"first"` or of the `"last"`. Returns `(x, y, sigma)`.
+
+```python
+# the peak in two overlapping pieces, the second recorded twice as bright
+sx, sy, _ = curves.stitch([(x[:120], peak[:120], None), (x[100:], 2 * peak[100:], None)])
+sx.size, bool(np.allclose(sy, peak))            # (201, True)
+```
+
+- `PEAK_METHODS`: `("maximum", "refined", "com")`
+- `SMOOTH_METHODS`: `("gaussian", "moving average", "savitzky-golay", "median")`
+- `BACKGROUND_METHODS`: `("linear", "constant", "polynomial", "minimum")`
+
+### bexa.analysis.peakfit: peaks of any shape on a background, bounds and fixed values
+
+Sums of peak shapes on a background fitted with scipy's bounded `least_squares` (no lmfit
+needed, so it works on the ESRF POWER nodes). Shapes are parametrised by their height
+(`amplitude`), `center` and full width at half maximum (`fwhm`): `gaussian`, `lorentzian`,
+`pseudo_voigt` (`eta`, the Lorentzian share), `voigt` (`fwhm` of the Gaussian part,
+`lorentz_fwhm`), `pearson7` (`m`) and `step` (an error-function edge, `fwhm` its blur).
+Backgrounds: `none`, `constant`, `linear`, `quadratic` (about the middle of the range),
+`exponential`. Every parameter can be a number, `(value, min, max[, fixed])`, a dict
+`{"value", "min", "max", "fixed"}` or a `Param`; missing ones are guessed. With `sigma` the
+residuals are weighted by `1/sigma` and the errors are absolute; without, they are scaled by the
+reduced chi-square. The Fit tab of the GUI (`bexa.gui.fit_tab`) is built on this module.
+
+```python
+import numpy as np
+from bexa.analysis import peakfit
+
+x = np.linspace(-2, 2, 241)  # a motor axis in deg
+truth = {"center": 0.1, "fwhm": 0.4, "amplitude": 50.0, "eta": 0.3}  # the planted pseudo-Voigt
+y = peakfit.shape_values("pseudo_voigt", x, truth) + 3 + np.random.default_rng(0).normal(0, 0.3, x.size)
+```
+
+#### `fit_peaks`
+`bexa.analysis.peakfit.fit_peaks(x, y, peaks=None, background="linear", sigma=None, x_range=None, n_peaks=1, shape="gaussian", background_params=None, max_nfev=5000)`
+
+Fit peaks on a background to a curve. `peaks` holds one dict per peak
+(`shape` and any of its parameters); `None` guesses `n_peaks` peaks of `shape` from the most
+prominent maxima. `background_params` sets the background's start values (`{"c0": 5}`), `x_range`
+limits the fitted points. Returns a `PeakFit`.
+
+```python
+# y: the noisy pseudo-Voigt on a constant of 3; one peak guessed, then two placed by hand
+fit = peakfit.fit_peaks(x, y, n_peaks=1, shape="pseudo_voigt", background="constant", sigma=np.full(x.size, 0.3))
+round(fit.values["p1_center"], 3), round(fit.values["p1_fwhm"], 3), round(fit.r2, 4)  # (0.1, 0.401, 0.9994)
+two = peakfit.fit_peaks(x, y, [{"shape": "gaussian", "center": 0.0}, {"shape": "lorentzian", "center": (0.2, 0.1, 0.3)}])
+len(two.shapes)                                 # 2
+```
+
+#### `PeakFit`
+`bexa.analysis.peakfit.PeakFit(x, y, shapes, background, values, errors, best_fit, r2, reduced_chi2, success, message="", fixed=set(), bounds={})`
+
+What `fit_peaks` found: the fitted points `x`, `y`, the `shapes`, the
+`background`, `values` and `errors` by parameter name (`p1_center`, `p1_fwhm`, `p1_amplitude`,
+`bg_c0`, ...), `best_fit` at the points, `r2`, `reduced_chi2`, `success`, `message`, the `fixed`
+names and the `bounds`.
+
+- `x0`: Property: the middle of the fitted range, the reference of the background polynomial.
+- `residual`: Property: data minus best fit.
+- `peak_params(k)`: the parameters of peak `k` (from 1) without their prefix.
+- `components(x=None)`: each peak (`p1`, ...) and the `background` at `x` (default the fitted points).
+- `evaluate(x=None)`: the model (peaks plus background) at `x`.
+- `peaks()`: one dict per peak: parameters, errors (`*_err`), `area` and, for a Voigt, `fwhm_total`.
+- `table()`: `peaks()` as a DataFrame.
+- `report()`: every value and error flat, with the areas, `r2`, `reduced_chi2`, `success`.
+- `spec()`: the fitted values as start values (bounds and fixed flags kept) for another fit.
+- `to_dict()`: everything but the arrays, ready for JSON (what the workspace keeps in a fit's metadata).
+
+```python
+# fit: the pseudo-Voigt fit above
+fit.table()[["center", "fwhm", "amplitude", "area"]].round(3)  # DataFrame: 1 rows x 4 columns (center, fwhm, amplitude, area)
+fit.components(np.array([0.1]))["p1"]           # array([49.887])
+peakfit.fit_peaks(x, y, background="constant", **{k: v for k, v in fit.spec().items() if k != "background"}).r2 > 0.99  # True
+```
+
+#### `Param`
+`bexa.analysis.peakfit.Param(value, min=-np.inf, max=np.inf, fixed=False)`
+
+One parameter: start `value`, bounds `min` and `max` (infinite by
+default) and `fixed`. `Param.of(spec)` makes one from a number, a tuple, a dict or a Param;
+`to_dict()` gives the dict form the workspace logs.
+
+```python
+# the same parameter written three ways
+peakfit.Param.of(0.2)                           # Param(value=0.2, min=-inf, max=inf, fixed=False)
+peakfit.Param.of((0.2, 0.0, 0.5))               # Param(value=0.2, min=0.0, max=0.5, fixed=False)
+peakfit.Param.of({"value": 0.2, "fixed": True}).fixed  # True
+```
+
+#### `guess_peaks`
+`bexa.analysis.peakfit.guess_peaks(x, y, n=1, shape="gaussian")`
+
+Start values for `n` peaks of `shape`: the most prominent maxima
+(scipy `find_peaks`), their heights above the minimum and their widths at half height; for a
+`step`, the half-way crossing. Returns one dict per peak, as `fit_peaks` takes them.
+
+```python
+# y: one peak to find
+peakfit.guess_peaks(x, y, 1)                    # [{'shape': 'gaussian', 'center': 0.11667, 'fwhm': 0.40195, 'amplitude': 50.568}]
+```
+
+#### `shape_values`
+`bexa.analysis.peakfit.shape_values(shape, x, p)`
+
+The values of one peak shape with parameters `p` (a dict) at
+`x`.
+
+```python
+# a Gaussian of height 10 and FWHM 1: half height at centre + 0.5
+peakfit.shape_values("gaussian", np.array([0.0, 0.5]), {"center": 0.0, "fwhm": 1.0, "amplitude": 10.0})  # array([10.0, 5.0])
+```
+
+#### `model_components`
+`bexa.analysis.peakfit.model_components(summary, x)`
+
+Each peak and the background of a fit from its summary
+(`PeakFit.to_dict()`), at `x`: what a fit kept in an object's metadata draws again without
+refitting.
+
+```python
+# fit: the pseudo-Voigt fit; drawn again from its summary
+parts = peakfit.model_components(fit.to_dict(), x)
+sorted(parts), bool(np.allclose(sum(parts.values()), fit.evaluate(x)))  # (['background', 'p1'], True)
+```
+
+#### `fit_series`
+`bexa.analysis.peakfit.fit_series(x, curves, peaks=None, background="linear", sigmas=None, warm_start=True, **kwargs)`
+
+`fit_peaks` for every row of `curves` (all on `x`); with
+`warm_start` each fit starts from the previous good one (`r2` at least 0.5), which follows a peak
+that moves slowly along the series. A curve that cannot be fitted gives `None`. Its progress
+reaches the GUI's progress bar, and Cancel stops it.
+
+```python
+# twelve curves with a peak moving from -0.5 to 0.5
+rows = np.array([peakfit.shape_values("gaussian", x, {"center": c, "fwhm": 0.4, "amplitude": 60}) + 2 for c in np.linspace(-0.5, 0.5, 12)])
+fits = peakfit.fit_series(x, rows, n_peaks=1, background="constant")
+[round(f.values["p1_center"], 2) for f in fits][:4]  # [-0.5, -0.41, -0.32, -0.23]
+```
+
+#### `series_table`
+`bexa.analysis.peakfit.series_table(fits, coords=None, name="index")`
+
+One row per fit of a series: the coordinate (`coords`, named
+`name`), every value, error and area, and `r2`.
+
+```python
+# fits: the moving peak; the table against its position
+peakfit.series_table(fits, np.linspace(-0.5, 0.5, 12), "position")[["position", "p1_center", "r2"]].head(3).round(3)  # DataFrame: 3 rows x 3 columns (position, p1_center, r2)
+```
+
+- `SHAPES`: dict of shape name to its parameter names.
+- `BACKGROUNDS`: dict of background name to its parameter names.
+
+### bexa.analysis.imaging: Gaussian peak maps, KAM, orientation colours, strain
+
+Per-pixel maps for dark-field microscopy and topography, vectorised over the pixels (no Python
+loop per pixel). `gaussian_peak_maps` accepts numpy or cupy arrays.
+
+```python
+import numpy as np
+from bexa.analysis import imaging
+
+mu = np.linspace(-1, 1, 21)  # the rocking motor, deg
+centres = np.linspace(-0.3, 0.3, 64).reshape(8, 8)  # the planted peak position of every pixel
+vol = 500 * np.exp(-0.5 * ((mu[:, None, None] - centres) / 0.2) ** 2)  # (mu, y, x) rocking curves
+```
+
+#### `gaussian_peak_maps`
+`bexa.analysis.imaging.gaussian_peak_maps(volume, values, axis=0, threshold=0.1)`
+
+A Gaussian fitted to the rocking curve of every pixel, all pixels
+at once: `ln I = a + b x + c x^2` by weighted least squares (weights `I^2`, Guo's form of Caruana's
+algorithm) over the points above `threshold` of each pixel's maximum, a 3 x 3 linear system per
+pixel solved for all together with `tensordot`. Returns `center`, `fwhm`, `amplitude` and
+`points`; pixels without a peak are NaN.
+
+```python
+# vol: planted centres from -0.3 to 0.3 deg, sigma 0.2 deg
+maps = imaging.gaussian_peak_maps(vol, mu)
+float(np.nanmax(np.abs(maps["center"] - centres))), float(np.nanmean(maps["fwhm"]))  # (3.0698e-14, 0.47096)
+```
+
+#### `kam`
+`bexa.analysis.imaging.kam(com_a, com_b=None, size=3)`
+
+Kernel average misorientation: the mean tilt difference between each pixel
+and the neighbours in a `size` x `size` kernel, `hypot(da, db)` with a second tilt map `com_b`;
+NaN neighbours are skipped.
+
+```python
+# centres: a smooth tilt gradient of 0.6 deg over 8 pixels
+float(np.nanmean(imaging.kam(centres)))         # 0.057927
+imaging.kam(centres, centres.T, size=5).shape   # (8, 8)
+```
+
+#### `orientation_rgb`
+`bexa.analysis.imaging.orientation_rgb(com_a, com_b, center=None, span=None, intensity=None)`
+
+Two tilt maps as one colour image `(..., 3)`: hue the direction
+of the tilt from `center` (default the medians), saturation its size (full at `span`, default
+the 95th percentile), brightness from `intensity` (percentiles 1 to 99) or 1. NaN pixels are
+black.
+
+```python
+# the gradient and its transpose: tilts in every direction
+rgb = imaging.orientation_rgb(centres, centres.T)
+rgb.shape, float(rgb.min()), float(rgb.max())   # ((8, 8, 3), 0.0, 1.0)
+```
+
+#### `hsv_to_rgb`
+`bexa.analysis.imaging.hsv_to_rgb(hue, saturation, value)`
+
+Hue, saturation and value in 0..1 to RGB, numpy only.
+
+```python
+# pure red, then a pale cyan
+imaging.hsv_to_rgb(0.0, 1.0, 1.0)               # array([1.0, 0.0, 0.0])
+imaging.hsv_to_rgb(0.5, 0.2, 1.0).round(2)      # array([0.8, 1.0, 1.0])
+```
+
+#### `strain_map`
+`bexa.analysis.imaging.strain_map(com, reference=None, kind="theta", theta_deg=None)`
+
+Lattice strain from a centre-of-mass map: an angle map (`kind="theta"`,
+or `"two_theta"`) gives `-(theta - theta_0) cot(theta_0)`, an energy map `-(E - E_0) / E_0`.
+`reference` is the unstrained value (default the median), `theta_deg` the Bragg angle for the
+cotangent (default the reference).
+
+```python
+# a Bragg angle 0.01 deg above 10 deg, and an energy 1e-3 above 17 keV
+imaging.strain_map(np.array([10.0, 10.01]), reference=10.0)  # array([-0.0, -0.00098983])
+imaging.strain_map(np.array([17.0, 17.017]), 17.0, "energy")  # array([-0.0, -0.001])
+```
+
+### bexa.analysis.xrd: powder geometry, azimuthal integration, cakes, Scherrer
+
+Powder diffraction on a flat area detector at `distance_mm` from the sample, hit by the direct
+beam at pixel `(center_y, center_x)`, tilted by `tilt_deg` about an in-plane axis at
+`tilt_plane_deg` from the detector's x axis. Every pixel gets 2theta and an azimuth chi (0 along
++x, towards +y); the integrations bin pixels with `numpy.bincount`, and the per-pixel arrays of a
+geometry are cached, so a 4-megapixel frame integrates in tens of milliseconds.
+
+```python
+import numpy as np
+from bexa.analysis import xrd
+
+geometry = xrd.PowderGeometry(distance_mm=200, center_y=250.3, center_x=260.7, pixel_um=100, energy_keV=17)  # a flat detector
+two_theta = geometry.arrays((512, 520))["two_theta"]  # deg, one value per pixel
+image = 1000 * np.exp(-0.5 * ((two_theta - 8.0) / 0.05) ** 2) + 10  # one powder ring at 8 deg
+```
+
+#### `PowderGeometry`
+`bexa.analysis.xrd.PowderGeometry(distance_mm, center_y, center_x, pixel_um, energy_keV, tilt_deg=0.0, tilt_plane_deg=0.0)`
+
+Where the detector sits. Frozen (usable as a cache key).
+
+- `wavelength_A`: Property: the wavelength of `energy_keV`.
+- `arrays(shape)`: `two_theta`, `chi` (deg) and `solid_angle` (1 at normal incidence) per pixel of a frame of `shape`, cached.
+- `axis(shape, unit="2theta")`: the value of `unit` (`2theta`, `q`, `d`) at every pixel.
+- `polarization(shape, factor=0.0)`: the polarisation factor per pixel, `factor` 0 unpolarised, 1 fully horizontal.
+- `to_dict()`: the fields as a dict (what a pattern's metadata keeps).
+
+```python
+# geometry: 200 mm, 100 um pixels, 17 keV
+round(geometry.wavelength_A, 5)                 # 0.72932
+round(float(two_theta[250, 260 + 200]), 3)      # 5.691
+geometry.axis((512, 520), "q").max().round(3)   # 1.568
+```
+
+#### `integrate_1d`
+`bexa.analysis.xrd.integrate_1d(image, geometry, bins=None, unit="2theta", x_range=None, chi_range=None, mask=None, solid_angle=True, polarization=0.0)`
+
+The mean corrected intensity in rings of equal `unit` (`2theta` deg,
+`q` 1/A, `d` A): `x` (bin centres), `intensity`, `sigma` (Poisson, from the raw counts) and
+`pixels` per bin. `bins` defaults to one per pixel of radius; `chi_range` limits the azimuth,
+`mask` (True: left out) the pixels; `solid_angle` and `polarization` (a factor, `None` for none)
+correct the intensities.
+
+```python
+# image: one ring at 8 deg; its pattern peaks there
+pattern = xrd.integrate_1d(image, geometry, solid_angle=False, polarization=None)
+round(float(pattern["x"][np.nanargmax(pattern["intensity"])]), 2)  # 7.99
+xrd.integrate_1d(image, geometry, unit="q", chi_range=(-45, 45))["x"].size  # 364
+```
+
+#### `integrate_2d`
+`bexa.analysis.xrd.integrate_2d(image, geometry, bins=None, chi_bins=180, unit="2theta", x_range=None, mask=None, solid_angle=True, polarization=0.0)`
+
+The image unrolled into azimuth against `unit` (a cake): `x`, `chi`
+(bin centres) and `intensity` of shape `(chi_bins, bins)`, NaN where no pixel falls. Rings become
+lines; texture and strain show along chi.
+
+```python
+# image: the ring as a cake of 36 azimuth bins
+cake = xrd.integrate_2d(image, geometry, chi_bins=36)
+cake["intensity"].shape                         # (36, 364)
+```
+
+#### `calibrate_from_ring`
+`bexa.analysis.xrd.calibrate_from_ring(image, d_spacing_A, energy_keV, pixel_um, percentile=99.0, guess=None)`
+
+Beam centre and distance from one ring of known `d_spacing_A`
+(no tilt): the pixels above `percentile` are taken as the ring, a circle is fitted to them, and
+`distance = radius / tan(2theta)`. `guess` (a rough centre) drops pixels far from the median radius
+first. Returns `center_y`, `center_x`, `radius_px`, `distance_mm`, `two_theta_deg`,
+`ring_scatter_px`, `pixels`.
+
+```python
+# image: the 8 deg ring; its d-spacing at 17 keV
+d = geometry.wavelength_A / (2 * np.sin(np.radians(4.0)))
+found = xrd.calibrate_from_ring(image, d, 17.0, 100)
+round(found["center_y"], 2), round(found["center_x"], 2), round(found["distance_mm"], 2)  # (250.3, 260.7, 199.99)
+```
+
+#### `convert_two_theta`
+`bexa.analysis.xrd.convert_two_theta(two_theta_deg, unit, wavelength_A)`
+
+2theta in degrees as `"2theta"` (unchanged), `"q"` (1/A) or `"d"`
+(A) for a wavelength.
+
+```python
+# 8 deg at 0.729 A
+xrd.convert_two_theta([8.0], "q", geometry.wavelength_A).round(4)  # array([1.2019])
+xrd.convert_two_theta([8.0], "d", geometry.wavelength_A).round(4)  # array([5.2276])
+```
+
+#### `scherrer`
+`bexa.analysis.xrd.scherrer(fwhm_deg, two_theta_deg, energy_keV, shape_factor=0.9, instrumental_deg=0.0)`
+
+Crystallite size in nanometres from a peak's full width in 2theta
+(degrees), `K lambda / (beta cos theta)`, the `instrumental_deg` width removed in quadrature.
+
+```python
+# a 0.1 deg wide peak at 30 deg, 17 keV
+round(float(xrd.scherrer(0.1, 30, 17)), 2)      # 38.93
+round(float(xrd.scherrer(0.1, 30, 17, instrumental_deg=0.05)), 2)  # 44.96
+```
+
+- `UNITS`: `("2theta", "q", "d")`.
+- `UNIT_LABELS`: axis labels of the units.
+
+### bexa.analysis.xrr: momentum transfer, footprint, critical angle, film thickness
+
+X-ray reflectivity of a specular theta-2theta scan: the incidence angle theta (degrees) or q_z
+(1/A) and the measured intensity.
+
+```python
+import numpy as np
+from bexa.analysis import xrr
+
+theta = np.linspace(0.05, 2.0, 600)  # incidence angles, deg
+q = xrr.qz(theta, 8.04)  # q_z in 1/A at Cu K-alpha
+r = np.where(q < 0.03, 1.0, (0.03 / (2 * q)) ** 4) * (1 + 0.5 * np.cos(q * 300))  # a 300 A film: fringes every 2 pi / 300
+```
+
+#### `qz`
+`bexa.analysis.xrr.qz(theta_deg, energy_keV)`
+
+Momentum transfer normal to the surface, `4 pi sin(theta) / lambda`, 1/A.
+
+```python
+# 1 deg at 8.04 keV
+round(float(xrr.qz(1.0, 8.04)), 4)              # 0.1422
+```
+
+#### `theta_from_qz`
+`bexa.analysis.xrr.theta_from_qz(q, energy_keV)`
+
+The incidence angle (degrees) of a momentum transfer.
+
+```python
+# back to 1 deg
+round(float(xrr.theta_from_qz(xrr.qz(1.0, 8.04), 8.04)), 6)  # 1.0
+```
+
+#### `footprint_fraction`
+`bexa.analysis.xrr.footprint_fraction(theta_deg, beam_mm, sample_mm, profile="gaussian")`
+
+The share of the beam that falls on the sample at each angle:
+`beam_mm` is the beam height (its FWHM for `"gaussian"`), `sample_mm` the sample length along the
+beam. Divide the intensity by it to correct for the footprint.
+
+```python
+# a 0.1 mm beam on a 10 mm sample
+xrr.footprint_fraction([0.1, 0.5, 2.0], 0.1, 10).round(3)  # array([0.163, 0.696, 1.0])
+xrr.footprint_fraction([0.1, 0.5, 2.0], 0.1, 10, "rectangular").round(3)  # array([0.175, 0.873, 1.0])
+```
+
+#### `critical_angle`
+`bexa.analysis.xrr.critical_angle(x, intensity, energy_keV=None, unit="theta")`
+
+The critical angle: where `log10` of the reflectivity falls fastest.
+`unit="theta"` (x in degrees) or `"q"`; with the energy also `q_c` and the electron density
+`q_c^2 / (16 pi r_e)` in electrons per cubic Angstrom.
+
+```python
+# r: the critical edge at q_c = 0.03 1/A
+{k: round(v, 4) for k, v in xrr.critical_angle(theta, r, 8.04).items()}  # {'theta_c_deg': 0.2128, 'q_c': 0.0303, 'electron_density_per_A3': 0.6465}
+```
+
+#### `kiessig_thickness`
+`bexa.analysis.xrr.kiessig_thickness(q, intensity, q_range=None)`
+
+Film thickness from the spacing of the Kiessig fringes,
+`2 pi / delta q`: `log10(I q^4)` minus a smooth trend, resampled evenly and Fourier transformed.
+Returns `thickness_A`, `fringe_spacing_q` and the `strength` of the fringe peak over the
+spectrum's mean.
+
+```python
+# r: fringes of a 300 A film, above q = 0.05
+round(xrr.kiessig_thickness(q, r, (0.05, None))["thickness_A"], 1)  # 301.6
+```
+
+- `CLASSICAL_ELECTRON_RADIUS_A`: 2.818e-5 Angstrom.
+
 ### bexa.viz.style: plot conventions, themes and colour limits
 
 `bexa.viz` draws with matplotlib (plotly for 3-D renderings, napari for viewers), and every plot
@@ -8063,6 +8699,2755 @@ panel.scans.value = (panel.scans.options[0][1],)  # highlight the first, as a cl
 panel.remove_button.click()
 [number for _, number in live.selection]         # [7]
 ```
+
+### bexa.workspace: the object system behind the GUI
+
+`from bexa.workspace import Workspace, DataObject, ScanSet` (also `KINDS`, `LogEntry`,
+`kind_of`). The GUI (`bexa.gui`) is a view of a `Workspace`; everything it does is a logged call
+that works in a cell too. The modules below: the objects, the workspace, the catalog of
+operations and the operations by group, files, conversions, background jobs.
+
+### bexa.workspace.objects: data objects and scan sets
+
+What a workspace holds and every operation makes. A `DataObject` is a scan read from files
+(kind `scan`, raw: no operation changes it), a scan set (`scanset`, several scans processed
+together), or a result in memory: a `stack` of frames over motor dims, an `image` (the two pixel
+dims), a `map` (two dims that are not pixels), a `curve`, an N-dimensional `volume`, an `rgb`
+picture, a `table` or a `text` report. It carries the uncertainties of its values (`sigma`), its
+metadata, the names of its parents and the commands that made it.
+
+```python
+import numpy as np
+import xarray as xr
+import bexa
+from bexa.workspace import DataObject, ScanSet
+from bexa.workspace.objects import has_pixel_dims, kind_of, scan_label
+
+scan = bexa.demo("rocking")  # a synthetic mu scan
+obj = DataObject("rocking", scan)  # the scan as a raw object
+curve = DataObject("c", xr.DataArray(np.arange(5.0), dims=("mu",)), sigma=np.ones(5))  # a curve with errors
+```
+
+#### `DataObject`
+`bexa.workspace.objects.DataObject(name, data, kind="", sigma=None, meta={}, history=[], parents=[], notes="", raw=False, created=time())`
+
+One object of a workspace: `name`, `data` (a `bexa.Scan`, a
+`ScanSet`, an `xarray.DataArray`, a `DataFrame` or text; a plain numpy array becomes a DataArray
+whose last two dims are `y`, `x`), `kind` (guessed from the data when empty), `sigma`, `meta`,
+`history`, `parents`, `notes`, `raw` (True for scans and scan sets) and `created`.
+
+- `is_array`: Property: True for stacks, images, maps, curves, volumes and pictures.
+- `shape`: Property: the sizes (the number of scans of a scan set).
+- `dims`: Property: the dim names of a scan or array.
+- `array`: Property: the DataArray of an array object (`TypeError` for the others).
+- `coord(dim)`: the coordinate values along a dim (indices when it has none).
+- `describe()`: one line: kind, dims and sizes, dtype, `+/-` when it has uncertainties.
+- `label()`: the name and `describe()`, as the objects panel lists it.
+- `info()`: everything known: description, metadata, parents, history, notes.
+- `copy(name=None)`: a copy with its own arrays (scans are shared: they are read-only).
+
+```python
+# obj: the raw scan; curve: five values with errors of 1
+obj.kind, obj.raw, obj.describe()               # ('scan', True, 'scan fscan1d mu[25] x y[64] x x[80]')
+curve.describe(), curve.coord("mu")             # ('curve mu[5] float64 +/-', array(list of 5))
+print(curve.copy("c2").info())
+```
+
+#### `ScanSet`
+`bexa.workspace.objects.ScanSet(scans, labels=None)`
+
+Several scans handled as one object: the multi-scan input of the
+workspace. `scans` and `labels` (default `<dataset> #<number>`). Operations made for one scan run
+on each scan of a set and their results stack along `axis()`.
+
+- `recipes`: Property: how to open every scan again (`bexa.open(**recipe)`).
+- `n_frames`: Property: the frames of all the scans.
+- `table()`: one row per scan: label, type, motors, grid, frames, energy and positioners.
+- `varying(ignore=None)`: the positioners (and the energy) that differ between the scans.
+- `axis()`: the dim results stack on: the leading varying positioner that sets every scan apart, else `scan`.
+- `series(dim=None)`: the scans joined as one scan with a new leading dim (they must share a grid).
+- `subset(indices)`: the scans at the given positions, as a set.
+
+```python
+# the scans of the demo z-stack that are chi x mu scans, one per height
+ds = bexa.demo("zstack")
+scans = ScanSet(ds.select(type="fscan2d"))
+len(scans), scans.axis()[0], scans.labels[:2]   # (5, 'samz', ['demo_zstack #1', 'demo_zstack #7'])
+scans.subset([0, 2]).table()[["label", "shape"]]  # DataFrame: 2 rows x 2 columns (label, shape)
+```
+
+#### `kind_of`
+`bexa.workspace.objects.kind_of(data)`
+
+The kind of object some data makes (see the section intro).
+
+```python
+# a few arrays and what they become
+kind_of(xr.DataArray(np.zeros((4, 8, 8)), dims=("mu", "y", "x"))), kind_of(xr.DataArray(np.zeros((3, 5)), dims=("chi", "mu")))  # ('stack', 'map')
+```
+
+#### `has_pixel_dims`
+`bexa.workspace.objects.has_pixel_dims(dims)`
+
+True when the last two dims are detector pixels (`y, x`, or the
+binned `yb, xb` of a preview).
+
+```python
+# dims of a stack and of a map
+has_pixel_dims(("mu", "y", "x")), has_pixel_dims(("chi", "mu"))  # (True, False)
+```
+
+#### `scan_label`
+`bexa.workspace.objects.scan_label(scan)`
+
+A short name for a scan: its dataset and number.
+
+```python
+# the demo scan
+scan_label(scan)                                # 'demo_rocking #1'
+```
+
+- `KINDS`: every kind of object.
+- `ARRAY_KINDS`: the kinds held as DataArrays.
+- `SCAN_KINDS`: `("scan", "scanset")`.
+- `PIXEL_PAIRS`: the pixel dim pairs, `(y, x)` and `(yb, xb)`.
+
+### bexa.workspace.workspace: the Workspace, its ROIs and its log
+
+The object system behind the GUI, and usable from any script. Every change goes through a
+method that logs the Python command doing it (`ws.open_scan(...)`, `ws.set_roi(...)`,
+`ws.run("roi_curves", ...)`), so `Workspace.script` replays a session and `Workspace.save` keeps
+objects, ROIs, settings and log in one HDF5 file. Operations never change their inputs.
+
+```python
+import bexa
+from bexa.workspace import Workspace
+
+ws = Workspace("readme", cache=False)  # an empty workspace, results not cached
+folder = bexa.demo("rocking").files[0].parent  # the dataset folder of a synthetic mu scan
+```
+
+#### `Workspace`
+`bexa.workspace.workspace.Workspace(name="workspace", cache=True)`
+
+Named objects and named ROIs, the operations of `bexa.workspace.catalog`, and
+the log. `ws["name"]`, `"name" in ws`, `len(ws)` and iteration (names) work as on a dict; `objects`,
+`rois`, `log` and `settings` (remembered form values, saved too) are its attributes. The members
+without an entry of their own:
+
+- `observe(callback)`: call `callback(event, info)` on every change: `added`, `removed`, `renamed`, `changed`, `rois`, `log`, `cleared` (the GUI's panels listen).
+- `unobserve(callback)`: stop calling it.
+- `names(kinds=None)`: the object names, oldest first, of the given kinds.
+- `unique(name)`: a name made safe and unique (`name_2`, `name_3`, ...).
+- `add(data, name=None, **fields)`: data made outside the workspace as an object; the log gets a comment only (a script cannot remake such data).
+- `remove(*names)`: remove objects (raw scans too; their files stay).
+- `rename(old, new)`: rename an object; returns the name it got.
+- `duplicate(name, new_name=None)`: a copy with its own arrays.
+- `set_notes(name, text)`: the notes of an object.
+- `clear()`: remove every object and ROI (the log stays).
+- `close()`: close the files of every scan (they reopen by themselves when read again).
+- `remove_roi(name)`: forget a named ROI.
+- `roi(name)`: a named ROI (`ValueError` naming those defined).
+- `demo(kind="mosa")`: synthetic data from `bexa.demo` as a scan, or a scan set for the z-stack and alignment demos.
+- `export(name, path, format=None)`: write one object to a file (`bexa.workspace.files.export_object`).
+- `export_nexus(names, path)`: write several objects to one NeXus HDF5 file.
+- `convert_session(path, out_dir, **options)`: every scan of a dataset as packages or another target (`bexa.workspace.convert.convert_session`).
+- `convert_dataset(path, dataset, target, out, **options)`: one HDF5 dataset as npy, TIFF or CSV.
+- `convert_file(path, target, out)`: a file bexa loads as objects written in another format.
+- `record(command, seconds=0.0, status="ok", message="", results=())`: add a line to the log (every logging method calls it).
+- `save_script(path)`: write `script()` to a file.
+
+```python
+# ws: open, copy, rename, look at the names and the log
+rock = ws.open_scan(folder, name="rock")
+ws.duplicate("rock", "rock_copy").raw, ws.rename("rock_copy", "spare")  # (True, 'spare')
+ws.names(), [e.command for e in ws.log][-1]     # (['rock', 'spare'], "ws.rename('rock_copy', 'spare')")
+```
+
+#### `run`
+`bexa.workspace.workspace.Workspace.run(operation, /, *inputs, name=None, **params)`
+
+Run an operation of the catalog on objects (given as objects or by
+name); `params` are its settings by name, `name` names the result (several results: as a
+prefix). The results are new objects, returned and listed; the command is logged, or logged as
+failed with the error when the operation raises. A scan set given to an operation of single scans
+runs it on every scan and stacks the results over the scans (`bexa.workspace.ops.multiscan.stack_per_scan`).
+
+```python
+# rock: the mu scan; an ROI, its rocking curve, a fit of the curve
+ws.set_roi("peak", y=(16, 48), x=(20, 60))      # ROI(y=(16, 48), x=(20, 60))
+(curve,) = ws.run("roi_curves", "rock", rois=["peak"])
+fit, table = ws.run("fit_peaks", curve, shape="pseudo_voigt", background="constant")
+curve.describe(), round(float(table.data["r2"][0]), 4)  # ('curve mu[25] float64 +/-', 0.9997)
+```
+
+#### `open_scan`
+`bexa.workspace.workspace.Workspace.open_scan(path=None, scan=None, *, name=None, **options)`
+
+Open one scan of any layout bexa reads (`bexa.open(path, scan=...,
+**options)`; `path=None` with `profile=`, `sample=` opens through a profile) as a raw object
+named after its dataset and number.
+
+```python
+# the synthetic scan folder, opened again under another name
+ws.open_scan(folder, name="again").describe()   # 'scan fscan1d mu[25] x y[64] x x[80]'
+```
+
+#### `open_scans`
+`bexa.workspace.workspace.Workspace.open_scans(path, scans=None, *, name=None, as_set=True, status="finished", type=None, **options)`
+
+Several scans of a dataset (a folder, a master file, a SPEC
+session): one scan set (`as_set=True`) or one object per scan. `scans`, `status` and `type`
+choose them as `Dataset.select_numbers` does; the log keeps the scan numbers chosen.
+
+```python
+# the chi x mu scans of the demo z-stack as one set
+(zset,) = ws.open_scans(bexa.demo("zstack").path, type="fscan2d", name="z")
+zset.describe(), zset.data.varying()            # ('scan set of 5 scans', {'samz': array(list of 5)})
+```
+
+#### `open_scan_set`
+`bexa.workspace.workspace.Workspace.open_scan_set(recipes, *, name="scans", labels=None)`
+
+A scan set from the recipes of its scans (`bexa.open(**recipe)`
+each): how a script reopens a set chosen in the scan picker.
+
+```python
+# the first two scans of the set, from their recipes
+ws.open_scan_set(zset.data.recipes[:2], name="two").describe()  # 'scan set of 2 scans'
+```
+
+#### `add_scans`
+`bexa.workspace.workspace.Workspace.add_scans(scans, *, as_set=False, name=None, labels=None)`
+
+Scans opened elsewhere (the scan picker's `scans`) as objects, or
+as one set with `as_set=True`; logged by their recipes.
+
+```python
+# scans opened with bexa.open, added as a set
+ws.add_scans([bexa.open(folder, cache=False)], as_set=True, name="picked")[0].describe()  # 'scan set of 1 scans'
+```
+
+#### `open_file`
+`bexa.workspace.workspace.Workspace.open_file(path, *, dataset=None, index=None, name=None)`
+
+Objects from a file that is not a scan: a bexa cube, one dataset of
+any HDF5 file cut by `index` while it is read (`"0, :, 100:200"`), npy, TIFF, PNG, CSV
+(`bexa.workspace.files.load_file`).
+
+```python
+# the master file of the scan: one dataset of it, read as an object
+master = next(folder.glob("*.h5"))
+ws.open_file(master, dataset="1.1/measurement/mu")[0].describe()  # 'curve index[25] float64'
+```
+
+#### `set_roi`
+`bexa.workspace.workspace.Workspace.set_roi(name, roi=None, **ranges)`
+
+Define or replace a named ROI: `set_roi("peak", y=(10, 50), x=(20,
+80), mu=(-0.2, 0.2))` (pixel ranges half-open full-resolution indices, motor ranges inclusive
+values), or from a `bexa.ROI`. Returns the ROI.
+
+```python
+# a pixel window and a motor range
+ws.set_roi("core", y=(20, 40), x=(30, 50), mu=(-0.3, 0.3))  # ROI(y=(20, 40), x=(30, 50), mu=(-0.3, 0.3))
+```
+
+#### `convert`
+`bexa.workspace.workspace.Workspace.convert(name, target, out, **options)`
+
+Write a scan (every scan of a set, into the folder `out`) as a target
+of `bexa.workspace.convert.SCAN_TARGETS`: `package`, `cube`, `nexus`, `tiff_stack`,
+`tiff_folder`, `npy`; `roi` may name an ROI. Returns the files written.
+
+```python
+# rock as a scan package in a temporary folder
+import tempfile
+out = tempfile.mkdtemp()
+[f.name for f in ws.convert("rock", "package", f"{out}/rock.h5")]  # ['rock.h5']
+```
+
+#### `script`
+`bexa.workspace.workspace.Workspace.script()`
+
+The commands that worked, as a Python script that rebuilds the
+workspace (failed commands are left out; comments mark data added from code).
+
+```python
+# the first lines of this section's script
+ws.script().splitlines()[6]                     # "ws.open_scan('C:/Users/sport/AppData/Local/Temp/claude/x-..."
+```
+
+#### `save`
+`bexa.workspace.workspace.Workspace.save(path)`
+
+Keep the whole workspace in one HDF5 file: every object as NeXus (scans
+and scan sets by their recipes), ROIs, settings and the log.
+
+```python
+# saved to the temporary folder
+ws.save(f"{out}/session.bexa.h5").name          # 'session.bexa.h5'
+```
+
+#### `load`
+`bexa.workspace.workspace.Workspace.load(path, cache=True)`
+
+A workspace saved by `save`; scans are opened again from their files
+(one whose files are gone becomes a text object saying why).
+
+```python
+# the saved session, opened again
+again = Workspace.load(f"{out}/session.bexa.h5", cache=False)
+len(again) == len(ws), list(again.rois)         # (True, ['peak', 'core'])
+```
+
+#### `LogEntry`
+`bexa.workspace.workspace.LogEntry(command, seconds=0.0, status="ok", message="", results=[], time=timestamp())`
+
+One logged command: `command`, `seconds`, `status` (`ok`,
+`failed`, `cancelled`, `note`), `message` (the error of a failure), `results` (the names made)
+and `time`.
+
+```python
+# the last entry of the log
+ws.log[-1].status, ws.log[-1].command.split("(")[0]  # ('ok', 'ws.convert')
+```
+
+#### `timestamp`
+`bexa.workspace.workspace.timestamp()`
+
+The local time as `YYYY-MM-DD HH:MM:SS`: when a command of
+the log ran.
+
+```python
+# a time stamp has 19 characters
+from bexa.workspace.workspace import timestamp
+len(timestamp())                                # 19
+```
+
+- `WORKSPACE_MARKER`: the root attribute of a saved workspace, `bexa-workspace-v1`.
+
+### bexa.workspace.catalog: the operations, their settings and their help
+
+Every operation the GUI offers, with the function it runs, the objects it takes, its settings
+(typed, with defaults and help) and its help text. The Analysis tab builds its forms from here
+and `Workspace.run` checks settings against it, so the GUI and a script behave alike. The table
+lists them all; each function is documented under its module (`bexa.workspace.ops.*`).
+
+| Group | Operation | Key for `ws.run` | Takes | Settings |
+|---|---|---|---|---|
+| Extract | Image from Frames | `reduce_frames` | scan/stack | `how`, `roi`, `downsample` |
+| Extract | Load Frames | `read_volume` | scan | `roi`, `downsample` |
+| Extract | Preview Stack | `preview` | scan | `bin`, `log` |
+| Extract | ROI Curves | `roi_curves` | scan/stack | `rois`, `quantity`, `background`, `normalize` |
+| Extract | COM Maps | `com_maps` | scan/stack | `axes`, `sigma`, `roi`, `downsample` |
+| Extract | Frame Statistics | `frame_stats` | scan | `roi` |
+| Extract | Projections | `projections` | scan | `roi` |
+| Extract | Counters | `counters` | scan | `channels` |
+| Extract | Point Table | `point_table` | scan | - |
+| Extract | Histogram | `histogram` | scan/stack/image/map/curve/volume | `bins`, `low`, `high` |
+| Extract | Crop to ROI | `crop` | stack/image/map/curve/volume | `roi` |
+| Extract | Select Range | `select_range` | stack/image/map/curve/volume | `dim`, `low`, `high` |
+| Extract | Slice | `take_slice` | stack/image/map/curve/volume | `dim`, `index`, `value` |
+| Extract | Reduce Dims | `reduce_dims` | stack/image/map/curve/volume | `dims`, `how` |
+| Extract | Profile | `profile` | stack/image/map/curve/volume | `along`, `roi`, `how` |
+| Extract | Line Profile | `line_profile` | image/map | `y0`, `x0`, `y1`, `x1`, `width`, `points` |
+| Extract | ROI Statistics | `roi_statistics` | image/map/stack | `rois` |
+| Process | Normalize | `normalize` | stack/image/map/curve/volume | `by`, `value`, `monitor`, `at`, `to` |
+| Process | Subtract Dark | `subtract_dark` | stack/image/map | `dark`, `scale`, `clip` |
+| Process | Flat Field | `flat_field` | stack/image/map | `flat`, `dark`, `minimum` |
+| Process | Subtract Background | `subtract_background` | curve | `method`, `regions`, `order`, `value` |
+| Process | Remove Hot Pixels | `remove_hot_pixels` | stack/image/map | `threshold`, `size` |
+| Process | Mask Pixels | `mask_pixels` | stack/image/map/curve/volume | `low`, `high`, `rois`, `inside` |
+| Process | Smooth | `smooth` | stack/image/map/curve/volume | `method`, `width`, `order` |
+| Process | Bin Pixels | `bin_pixels` | stack/image/map | `factor`, `how` |
+| Process | Flip / Rotate | `transform` | stack/image/map/rgb | `how` |
+| Process | Function of Values | `apply_function` | stack/image/map/curve/volume | `function` |
+| Process | Clip Values | `clip_values` | stack/image/map/curve/volume | `low`, `high`, `replace` |
+| Process | Replace NaN | `replace_nan` | stack/image/map/curve/volume | `value` |
+| Process | Resample | `resample` | curve | `step`, `points`, `low`, `high` |
+| Process | Derivative | `derivative` | curve | - |
+| Process | Running Integral | `cumulative_integral` | curve | - |
+| Process | Scale / Shift Axis | `shift_axis` | stack/image/map/curve/volume | `dim`, `offset`, `scale`, `new_name`, `units` |
+| Process | Convert 2theta / q / d | `convert_axis` | curve | `to`, `source`, `energy_keV` |
+| Process | Align Peak | `align_peak` | curve | `method`, `target`, `value`, `reference`, `x_range` |
+| Process | Merge Repeated Points | `merge_points` | curve | `tolerance` |
+| Process | Shift Image | `shift_image` | stack/image/image/map | `rows`, `columns` |
+| Process | Equalize Contrast | `equalize_histogram` | image/map/stack | - |
+| Combine | Arithmetic | `arithmetic` | stack/image/map/curve/volume | `op`, `b`, `number`, `interpolate` |
+| Combine | Average / Sum | `average` | stack/image/map/curve/volume (several) | `how` |
+| Combine | Join | `concatenate` | stack/image/map/curve/volume (several) | `dim` |
+| Combine | Stack Objects | `stack_objects` | stack/image/map/curve/volume (several) | `dim`, `values` |
+| Combine | Stitch Curves | `stitch_curves` | curve (several) | `scale`, `overlap` |
+| Combine | Match Peaks | `align_peaks` | curve (several) | `method`, `target`, `value`, `x_range` |
+| Combine | Register Images | `align_images` | image/map (several) | `max_shift` |
+| Combine | Mosaic | `mosaic` | image/map (several) | `offsets`, `rows`, `columns`, `pixel_mm`, `how` |
+| Combine | Merge Scans | `merge_scan_sets` | scan/scanset (several) | - |
+| Multi-scan | Stack Scans | `stack_scans` | scanset | `quantities`, `dim`, `sigma`, `roi`, `downsample`, `preview_bin`, `rois`, `workers` |
+| Multi-scan | Series (one scan) | `series` | scanset | `dim` |
+| Multi-scan | Scan Table | `scan_table` | scanset | - |
+| Multi-scan | Subset | `subset` | scanset | `indices` |
+| Multi-scan | Split into Layers | `layers` | scan | `dim` |
+| Fit | Fit Peaks | `fit_peaks` | curve | `shape`, `n_peaks`, `background`, `centers`, `x_range`, `use_sigma`, `components` |
+| Fit | Fit Series | `fit_series` | map/volume/stack/image | `along`, `shape`, `n_peaks`, `background`, `centers`, `x_range`, `warm_start` |
+| Fit | Fit Each Curve | `fit_many` | curve (several) | `shape`, `n_peaks`, `background`, `centers`, `x_range`, `use_sigma` |
+| Fit | Find Peaks | `find_peaks` | curve | `n`, `prominence` |
+| Imaging | Moment Maps | `moments_maps` | stack | `dim`, `sigma` |
+| Imaging | Gaussian Peak Maps | `peak_maps` | stack | `dim`, `threshold` |
+| Imaging | Brightest-Frame Map | `argmax_map` | stack | `dim` |
+| Imaging | Orientation Map | `orientation_map` | image/map; image/map | `span`, `intensity` |
+| Imaging | KAM | `kam_map` | image/map | `b`, `size` |
+| Imaging | Strain | `strain` | image/map | `kind`, `reference`, `theta_deg` |
+| Imaging | Drift Correction | `align_frames` | stack | `dim`, `max_shift` |
+| Imaging | Segment | `segment` | image/map; image/map | `clusters`, `method` |
+| Imaging | Gradients | `gradient_maps` | image/map | - |
+| XRD | Azimuthal Integration | `integrate_powder` | stack/image/map | `distance_mm`, `center_y`, `center_x`, `pixel_um`, `energy_keV`, `unit`, `bins`, `x_range`, `chi_range`, `tilt_deg`, `tilt_plane_deg`, `per_frame`, `solid_angle`, `polarization` |
+| XRD | Cake (2theta-chi) | `cake` | stack/image/map | `distance_mm`, `center_y`, `center_x`, `pixel_um`, `energy_keV`, `unit`, `bins`, `chi_bins`, `x_range`, `tilt_deg`, `tilt_plane_deg` |
+| XRD | Calibrate from a Ring | `calibrate_ring` | image | `d_spacing_A`, `pixel_um`, `energy_keV`, `percentile` |
+| XRR | Reflectivity | `reflectivity` | curve | `angle`, `i0`, `beam_mm`, `sample_mm`, `profile`, `energy_keV`, `x`, `theta_offset` |
+| XRR | Footprint Correction | `footprint_correction` | curve | `beam_mm`, `sample_mm`, `profile`, `energy_keV` |
+| XRR | Critical Angle | `critical_angle` | curve | `energy_keV` |
+| XRR | Film Thickness | `kiessig_thickness` | curve | `q_low`, `q_high` |
+| Calculators | Energy and Wavelength | `energy` | numbers only | `energy_keV`, `wavelength_A` |
+| Calculators | Reflections of a Lattice | `reflections` | numbers only | `a`, `b`, `c`, `alpha`, `beta`, `gamma`, `centering`, `energy_keV`, `max_index`, `max_two_theta` |
+| Calculators | Bragg Angles | `bragg` | numbers only | `d_spacings`, `energy_keV` |
+| Calculators | Crystallite Size | `scherrer_size` | numbers only | `fwhm_deg`, `two_theta_deg`, `energy_keV`, `shape_factor`, `instrumental_deg` |
+| Calculators | Transmission | `transmission` | numbers only | `material`, `thickness`, `energies_keV` |
+| Calculators | Photons per Pulse | `photons` | numbers only | `pulse_energy_uJ`, `energy_keV` |
+
+Setting kinds (`P.kind`): `number`, `int`, `bool`, `choice`, `text`, `numbers` (`"0.5, 1, 2"`),
+`ints` (`"0-3, 7"`), `range` (two numbers, an empty end open), `object`/`objects` (other objects),
+`dim`/`dims` (dims of the first input), `channel`/`channels` (per-frame channels of a scan),
+`roi`/`rois` (named ROIs), `spec` (set by a tab of its own, such as the Fit tab's peaks).
+
+```python
+from bexa.workspace import catalog
+
+op = catalog.find("roi_curves")  # one operation of the catalog
+```
+
+#### `Op`
+`bexa.workspace.catalog.Op(key, label, group, function, inputs, params=[], help="")`
+
+One operation: `key`, `label`, `group`, the `function`, its `inputs`
+(`Input`), its `params` (`P`) and `help`.
+
+- `param(name)`: the `P` named `name`.
+- `defaults()`: every setting's default.
+- `check(values)`: the values with every setting, the missing required ones and the unknown ones reported (`ValueError`).
+- `command(inputs, values, name=None)`: the `ws.run(...)` line that runs it on inputs (names) with values.
+
+```python
+# op: ROI Curves; its settings and the command a form makes
+[p.name for p in op.params], op.inputs[0].kinds  # (['rois', 'quantity', 'background', 'normalize'], ('scan', 'stack'))
+op.command(["rock"], {"rois": ["peak"]})        # "ws.run('roi_curves', 'rock', rois=['peak'])"
+```
+
+#### `P`
+`bexa.workspace.catalog.P(name, label="", kind="number", default=None, choices=(), help="", optional=False, kinds=('stack', 'image', 'map', 'curve', 'volume'), minimum=None)`
+
+One setting: `name`, `label`, `kind`, `default`, `choices`, `help`, `optional`,
+`kinds` (for objects) and `minimum`. `parse(raw)` turns a form field into the value
+(`ValueError` naming the field), `text(value)` back into the field's text.
+
+```python
+# a range from a form, and a number below its minimum
+catalog.P("x_range", kind="range").parse(("5", "1"))  # (1.0, 5.0)
+catalog.P("bins", kind="int", minimum=2).text(256)  # '256'
+```
+
+#### `Input`
+`bexa.workspace.catalog.Input(name, kinds, label="", many=False)`
+
+An input of an operation: its argument `name`, the `kinds` it takes, a
+`label`, and `many` (several objects, passed as a list).
+
+```python
+# the inputs of Average / Sum
+catalog.find("average").inputs                  # [Input]
+```
+
+#### `find`
+`bexa.workspace.catalog.find(key)`
+
+The operation named `key`; `KeyError` naming the close ones.
+
+```python
+# by key
+catalog.find("fit_peaks").label                 # 'Fit Peaks'
+```
+
+#### `in_group`
+`bexa.workspace.catalog.in_group(group)`
+
+The operations of one group.
+
+```python
+# the XRR group
+[o.key for o in catalog.in_group("XRR")]        # ['reflectivity', 'footprint_correction', 'critical_angle', 'kiessig_thickness']
+```
+
+#### `for_kind`
+`bexa.workspace.catalog.for_kind(kind)`
+
+The operations whose first input takes a kind (a scan set also gets
+the operations of single scans, which then run on every scan).
+
+```python
+# how many operations take a curve, and a scan set
+len(catalog.for_kind("curve")), len(catalog.for_kind("scanset"))  # (33, 16)
+```
+
+#### `parse_ints`
+`bexa.workspace.catalog.parse_ints(text, label="Indices")`
+
+`"0-3, 7"` as `[0, 1, 2, 3, 7]` (ranges include their end); empty
+text gives `None`.
+
+```python
+# scan numbers typed in a form
+catalog.parse_ints("1-3, 9")                    # [1, 2, 3, 9]
+```
+
+- `OPS`: every `Op`, in the order of the GUI.
+- `GROUPS`: the groups of the Analysis tab.
+
+### bexa.workspace.ops.extract: scans and stacks to images, curves, maps and tables
+
+The Extract group of the Analysis tab. A scan is never loaded whole: its operations stream the
+frames through `bexa.reduce` (one pass, within the memory budget); stacks in memory are reduced
+with xarray. Each function returns new objects; called through `Workspace.run` they are named,
+kept and logged.
+
+```python
+import bexa
+from bexa.workspace import Workspace
+
+ws = Workspace("readme", cache=False)  # an empty workspace
+(rock,) = ws.demo("rocking")  # a synthetic mu scan (25 frames of 64 x 80) as a raw object
+peak = ws.set_roi("peak", y=(16, 48), x=(20, 60))  # an ROI in full-detector pixels
+(mosa,) = ws.demo("mosa")  # a chi x mu scan
+from bexa.workspace.ops import extract
+```
+
+#### `reduce_frames`
+`bexa.workspace.ops.extract.reduce_frames(obj, how="sum", roi=None, downsample=None)`
+
+One image from the frames: their sum, mean, maximum or minimum (also std, median of a stack).
+`roi` limits the pixels and, with motor ranges, the frames; `downsample` bins the pixels of a scan
+while it is read. On the Analysis tab: Extract, "Image from Frames"; in code
+`ws.run("reduce_frames", ...)`.
+
+```python
+# the summed image of rock, and the maximum of mosa inside the ROI
+image = extract.reduce_frames(rock, how="sum")
+image.describe()                                # 'image y[64] x x[80] float64 +/-'
+extract.reduce_frames(mosa, how="max", roi=peak).shape  # (32, 40)
+```
+
+#### `read_volume`
+`bexa.workspace.ops.extract.read_volume(obj, roi=None, downsample=None)`
+
+The frames of a scan in memory as a stack `(motors..., y, x)` within the budget. On the Analysis
+tab: Extract, "Load Frames"; in code `ws.run("read_volume", ...)`.
+
+```python
+# mosa's frames inside the ROI, in memory
+stack = extract.read_volume(mosa, roi=peak)
+stack.describe()                                # 'stack chi[6] x mu[16] x y[32] x x[40] float32'
+```
+
+#### `preview`
+`bexa.workspace.ops.extract.preview(obj, bin=4, log=False)`
+
+The scan's frames binned `bin` x `bin`: a light stack to browse (cached on disk). On the Analysis
+tab: Extract, "Preview Stack"; in code `ws.run("preview", ...)`.
+
+```python
+# mosa binned 4 x 4
+extract.preview(mosa, bin=4).describe()         # 'stack chi[6] x mu[16] x y[16] x x[20] float32'
+```
+
+#### `roi_curves`
+`bexa.workspace.ops.extract.roi_curves(obj, rois, quantity="sum", background=None, normalize=None)`
+
+The intensity of each ROI at every point of the scan's grid, with uncertainties.  A scan of one
+motor gives a curve per ROI (a rocking curve), a mesh a map. `background` is an ROI whose mean per
+pixel is subtracted from every ROI, frame by frame (scaled by the ROI's pixel count for `sum`);
+`normalize` names a per-frame channel (a monitor) to divide by. On the Analysis tab: Extract, "ROI
+Curves"; in code `ws.run("roi_curves", ...)`.
+
+```python
+# rock: the rocking curve of the ROI, with Poisson errors
+(curve,) = extract.roi_curves(rock, {"peak": peak})
+curve.describe(), round(float(curve.sigma[12]), 1)  # ('curve mu[25] float64 +/-', 1920.9)
+```
+
+#### `com_maps`
+`bexa.workspace.ops.extract.com_maps(obj, axes=None, sigma=3.0, roi=None, downsample=None)`
+
+Centre-of-mass and width maps per motor axis, and the total intensity.  The DFXM maps: for every
+pixel the intensity-weighted mean motor position (`com_<axis>`) and spread (`width_<axis>`).
+Frames are smoothed by `sigma` pixels first (scans; 0 to switch off). On the Analysis tab:
+Extract, "COM Maps"; in code `ws.run("com_maps", ...)`.
+
+```python
+# mosa: the centre-of-mass maps of both tilts
+[o.name for o in extract.com_maps(mosa, sigma=1.0)]  # ['demo_mosa_total', 'demo_mosa_com_chi', 'demo_mosa_width_chi', 'demo_mosa_com_mu', 'de...
+```
+
+#### `frame_stats`
+`bexa.workspace.ops.extract.frame_stats(obj, roi=None)`
+
+Per-frame sum, mean, maximum and detector centre of mass, on the motor grid. On the Analysis tab:
+Extract, "Frame Statistics"; in code `ws.run("frame_stats", ...)`.
+
+```python
+# rock: per-frame statistics against mu
+[o.name for o in extract.frame_stats(rock)]     # ['demo_rocking_frame_sum', 'demo_rocking_frame_mean', 'demo_rocking_frame_max', 'demo_r...
+```
+
+#### `projections`
+`bexa.workspace.ops.extract.projections(obj, roi=None)`
+
+Intensity projected on every pair of axes: the summed image, motor-pixel and motor maps. On the
+Analysis tab: Extract, "Projections"; in code `ws.run("projections", ...)`.
+
+```python
+# mosa: every projection
+[o.name for o in extract.projections(mosa)]     # ['demo_mosa_proj_xy', 'demo_mosa_proj_grid', 'demo_mosa_proj_chi_y', 'demo_mosa_proj_ch...
+```
+
+#### `counters`
+`bexa.workspace.ops.extract.counters(obj, channels=None)`
+
+Per-frame channels (counters, monitors, readbacks) on the scan's grid: curves or maps.  Without
+`channels` every channel that is not a scanned motor is given. On the Analysis tab: Extract,
+"Counters"; in code `ws.run("counters", ...)`.
+
+```python
+# rock: the recorded channels on the grid
+[o.name for o in extract.counters(rock)]        # ['demo_rocking_elapsed_time']
+```
+
+#### `point_table`
+`bexa.workspace.ops.extract.point_table(obj)`
+
+The scan's side tables (every SPEC row, for example), else its per-frame channels. On the Analysis
+tab: Extract, "Point Table"; in code `ws.run("point_table", ...)`.
+
+```python
+# rock: its per-frame channels as a table
+extract.point_table(rock)[0].describe()         # 'table 25 rows x 2 columns'
+```
+
+#### `histogram`
+`bexa.workspace.ops.extract.histogram(obj, bins=256, low=None, high=None)`
+
+Histogram of the pixel values (of every frame of a scan). On the Analysis tab: Extract,
+"Histogram"; in code `ws.run("histogram", ...)`.
+
+```python
+# rock: the pixel values of every frame
+extract.histogram(rock, bins=64).describe()     # 'curve value[64] int64 +/-'
+```
+
+#### `crop`
+`bexa.workspace.ops.extract.crop(obj, roi)`
+
+The part of an object inside an ROI (pixel ranges, and ranges of any other dim). On the Analysis
+tab: Extract, "Crop to ROI"; in code `ws.run("crop", ...)`.
+
+```python
+# image: the ROI window of the summed image
+extract.crop(image, peak).shape                 # (32, 40)
+```
+
+#### `select_range`
+`bexa.workspace.ops.extract.select_range(obj, dim, low=None, high=None)`
+
+Keep the points of `dim` between `low` and `high` (coordinate values, inclusive). On the Analysis
+tab: Extract, "Select Range"; in code `ws.run("select_range", ...)`.
+
+```python
+# curve: the points within 0.5 deg of the middle
+extract.select_range(curve, "mu", -0.5, 0.5).shape  # (13,)
+```
+
+#### `take_slice`
+`bexa.workspace.ops.extract.take_slice(obj, dim, index=None, value=None)`
+
+One slice of an object along `dim` (by index, or nearest to a coordinate value). On the Analysis
+tab: Extract, "Slice"; in code `ws.run("take_slice", ...)`.
+
+```python
+# stack: the frame nearest mu = 0
+extract.take_slice(stack, "mu", value=0.0).describe()  # 'stack chi[6] x y[32] x x[40] float32'
+```
+
+#### `reduce_dims`
+`bexa.workspace.ops.extract.reduce_dims(obj, dims, how="sum")`
+
+Sum (or average, maximum, ...) an object over the named dims. On the Analysis tab: Extract,
+"Reduce Dims"; in code `ws.run("reduce_dims", ...)`.
+
+```python
+# stack: summed over both motors
+extract.reduce_dims(stack, ["chi", "mu"]).describe()  # 'image y[32] x x[40] float32'
+```
+
+#### `profile`
+`bexa.workspace.ops.extract.profile(obj, along="x", roi=None, how="sum")`
+
+A curve along one dim, every other dim summed (or averaged) inside the ROI. On the Analysis tab:
+Extract, "Profile"; in code `ws.run("profile", ...)`.
+
+```python
+# image: a profile along x within the ROI
+extract.profile(image, along="x", roi=peak).describe()  # 'curve x[40] float64 +/-'
+```
+
+#### `line_profile`
+`bexa.workspace.ops.extract.line_profile(obj, y0, x0, y1, x1, width=1, points=None)`
+
+The values along a straight line between two points, averaged over `width` pixels. On the Analysis
+tab: Extract, "Line Profile"; in code `ws.run("line_profile", ...)`.
+
+```python
+# image: a line from (10, 10) to (50, 70), 3 pixels wide
+extract.line_profile(image, 10, 10, 50, 70, width=3).describe()  # 'curve distance[74] float64'
+```
+
+#### `roi_statistics`
+`bexa.workspace.ops.extract.roi_statistics(obj, rois)`
+
+Sum, mean, spread, extremes and centroid of each ROI (a stack: its summed frames). On the Analysis
+tab: Extract, "ROI Statistics"; in code `ws.run("roi_statistics", ...)`.
+
+```python
+# image: the statistics of the ROI
+extract.roi_statistics(image, {"peak": peak}).data[["roi", "pixels", "sum"]]  # DataFrame: 1 rows x 3 columns (roi, pixels, sum)
+```
+
+#### `scan_meta`
+`bexa.workspace.ops.extract.scan_meta(scan)`
+
+What a result of a scan remembers about it: the source file, scan
+number, dataset, scan type, title, energy and the fixed motor positions.
+
+```python
+# rock's metadata keys
+sorted(extract.scan_meta(rock.data))            # ['dataset', 'energy_keV', 'positions', 'scan', 'scan_type', 'source', 'title']
+```
+
+#### `channel_on_grid`
+`bexa.workspace.ops.extract.channel_on_grid(scan, name)`
+
+A per-frame channel (counter, monitor, readback) placed on the
+scan's motor grid, NaN where a frame is missing.
+
+```python
+# a channel of mosa on its chi x mu grid
+extract.channel_on_grid(mosa.data, "elapsed_time").dims  # ('chi', 'mu')
+```
+
+- `SCAN_HOWS`: `("sum", "mean", "max", "min")`: what a scan streams.
+
+### bexa.workspace.ops.process: one object in, a new one out
+
+The Process group of the Analysis tab: normalising, darks and flats, backgrounds, masks,
+smoothing, binning, transforms, functions of the values, axis changes, peak alignment.
+Uncertainties are propagated where the object has them.
+
+```python
+import bexa
+from bexa.workspace import Workspace
+
+ws = Workspace("readme", cache=False)  # an empty workspace
+(rock,) = ws.demo("rocking")  # a synthetic mu scan (25 frames of 64 x 80) as a raw object
+peak = ws.set_roi("peak", y=(16, 48), x=(20, 60))  # an ROI in full-detector pixels
+(curve,) = ws.run("roi_curves", rock, rois=["peak"])  # a rocking curve with Poisson errors
+(image,) = ws.run("reduce_frames", rock)  # the summed image
+from bexa.workspace.ops import process
+```
+
+#### `normalize`
+`bexa.workspace.ops.process.normalize(obj, by="max", value=None, monitor=None, at=None, to=1.0)`
+
+Divide by the maximum, the range (to 0..1), the integral, the mean, the value at `at`, a number,
+or a monitor curve (relative to its mean); the result's reference becomes `to`. On the Analysis
+tab: Process, "Normalize"; in code `ws.run("normalize", ...)`.
+
+```python
+# curve: to a maximum of 1, and to percent of its integral
+process.normalize(curve, by="max").array.max().item()  # 1.0
+process.normalize(curve, by="integral", to=100).describe()  # 'curve mu[25] float64 +/-'
+```
+
+#### `subtract_dark`
+`bexa.workspace.ops.process.subtract_dark(obj, dark, scale=1.0, clip=False)`
+
+Subtract a dark image (a dark stack is averaged first), scaled by `scale`. On the Analysis tab:
+Process, "Subtract Dark"; in code `ws.run("subtract_dark", ...)`.
+
+```python
+# image minus a dark of a tenth of it
+dark = process.normalize(image, by="number", value=10)
+round(float((process.subtract_dark(image, dark).array / image.array).mean()), 3)  # 0.9
+```
+
+#### `flat_field`
+`bexa.workspace.ops.process.flat_field(obj, flat, dark=None, minimum=0.05)`
+
+Divide by a flat field normalised to a mean of 1 (after its dark); weak pixels are NaN. On the
+Analysis tab: Process, "Flat Field"; in code `ws.run("flat_field", ...)`.
+
+```python
+# image divided by a flat made from itself: 1 everywhere
+flat = process.normalize(image, by="mean")
+round(float(process.flat_field(image, flat).array.mean()), 3)  # 19933.0
+```
+
+#### `subtract_background`
+`bexa.workspace.ops.process.subtract_background(obj, method="linear", regions=None, order=2, value=None)`
+
+Fit a background to the curve's background `regions` (pairs of x: 1, 2, 9, 10) and subtract it;
+`method="value"` subtracts a number. On the Analysis tab: Process, "Subtract Background"; in code
+`ws.run("subtract_background", ...)`.
+
+```python
+# curve: a line fitted to both ends taken off
+process.subtract_background(curve, "linear", regions=[-1, -0.7, 0.7, 1]).describe()  # 'curve mu[25] float64 +/-'
+```
+
+#### `remove_hot_pixels`
+`bexa.workspace.ops.process.remove_hot_pixels(obj, threshold=8.0, size=3)`
+
+Replace pixels far above their neighbours (`threshold` times the local noise) by the local median;
+every frame of a stack separately. On the Analysis tab: Process, "Remove Hot Pixels"; in code
+`ws.run("remove_hot_pixels", ...)`.
+
+```python
+# a copy of image with one hot pixel
+hot = image.copy("hot")
+hot.data[5, 5] = 1e9
+process.remove_hot_pixels(hot).meta["hot_pixels_replaced"]  # 1
+```
+
+#### `mask_pixels`
+`bexa.workspace.ops.process.mask_pixels(obj, low=None, high=None, rois=None, inside=False)`
+
+Set to NaN (left out of every later step) the values below `low`, above `high`, and the pixels
+outside the ROIs (`inside=True`: inside them). On the Analysis tab: Process, "Mask Pixels"; in
+code `ws.run("mask_pixels", ...)`.
+
+```python
+# image: everything outside the ROI masked
+process.mask_pixels(image, rois={"peak": peak}).meta["masked_pixels"]  # 3840
+```
+
+#### `smooth`
+`bexa.workspace.ops.process.smooth(obj, method="gaussian", width=2.0, order=2)`
+
+Smooth a curve, or an image (every frame of a stack) over its two image dims. On the Analysis tab:
+Process, "Smooth"; in code `ws.run("smooth", ...)`.
+
+```python
+# curve, smoothed by Savitzky-Golay over 5 points
+process.smooth(curve, "savitzky-golay", 5).describe()  # 'curve mu[25] float64'
+```
+
+#### `bin_pixels`
+`bexa.workspace.ops.process.bin_pixels(obj, factor=2, how="mean")`
+
+Combine `factor` x `factor` pixels (or points of a map) into one. On the Analysis tab: Process,
+"Bin Pixels"; in code `ws.run("bin_pixels", ...)`.
+
+```python
+# image binned 4 x 4
+process.bin_pixels(image, 4).shape              # (16, 20)
+```
+
+#### `transform`
+`bexa.workspace.ops.process.transform(obj, how="rotate 90")`
+
+Flip, rotate (counter-clockwise) or transpose the last two dims. On the Analysis tab: Process,
+"Flip / Rotate"; in code `ws.run("transform", ...)`.
+
+```python
+# image rotated by 90 deg
+process.transform(image, "rotate 90").dims      # ('x', 'y')
+```
+
+#### `apply_function`
+`bexa.workspace.ops.process.apply_function(obj, function="log10")`
+
+A function of every value, the uncertainties propagated to first order. On the Analysis tab:
+Process, "Function of Values"; in code `ws.run("apply_function", ...)`.
+
+```python
+# the logarithm of curve keeps uncertainties
+process.apply_function(curve, "log10").describe()  # 'curve mu[25] float64 +/-'
+```
+
+#### `clip_values`
+`bexa.workspace.ops.process.clip_values(obj, low=None, high=None, replace=None)`
+
+Limit values to `low..high`: set to the limit, or to `replace` (0, NaN, ...). On the Analysis tab:
+Process, "Clip Values"; in code `ws.run("clip_values", ...)`.
+
+```python
+# image limited to 1000
+float(process.clip_values(image, high=1000).array.max())  # 1000.0
+```
+
+#### `replace_nan`
+`bexa.workspace.ops.process.replace_nan(obj, value=0.0)`
+
+Replace NaN (masked or missing points) by `value`. On the Analysis tab: Process, "Replace NaN"; in
+code `ws.run("replace_nan", ...)`.
+
+```python
+# image with everything masked, then filled with 0
+int(process.replace_nan(process.mask_pixels(image, low=1e12)).array.isnull().sum())  # 0
+```
+
+#### `resample`
+`bexa.workspace.ops.process.resample(obj, step=None, points=None, low=None, high=None)`
+
+Interpolate a curve onto evenly spaced x (by `step` or a number of `points`). On the Analysis tab:
+Process, "Resample"; in code `ws.run("resample", ...)`.
+
+```python
+# curve on 11 evenly spaced points
+process.resample(curve, points=11).shape        # (11,)
+```
+
+#### `derivative`
+`bexa.workspace.ops.process.derivative(obj)`
+
+`dy/dx` of a curve, with uncertainties. On the Analysis tab: Process, "Derivative"; in code
+`ws.run("derivative", ...)`.
+
+```python
+# curve: its slope
+process.derivative(curve).describe()            # 'curve mu[25] float64 +/-'
+```
+
+#### `cumulative_integral`
+`bexa.workspace.ops.process.cumulative_integral(obj)`
+
+The integral of a curve from its first point. On the Analysis tab: Process, "Running Integral"; in
+code `ws.run("cumulative_integral", ...)`.
+
+```python
+# curve: the running integral
+process.cumulative_integral(curve).describe()   # 'curve mu[25] float64 +/-'
+```
+
+#### `shift_axis`
+`bexa.workspace.ops.process.shift_axis(obj, dim=None, offset=0.0, scale=1.0, new_name="", units="")`
+
+`x -> scale * x + offset` along a dim (default: a curve's x), optionally renamed. On the Analysis
+tab: Process, "Scale / Shift Axis"; in code `ws.run("shift_axis", ...)`.
+
+```python
+# curve against mu + 0.5, renamed
+process.shift_axis(curve, offset=0.5, new_name="mu_shifted").dims  # ('mu_shifted',)
+```
+
+#### `convert_axis`
+`bexa.workspace.ops.process.convert_axis(obj, to="q", source="2theta", energy_keV=None)`
+
+Convert a curve's x between 2theta, theta (degrees), q (1/A) and d (A). On the Analysis tab:
+Process, "Convert 2theta / q / d"; in code `ws.run("convert_axis", ...)`.
+
+```python
+# curve: its mu taken as theta, converted to q at the scan's 17 keV
+process.convert_axis(curve, to="q", source="theta").dims  # ('q',)
+```
+
+#### `align_peak`
+`bexa.workspace.ops.process.align_peak(obj, method="maximum", target="zero", value=None, reference=None, x_range=None)`
+
+Move a curve along x so its peak sits at zero, at a value, or at another curve's peak. On the
+Analysis tab: Process, "Align Peak"; in code `ws.run("align_peak", ...)`.
+
+```python
+# curve moved so its refined peak sits at 0
+round(process.align_peak(curve, method="refined").meta["shift"], 4)  # -0.001
+```
+
+#### `merge_points`
+`bexa.workspace.ops.process.merge_points(obj, tolerance=None)`
+
+Sort a curve by x and average the points at the same x. On the Analysis tab: Process, "Merge
+Repeated Points"; in code `ws.run("merge_points", ...)`.
+
+```python
+# curve: no repeated mu, so the same points
+process.merge_points(curve).shape               # (25,)
+```
+
+#### `shift_image`
+`bexa.workspace.ops.process.shift_image(obj, rows=0.0, columns=0.0)`
+
+Move an image (every frame of a stack) by fractions of a pixel. On the Analysis tab: Process,
+"Shift Image"; in code `ws.run("shift_image", ...)`.
+
+```python
+# image moved by half a pixel down
+process.shift_image(image, rows=0.5).describe()  # 'image y[64] x x[80] float64'
+```
+
+#### `equalize_histogram`
+`bexa.workspace.ops.process.equalize_histogram(obj)`
+
+Spread the values evenly over 0..1 (by rank): faint contrast becomes visible. On the Analysis tab:
+Process, "Equalize Contrast"; in code `ws.run("equalize_histogram", ...)`.
+
+```python
+# image spread over 0 to 1 by rank
+float(process.equalize_histogram(image).array.max())  # 1.0
+```
+
+- `NORMALIZE_BY`: the choices of `normalize`.
+- `TRANSFORMS`: the choices of `transform`.
+- `FUNCTIONS`: the choices of `apply_function`.
+- `AXIS_UNITS`: `("2theta", "theta", "q", "d")`.
+
+### bexa.workspace.ops.combine: several objects in
+
+The Combine group of the Analysis tab: arithmetic with uncertainties, averages, joins, stacks
+of objects, stitching, peak matching, registration, mosaics, and merging scans into one set.
+
+```python
+import bexa
+from bexa.workspace import Workspace
+
+ws = Workspace("readme", cache=False)  # an empty workspace
+(rock,) = ws.demo("rocking")  # a synthetic mu scan (25 frames of 64 x 80) as a raw object
+peak = ws.set_roi("peak", y=(16, 48), x=(20, 60))  # an ROI in full-detector pixels
+ws.set_roi("low", y=(0, 16), x=(0, 80))  # a second ROI above the peak
+curve, other = ws.run("roi_curves", rock, rois=["peak", "low"])  # two rocking curves
+(image,) = ws.run("reduce_frames", rock)  # the summed image
+from bexa.workspace.ops import combine, extract, process
+```
+
+#### `arithmetic`
+`bexa.workspace.ops.combine.arithmetic(a, op="-", b=None, number=None, interpolate=True)`
+
+`A op B` with uncertainties: B is another object or a number.  Objects are matched by dim names:
+an image with a stack applies to every frame, a curve along a stack's motor dim gives a value per
+frame; curves on other x values are interpolated onto A's when `interpolate`. On the Analysis tab:
+Combine, "Arithmetic"; in code `ws.run("arithmetic", ...)`.
+
+```python
+# curve minus other, and image over 2
+combine.arithmetic(curve, "-", other).describe()  # 'curve mu[25] float64 +/-'
+combine.arithmetic(image, "/", number=2.0).describe()  # 'image y[64] x x[80] float64 +/-'
+```
+
+#### `average`
+`bexa.workspace.ops.combine.average(objects, how="mean")`
+
+The mean, sum or uncertainty-weighted mean of objects of one shape (repeated scans). On the
+Analysis tab: Combine, "Average / Sum"; in code `ws.run("average", ...)`.
+
+```python
+# the mean of two curves, errors divided by sqrt(2)
+combine.average([curve, curve], how="mean").describe()  # 'curve mu[25] float64 +/-'
+```
+
+#### `concatenate`
+`bexa.workspace.ops.combine.concatenate(objects, dim="")`
+
+Join objects along a dim they share (curves point after point, stacks frame after frame). On the
+Analysis tab: Combine, "Join"; in code `ws.run("concatenate", ...)`.
+
+```python
+# both curves point after point
+combine.concatenate([curve, other]).shape       # (50,)
+```
+
+#### `stack_objects`
+`bexa.workspace.ops.combine.stack_objects(objects, dim="index", values=None)`
+
+Objects of one shape stacked along a new leading dim: images to a stack, curves to a map. On the
+Analysis tab: Combine, "Stack Objects"; in code `ws.run("stack_objects", ...)`.
+
+```python
+# both curves along a new dim: a map
+combine.stack_objects([curve, other], dim="roi").describe()  # 'map roi[2] x mu[25] float64 +/-'
+```
+
+#### `stitch_curves`
+`bexa.workspace.ops.combine.stitch_curves(objects, scale=True, overlap="average")`
+
+One curve from curves of neighbouring ranges, each scaled to match where they overlap. On the
+Analysis tab: Combine, "Stitch Curves"; in code `ws.run("stitch_curves", ...)`.
+
+```python
+# curve in two overlapping halves, joined again
+left, right = extract.select_range(curve, "mu", -1, 0.2), extract.select_range(curve, "mu", 0, 1)
+combine.stitch_curves([left, right]).shape      # (25,)
+```
+
+#### `align_peaks`
+`bexa.workspace.ops.combine.align_peaks(objects, method="maximum", target="first", value=None, x_range=None)`
+
+Move curves along x so their peaks coincide: at the first curve's peak, zero or a value. On the
+Analysis tab: Combine, "Match Peaks"; in code `ws.run("align_peaks", ...)`.
+
+```python
+# both curves moved onto curve's peak
+[round(o.meta["shift"], 3) for o in combine.align_peaks([curve, other])]  # [0.0, 0.0]
+```
+
+#### `align_images`
+`bexa.workspace.ops.combine.align_images(objects, max_shift=None)`
+
+Shift images onto the first by phase correlation (integer pixels). On the Analysis tab: Combine,
+"Register Images"; in code `ws.run("align_images", ...)`.
+
+```python
+# image and a copy moved by (2, 3) pixels
+[o.meta["shift_px"] for o in combine.align_images([image, process.shift_image(image, 2, 3)])]  # [[0, 0], [-1, -2]]
+```
+
+#### `mosaic`
+`bexa.workspace.ops.combine.mosaic(objects, offsets=None, rows="", columns="", pixel_mm=0.0, how="mean")`
+
+Images placed side by side: by pixel `offsets` (row, column per image) or by the stage positions
+in their metadata (`rows`/`columns` motor names, `pixel_mm` at the sample). On the Analysis tab:
+Combine, "Mosaic"; in code `ws.run("mosaic", ...)`.
+
+```python
+# image twice, side by side
+combine.mosaic([image, image], offsets=[0, 0, 0, 80]).shape  # (64, 160)
+```
+
+#### `merge_scan_sets`
+`bexa.workspace.ops.combine.merge_scan_sets(objects)`
+
+One scan set from scans and scan sets (to process them together). On the Analysis tab: Combine,
+"Merge Scans"; in code `ws.run("merge_scan_sets", ...)`.
+
+```python
+# rock and the mosa demo as one set
+(mosa,) = ws.demo("mosa")
+combine.merge_scan_sets([rock, mosa]).describe()  # 'scan set of 2 scans'
+```
+
+- `OPERATORS`: `("+", "-", "*", "/")`.
+
+### bexa.workspace.ops.multiscan: many scans at once
+
+The Multi-scan group of the Analysis tab. A scan set is the multi-scan object: `stack_scans`
+runs one streaming pass per scan (in parallel processes with `workers`) and stacks the results on
+the positioners that differ between the scans (`bexa.stack`); any single-scan operation run on a
+set goes through `stack_per_scan`.
+
+```python
+import bexa
+from bexa.workspace import Workspace
+
+ws = Workspace("readme", cache=False)  # an empty workspace
+(rock,) = ws.demo("rocking")  # a synthetic mu scan (25 frames of 64 x 80) as a raw object
+peak = ws.set_roi("peak", y=(16, 48), x=(20, 60))  # an ROI in full-detector pixels
+(zset,) = ws.open_scans(bexa.demo("zstack").path, type="fscan2d", name="z")  # the chi x mu scan of every height
+from bexa.workspace import DataObject
+from bexa.workspace.ops import extract, multiscan
+```
+
+#### `stack_scans`
+`bexa.workspace.ops.multiscan.stack_scans(obj, quantities=('sum', 'com'), dim="auto", sigma=3.0, roi=None, downsample=None, preview_bin=8, rois=None, workers=None)`
+
+Reduce every scan of a set the same way and stack the results on a grid of scans.  `quantities`:
+`sum`, `max`, `mean` (images), `com` (centre-of-mass and width maps per motor), `stats` (per-frame
+statistics), `preview` (the frames binned `preview_bin` times), `argmax`, `energy_com`; `rois`
+adds every ROI's curve per scan. `dim="auto"` stacks on the positioners that differ between the
+scans (a height, an energy, a temperature); a name stacks on that positioner, `"scan"` on the
+order. `workers` reduces several scans at once in separate processes. On the Analysis tab:
+Multi-scan, "Stack Scans"; in code `ws.run("stack_scans", ...)`.
+
+```python
+# zset: summed images and COM maps of every height, stacked on samz
+[o.describe() for o in multiscan.stack_scans(zset, quantities="sum,com", sigma=0)][:2]  # ['stack samz[5] x y[40] x x[48] float64', 'stack samz[5] x y[40] x x[48] float64']
+```
+
+#### `series`
+`bexa.workspace.ops.multiscan.series(obj, dim="auto")`
+
+The scans of a set joined as one scan with a new leading dim (they must share a grid).  `dim`:
+`"auto"` (the energy when every scan has its own, else `scan`), `"energy"`, `"scan"` or a
+positioner recorded in every scan. On the Analysis tab: Multi-scan, "Series (one scan)"; in code
+`ws.run("series", ...)`.
+
+```python
+# zset joined on samz: one scan of samz x chi x mu frames
+multiscan.series(zset, dim="samz").describe()   # 'scan multi samz[5] x chi[6] x mu[15] x y[40] x x[48]'
+```
+
+#### `scan_table`
+`bexa.workspace.ops.multiscan.scan_table(obj)`
+
+One row per scan of a set: type, motors, grid, frames, energy and every positioner. On the
+Analysis tab: Multi-scan, "Scan Table"; in code `ws.run("scan_table", ...)`.
+
+```python
+# zset: one row per scan
+multiscan.scan_table(zset).data[["label", "shape"]]  # DataFrame: 5 rows x 2 columns (label, shape)
+```
+
+#### `subset`
+`bexa.workspace.ops.multiscan.subset(obj, indices)`
+
+The scans at `indices` (from 0, in the set's order) as a scan set of their own. On the Analysis
+tab: Multi-scan, "Subset"; in code `ws.run("subset", ...)`.
+
+```python
+# the first and third heights
+multiscan.subset(zset, [0, 2]).data.labels      # ['demo_zstack #1', 'demo_zstack #13']
+```
+
+#### `layers`
+`bexa.workspace.ops.multiscan.layers(obj, dim)`
+
+A scan split along one of its motor dims, one layer per point, as a scan set.  A z-scan `uz x chi
+x mu` becomes its heights, which then stack like the scans of a z-stack. On the Analysis tab:
+Multi-scan, "Split into Layers"; in code `ws.run("layers", ...)`.
+
+```python
+# the mosa demo split into its chi layers
+(mosa,) = ws.demo("mosa")
+multiscan.layers(mosa, "chi").describe()        # 'scan set of 6 scans'
+```
+
+#### `stack_per_scan`
+`bexa.workspace.ops.multiscan.stack_per_scan(scan_set, per_scan, base)`
+
+The results of one operation run on every scan of a set
+(`per_scan[i]` for scan `i`, named `<base>_<suffix>`), stacked along `ScanSet.axis()` where they
+are arrays of one shape and dims; otherwise each kept on its own, named after its scan. What
+`Workspace.run` does with a scan set given to a single-scan operation.
+
+```python
+# the ROI curve of every height, then stacked
+per_scan = [extract.roi_curves(DataObject("z", scan), {"peak": peak}) for scan in zset.data]
+multiscan.stack_per_scan(zset.data, per_scan, "z")[0].describe()  # 'volume samz[5] x chi[6] x mu[15] float64 +/-'
+```
+
+- `STACK_QUANTITIES`: what `stack_scans` can give.
+
+### bexa.workspace.ops.fit: peaks, series of fits, peak finding
+
+The Fit group of the Analysis tab, on `bexa.analysis.peakfit`. A fit gives the best-fit curve
+(its metadata keeps the fit, so the View and Fit tabs draw it over the data) and a table of the
+peaks' parameters with errors; the Fit tab adds bounds, fixed values and clicks.
+
+```python
+import bexa
+from bexa.workspace import Workspace
+
+ws = Workspace("readme", cache=False)  # an empty workspace
+(rock,) = ws.demo("rocking")  # a synthetic mu scan (25 frames of 64 x 80) as a raw object
+peak = ws.set_roi("peak", y=(16, 48), x=(20, 60))  # an ROI in full-detector pixels
+(curve,) = ws.run("roi_curves", rock, rois=["peak"])  # a rocking curve with Poisson errors
+from bexa.workspace.ops import combine
+from bexa.workspace.ops import fit as fitting
+```
+
+#### `fit_peaks`
+`bexa.workspace.ops.fit.fit_peaks(obj, shape="gaussian", n_peaks=1, background="linear", centers=None, x_range=None, use_sigma=True, components=False, peaks=None, background_params=None)`
+
+Fit peaks on a background to a curve: the best fit (a curve) and its parameters (a table).
+`centers` places the peaks (else the `n_peaks` most prominent are guessed); `peaks` gives every
+parameter with bounds and fixed flags (the Fit tab). The uncertainties of the curve weight the fit
+when `use_sigma`. On the Analysis tab: Fit, "Fit Peaks"; in code `ws.run("fit_peaks", ...)`.
+
+```python
+# curve: one pseudo-Voigt on a constant
+best, table = fitting.fit_peaks(curve, shape="pseudo_voigt", background="constant")
+best.describe(), table.data[["center", "fwhm"]].round(4)  # ('curve mu[400] float64', DataFrame: 1 rows x 2 columns (center, fwhm))
+```
+
+#### `fit_series`
+`bexa.workspace.ops.fit.fit_series(obj, along="", shape="gaussian", n_peaks=1, background="linear", centers=None, x_range=None, warm_start=True, peaks=None)`
+
+Fit every curve of a map (or volume) along the dim `along`.  Gives a table with one row per curve
+and, for every peak, its centre, width, height and area as objects over the other dims (a curve
+for a map). Each fit starts from the previous good one with `warm_start`. On the Analysis tab:
+Fit, "Fit Series"; in code `ws.run("fit_series", ...)`.
+
+```python
+# a map of two copies of curve, each fitted along mu
+twice = combine.stack_objects([curve, curve], dim="copy")
+fitting.fit_series(twice, along="mu")[0].data[["copy", "p1_center"]].round(4)  # DataFrame: 2 rows x 2 columns (copy, p1_center)
+```
+
+#### `fit_many`
+`bexa.workspace.ops.fit.fit_many(objects, shape="gaussian", n_peaks=1, background="linear", centers=None, x_range=None, use_sigma=True)`
+
+Fit the same model to several curves: one table, a row per curve. On the Analysis tab: Fit, "Fit
+Each Curve"; in code `ws.run("fit_many", ...)`.
+
+```python
+# the same model on two curves: one table
+fitting.fit_many([curve, curve]).data[["object", "p1_center"]].round(4)  # DataFrame: 2 rows x 2 columns (object, p1_center)
+```
+
+#### `find_peaks`
+`bexa.workspace.ops.fit.find_peaks(obj, n=5, prominence=0.0)`
+
+The most prominent maxima of a curve: position, height, width (FWHM) and prominence. On the
+Analysis tab: Fit, "Find Peaks"; in code `ws.run("find_peaks", ...)`.
+
+```python
+# curve: its maxima
+fitting.find_peaks(curve).data.round(3)         # DataFrame: 1 rows x 4 columns (mu, height, fwhm, prominence)
+```
+
+#### `peak_spec`
+`bexa.workspace.ops.fit.peak_spec(shape, centers, peaks)`
+
+The peaks to fit: given in full (the Fit tab's rows), placed at
+`centers`, or `None` (guessed).
+
+```python
+# two Gaussians placed by hand
+fitting.peak_spec("gaussian", [0.1, 0.5], None)  # [{'shape': 'gaussian', 'center': 0.1}, {'shape': 'gaussian', 'center': 0.5}]
+```
+
+- `FIT_POINTS`: the best-fit curve's points (at least four per data point).
+
+### bexa.workspace.ops.imaging: per-pixel maps, orientation, KAM, strain, drift
+
+The Imaging group of the Analysis tab, on stacks in memory and on COM maps: moments and
+Gaussian maps per pixel, the brightest frame, orientation colours, KAM, strain, drift correction,
+segmentation (scikit-learn) and gradients.
+
+```python
+import bexa
+from bexa.workspace import Workspace
+
+ws = Workspace("readme", cache=False)  # an empty workspace
+(rock,) = ws.demo("rocking")  # a synthetic mu scan (25 frames of 64 x 80) as a raw object
+peak = ws.set_roi("peak", y=(16, 48), x=(20, 60))  # an ROI in full-detector pixels
+(mosa,) = ws.demo("mosa")  # a chi x mu scan
+(stack,) = ws.run("read_volume", mosa)  # its frames (chi, mu, y, x) in memory
+maps = ws.run("com_maps", mosa, sigma=1.0)  # total, com and width of chi and mu
+com_chi, com_mu = (next(o for o in maps if o.name.endswith(f"com_{m}")) for m in ("chi", "mu"))
+from bexa.workspace.ops import imaging
+```
+
+#### `moments_maps`
+`bexa.workspace.ops.imaging.moments_maps(obj, dim="", sigma=0.0)`
+
+Centre of mass, spread, FWHM, skewness and kurtosis of every pixel's curve along `dim`. On the
+Analysis tab: Imaging, "Moment Maps"; in code `ws.run("moments_maps", ...)`.
+
+```python
+# stack: the moments along mu
+[o.name.rsplit("_frames_", 1)[-1] for o in imaging.moments_maps(stack, dim="mu")]  # ['com_mu', 'width_mu', 'fwhm_mu', 'skew_mu', 'kurtosis_mu', 'total']
+```
+
+#### `peak_maps`
+`bexa.workspace.ops.imaging.peak_maps(obj, dim="", threshold=0.1)`
+
+A Gaussian fitted to every pixel's curve along `dim` (all pixels at once): centre, FWHM and height
+maps. On the Analysis tab: Imaging, "Gaussian Peak Maps"; in code `ws.run("peak_maps", ...)`.
+
+```python
+# stack: a Gaussian per pixel along mu
+imaging.peak_maps(stack, dim="mu")[0].describe()  # 'image y[64] x x[80] float64'
+```
+
+#### `argmax_map`
+`bexa.workspace.ops.imaging.argmax_map(obj, dim="")`
+
+The motor value of the brightest frame at every pixel. On the Analysis tab: Imaging,
+"Brightest-Frame Map"; in code `ws.run("argmax_map", ...)`.
+
+```python
+# stack: the mu of the brightest frame
+imaging.argmax_map(stack, dim="mu").describe()  # 'image y[64] x x[80] float64'
+```
+
+#### `orientation_map`
+`bexa.workspace.ops.imaging.orientation_map(a, b, span=None, intensity=None)`
+
+Two tilt maps as one colour picture: hue the direction, saturation the size of the tilt (fully
+saturated at `span`), brightness the `intensity` map if given. On the Analysis tab: Imaging,
+"Orientation Map"; in code `ws.run("orientation_map", ...)`.
+
+```python
+# both tilts in one picture, brighter where it scatters more
+imaging.orientation_map(com_chi, com_mu, intensity=maps[0]).describe()  # 'rgb y[64] x x[80] x rgb[3] float64'
+```
+
+#### `kam_map`
+`bexa.workspace.ops.imaging.kam_map(a, b=None, size=3)`
+
+Kernel average misorientation: the mean tilt difference to the neighbours of each pixel. On the
+Analysis tab: Imaging, "KAM"; in code `ws.run("kam_map", ...)`.
+
+```python
+# the KAM of both tilts
+imaging.kam_map(com_chi, com_mu).describe()     # 'image y[64] x x[80] float64'
+```
+
+#### `strain`
+`bexa.workspace.ops.imaging.strain(obj, kind="theta", reference=None, theta_deg=None)`
+
+Lattice strain from an angle (theta, 2theta) or energy centre-of-mass map. On the Analysis tab:
+Imaging, "Strain"; in code `ws.run("strain", ...)`.
+
+```python
+# com_mu taken as a Bragg angle near 10 deg
+imaging.strain(com_mu, kind="theta", theta_deg=10.0).describe()  # 'image y[64] x x[80] float64'
+```
+
+#### `align_frames`
+`bexa.workspace.ops.imaging.align_frames(obj, dim="", max_shift=5)`
+
+Drift correction: every frame along `dim` shifted onto the first (phase correlation). On the
+Analysis tab: Imaging, "Drift Correction"; in code `ws.run("align_frames", ...)`.
+
+```python
+# stack: every mu frame onto the first
+len(imaging.align_frames(stack, dim="mu").meta["shifts_px"])  # 16
+```
+
+#### `segment`
+`bexa.workspace.ops.imaging.segment(a, b, clusters=4, method="kmeans")`
+
+Grains or domains: pixels clustered by their two tilt maps (k-means or DBSCAN). On the Analysis
+tab: Imaging, "Segment"; in code `ws.run("segment", ...)`.
+
+```python
+# three domains from the two tilts
+imaging.segment(com_chi, com_mu, clusters=3).describe()  # 'image y[64] x x[80] float64'
+```
+
+#### `gradient_maps`
+`bexa.workspace.ops.imaging.gradient_maps(obj)`
+
+The derivatives of a map along its two dims (per coordinate unit). On the Analysis tab: Imaging,
+"Gradients"; in code `ws.run("gradient_maps", ...)`.
+
+```python
+# com_mu: its derivatives along y and x
+[o.name.rsplit("_", 1)[-1] for o in imaging.gradient_maps(com_mu)]  # ['dy', 'dx']
+```
+
+- `STRAIN_KINDS`: `("theta", "two_theta", "energy")`.
+
+### bexa.workspace.ops.scattering: powder integration, cakes, reflectivity
+
+The XRD and XRR groups of the Analysis tab, on `bexa.analysis.xrd` and `bexa.analysis.xrr`.
+The beam centre is in full-detector pixels: an image cut to a window keeps its offset in its
+coordinates. The energy comes from the object's metadata unless given.
+
+```python
+import numpy as np
+import xarray as xr
+from bexa.analysis import xrd, xrr
+from bexa.workspace import DataObject
+from bexa.workspace.ops import scattering
+
+geometry = xrd.PowderGeometry(200, 250.3, 260.7, 100, 17.0)  # 200 mm, 100 um pixels, 17 keV
+ring = 1000 * np.exp(-0.5 * ((geometry.arrays((512, 520))["two_theta"] - 8.0) / 0.05) ** 2) + 10  # one ring at 8 deg
+image = DataObject("ring", ring, meta={"energy_keV": 17.0})  # the powder image as an object
+theta = np.linspace(0.05, 2.0, 600)  # incidence angles, deg
+signal = np.where(xrr.qz(theta, 8.04) < 0.03, 1.0, (0.03 / (2 * xrr.qz(theta, 8.04))) ** 4)  # a reflectivity edge
+counts = DataObject("xrr", xr.DataArray(1e6 * signal * (1 + 0.5 * np.cos(xrr.qz(theta, 8.04) * 300)), dims=("theta",), coords={"theta": theta}), meta={"energy_keV": 8.04})  # a theta-2theta counter
+```
+
+#### `integrate_powder`
+`bexa.workspace.ops.scattering.integrate_powder(obj, distance_mm=200.0, center_y=0.0, center_x=0.0, pixel_um=75.0, energy_keV=None, unit="2theta", bins=None, x_range=None, chi_range=None, tilt_deg=0.0, tilt_plane_deg=0.0, per_frame=False, solid_angle=True, polarization=0.0)`
+
+The powder pattern: mean intensity in rings of equal 2theta (or q, d), with uncertainties.  The
+beam centre is in full-detector pixels; an image cut to a window keeps its offset. A stack gives
+the pattern of its summed frames, or one per frame (a map against the stack's motor dims) with
+`per_frame`. On the Analysis tab: XRD, "Azimuthal Integration"; in code
+`ws.run("integrate_powder", ...)`.
+
+```python
+# image: its pattern peaks at 8 deg
+pattern = scattering.integrate_powder(image, 200, 250.3, 260.7, 100, solid_angle=False, polarization=None)
+round(float(pattern.coord("2theta")[np.nanargmax(pattern.array.values)]), 2)  # 7.99
+```
+
+#### `cake`
+`bexa.workspace.ops.scattering.cake(obj, distance_mm=200.0, center_y=0.0, center_x=0.0, pixel_um=75.0, energy_keV=None, unit="2theta", bins=None, chi_bins=180, x_range=None, tilt_deg=0.0, tilt_plane_deg=0.0)`
+
+The image unrolled into azimuth chi against 2theta (q, d): rings become lines. On the Analysis
+tab: XRD, "Cake (2theta-chi)"; in code `ws.run("cake", ...)`.
+
+```python
+# image: azimuth against 2theta
+scattering.cake(image, 200, 250.3, 260.7, 100, chi_bins=36).describe()  # 'map chi[36] x 2theta[364] float64'
+```
+
+#### `calibrate_ring`
+`bexa.workspace.ops.scattering.calibrate_ring(obj, d_spacing_A=3.1356, pixel_um=75.0, energy_keV=None, percentile=99.0)`
+
+Beam centre and detector distance from one powder ring of known d-spacing. On the Analysis tab:
+XRD, "Calibrate from a Ring"; in code `ws.run("calibrate_ring", ...)`.
+
+```python
+# image: centre and distance from the 8 deg ring
+d = geometry.wavelength_A / (2 * np.sin(np.radians(4.0)))
+scattering.calibrate_ring(image, d_spacing_A=d, pixel_um=100).data.round(3).head(4)  # DataFrame: 4 rows x 2 columns (quantity, value)
+```
+
+#### `reflectivity`
+`bexa.workspace.ops.scattering.reflectivity(obj, angle="theta", i0=None, beam_mm=None, sample_mm=None, profile="gaussian", energy_keV=None, x="q", theta_offset=0.0)`
+
+A specular reflectivity curve from a counter curve against theta (or 2theta).  Divided by the
+direct beam `i0` if given, corrected for the footprint if the beam and sample sizes are given,
+against q_z (`x="q"`) or theta. On the Analysis tab: XRR, "Reflectivity"; in code
+`ws.run("reflectivity", ...)`.
+
+```python
+# counts over a direct beam of 1e6, footprint-corrected, against q_z
+refl = scattering.reflectivity(counts, i0=1e6, beam_mm=0.1, sample_mm=10)
+refl.describe()                                 # 'curve qz[600] float64'
+```
+
+#### `footprint_correction`
+`bexa.workspace.ops.scattering.footprint_correction(obj, beam_mm=0.1, sample_mm=10.0, profile="gaussian", energy_keV=None)`
+
+Divide a reflectivity curve (against theta or q_z) by the share of the beam on the sample. On the
+Analysis tab: XRR, "Footprint Correction"; in code `ws.run("footprint_correction", ...)`.
+
+```python
+# counts corrected for a 0.1 mm beam on 10 mm
+scattering.footprint_correction(counts, 0.1, 10).describe()  # 'curve theta[600] float64'
+```
+
+#### `critical_angle`
+`bexa.workspace.ops.scattering.critical_angle(obj, energy_keV=None)`
+
+The critical angle (and q_c, electron density) of a reflectivity curve. On the Analysis tab: XRR,
+"Critical Angle"; in code `ws.run("critical_angle", ...)`.
+
+```python
+# refl: the critical edge
+scattering.critical_angle(refl).meta["critical"]  # {'q_c': 0.030261, 'theta_c_deg': 0.21277, 'electron_density_per_A3': 0.64651}
+```
+
+#### `kiessig_thickness`
+`bexa.workspace.ops.scattering.kiessig_thickness(obj, q_low=None, q_high=None)`
+
+Film thickness from the spacing of the Kiessig fringes of a curve against q_z. On the Analysis
+tab: XRR, "Film Thickness"; in code `ws.run("kiessig_thickness", ...)`.
+
+```python
+# refl: a 300 A film
+round(scattering.kiessig_thickness(refl, q_low=0.05).meta["kiessig"]["thickness_A"], 1)  # 301.6
+```
+
+### bexa.workspace.ops.calculators: tables from numbers alone
+
+The Calculators group of the Analysis tab: no input object, a table out.
+
+```python
+from bexa.workspace.ops import calculators
+```
+
+#### `energy`
+`bexa.workspace.ops.calculators.energy(energy_keV=17.0, wavelength_A=None)`
+
+Energy, wavelength, wavevector and the monochromator angles of the usual crystals. On the Analysis
+tab: Calculators, "Energy and Wavelength"; in code `ws.run("energy", ...)`.
+
+```python
+# 17 keV
+calculators.energy(17.0).data.head(3)           # DataFrame: 3 rows x 2 columns (quantity, value)
+```
+
+#### `reflections`
+`bexa.workspace.ops.calculators.reflections(a=5.43102, b=None, c=None, alpha=90.0, beta=90.0, gamma=90.0, centering="F", energy_keV=17.0, max_index=4, max_two_theta=90.0)`
+
+The reflections of a lattice: d-spacing, 2theta and q, one row per family (h >= k >= l sorted, the
+multiplicity counted), up to `max_two_theta`. On the Analysis tab: Calculators, "Reflections of a
+Lattice"; in code `ws.run("reflections", ...)`.
+
+```python
+# silicon (F-centred cubic) at 17 keV
+calculators.reflections(a=5.43102, centering="F", energy_keV=17.0).data.head(3)  # DataFrame: 3 rows x 5 columns (hkl, d_A, two_theta_deg, q_1_A, multiplicity)
+```
+
+#### `bragg`
+`bexa.workspace.ops.calculators.bragg(d_spacings=(3.1356,), energy_keV=17.0)`
+
+The Bragg angle and 2theta of d-spacings at an energy. On the Analysis tab: Calculators, "Bragg
+Angles"; in code `ws.run("bragg", ...)`.
+
+```python
+# Si 111 and 220 at 17 keV
+calculators.bragg([3.1356, 1.9201], 17.0).data.round(3)  # DataFrame: 2 rows x 4 columns (d_A, theta_deg, two_theta_deg, q_1_A)
+```
+
+#### `scherrer_size`
+`bexa.workspace.ops.calculators.scherrer_size(fwhm_deg=(0.1,), two_theta_deg=(30.0,), energy_keV=17.0, shape_factor=0.9, instrumental_deg=0.0)`
+
+Crystallite sizes from peak widths (Scherrer), one row per peak. On the Analysis tab: Calculators,
+"Crystallite Size"; in code `ws.run("scherrer_size", ...)`.
+
+```python
+# two peak widths
+calculators.scherrer_size([0.1, 0.2], [30.0, 45.0], 17.0).data.round(2)  # DataFrame: 2 rows x 3 columns (fwhm_deg, two_theta_deg, size_nm)
+```
+
+#### `transmission`
+`bexa.workspace.ops.calculators.transmission(material="Si", thickness="500um", energies_keV=(8.0, 12.0, 17.0, 25.0))`
+
+Transmission and attenuation length of a material at several energies (needs xraydb). On the
+Analysis tab: Calculators, "Transmission"; in code `ws.run("transmission", ...)`.
+
+```python
+# 500 um of silicon
+calculators.transmission("Si", "500um", [8.0, 17.0]).data.round(4)  # DataFrame: 2 rows x 3 columns (energy_keV, transmission, attenuation_length_um)
+```
+
+#### `photons`
+`bexa.workspace.ops.calculators.photons(pulse_energy_uJ=100.0, energy_keV=9.5)`
+
+Photons per pulse from a pulse energy (an XFEL gas monitor reading). On the Analysis tab:
+Calculators, "Photons per Pulse"; in code `ws.run("photons", ...)`.
+
+```python
+# 100 uJ at 9.5 keV
+calculators.photons(100.0, 9.5).data            # DataFrame: 1 rows x 3 columns (pulse_energy_uJ, energy_keV, photons)
+```
+
+- `CENTERINGS`: `("P", "I", "F", "A", "B", "C", "R")`.
+
+### bexa.workspace.ops._base: what the operations share
+
+Helpers for writing an operation of your own: make a result from an input (`new`), check
+kinds (`require`), pick dims, reduce with uncertainties, cut to ROIs. Private (the module name
+starts with `_`), but stable enough to build on.
+
+```python
+import numpy as np
+import xarray as xr
+import bexa
+from bexa.workspace import DataObject
+from bexa.workspace.ops import _base
+
+stack = DataObject("s", xr.DataArray(np.ones((3, 4, 5)), dims=("mu", "y", "x"), coords={"y": np.arange(10, 14)}))  # a small stack
+curve = DataObject("c", xr.DataArray([1.0, 4.0, 9.0], dims=("mu",), coords={"mu": [0.0, 1.0, 2.0]}), sigma=np.ones(3))  # a curve
+```
+
+#### `new`
+`bexa.workspace.ops._base.new(source, data, suffix, *, sigma=None, kind="", meta=None, parents=None)`
+
+A result made from `source`: named `<source>_<suffix>`, its metadata passed
+on (a fit's own keys left behind), `parents` the source.
+
+```python
+# a result of the curve
+_base.new(curve, curve.array * 2, "double").label()  # 'c_double  (curve mu[3] float64)'
+```
+
+#### `require`
+`bexa.workspace.ops._base.require(obj, kinds, what="this operation")`
+
+`TypeError` naming the kinds an operation takes when an object is
+none of them.
+
+```python
+# a curve given where an image is needed
+try:
+    _base.require(curve, ("image",), "Crop")
+except TypeError as error:
+    print(error)  # Crop takes an image; c is a curve
+```
+
+#### `pixel_dims`
+`bexa.workspace.ops._base.pixel_dims(da)`
+
+The pixel dims of a DataArray (its last two when they are pixels).
+
+```python
+# the stack's pixels
+_base.pixel_dims(stack.array)                   # ('y', 'x')
+```
+
+#### `other_dims`
+`bexa.workspace.ops._base.other_dims(da)`
+
+The dims that are not pixels (motors, energy, scan).
+
+```python
+# the stack's motor
+_base.other_dims(stack.array)                   # ('mu',)
+```
+
+#### `reduce_over`
+`bexa.workspace.ops._base.reduce_over(da, dims, how="sum")`
+
+A DataArray summed (or `mean`, `max`, `min`, `std`, `median`) over
+dims, NaN skipped.
+
+```python
+# the stack summed over mu
+_base.reduce_over(stack.array, ["mu"]).dims     # ('y', 'x')
+```
+
+#### `sigma_over`
+`bexa.workspace.ops._base.sigma_over(sigma, dims, how, n)`
+
+The uncertainty of a sum or mean over dims (independent errors),
+`None` for other reductions.
+
+```python
+# three errors of 1 summed
+float(_base.sigma_over(curve.sigma, ["mu"], "sum", 3))  # 1.7321
+```
+
+#### `poisson`
+`bexa.workspace.ops._base.poisson(counts)`
+
+`sqrt(|counts|)`, the uncertainty of summed detector counts.
+
+```python
+# 16 counts
+float(_base.poisson(xr.DataArray(16.0)))        # 4.0
+```
+
+#### `select_ranges`
+`bexa.workspace.ops._base.select_ranges(da, roi)`
+
+A DataArray cut to the ranges of an ROI on the dims it has (pixel
+ranges half-open on the pixel coordinates, others inclusive values).
+
+```python
+# rows 11 and 12 of the stack (its y coordinates are 10 to 13)
+_base.select_ranges(stack.array, bexa.ROI(y=(11, 13))).sizes["y"]  # 2
+```
+
+#### `range_slices`
+`bexa.workspace.ops._base.range_slices(da, roi)`
+
+The index slice of every dim an ROI limits.
+
+```python
+# the same as slices
+_base.range_slices(stack.array, bexa.ROI(y=(11, 13), mu=(1, 2)))  # {'y': slice(1, 3, None), 'mu': slice(1, 3, None)}
+```
+
+#### `windowed`
+`bexa.workspace.ops._base.windowed(obj, roi)`
+
+The data and sigma of an array object, both cut to an ROI.
+
+```python
+# the curve's last two points
+_base.windowed(curve, bexa.ROI(mu=(1, 2)))[1].size  # 2
+```
+
+#### `numeric`
+`bexa.workspace.ops._base.numeric(values)`
+
+`numpy.asarray(values, dtype=float)`.
+
+```python
+# a list
+_base.numeric([1, 2])                           # array([1.0, 2.0])
+```
+
+#### `trapezoid`
+`bexa.workspace.ops._base.trapezoid(y, x)`
+
+The trapezoid integral (`numpy.trapezoid`, `numpy.trapz` before
+numpy 2).
+
+```python
+# the curve's integral
+_base.trapezoid([1.0, 4.0, 9.0], [0.0, 1.0, 2.0])  # 9.0
+```
+
+#### `curve_xy`
+`bexa.workspace.ops._base.curve_xy(obj)`
+
+`(dim, x, y, sigma)` of a curve object.
+
+```python
+# the curve
+_base.curve_xy(curve)[0]                        # 'mu'
+```
+
+#### `curve`
+`bexa.workspace.ops._base.curve(x, y, dim, name="", attrs=None, coord_attrs=None)`
+
+A 1-D DataArray along `dim` with coordinate `x`.
+
+```python
+# a new curve
+_base.curve([0, 1], [5, 6], "q", "intensity").dims  # ('q',)
+```
+
+#### `like`
+`bexa.workspace.ops._base.like(da, values, name=None)`
+
+Values with the dims, coordinates and attrs of a DataArray.
+
+```python
+# the curve's values squared on its coordinate
+_base.like(curve.array, curve.array.values ** 2).values  # array([1.0, 16.0, 81.0])
+```
+
+#### `pairs`
+`bexa.workspace.ops._base.pairs(values, what="values")`
+
+`[1, 2, 9, 10]` as `[(1, 2), (9, 10)]` (background regions typed in a
+form).
+
+```python
+# two regions
+_base.pairs([1, 2, 9, 10])                      # [(1.0, 2.0), (9.0, 10.0)]
+```
+
+- `ANY`: the kinds of array objects most operations take.
+- `DETECTOR`: `("stack", "image")`.
+- `IMAGES`: `("image", "map")`.
+- `SCANS`: `("scan",)`.
+- `REDUCE_HOWS`: the reductions `reduce_over` knows.
+
+### bexa.workspace.files: files to objects and objects to files
+
+What is not a scan, read as objects, and objects written as files. NeXus HDF5 keeps the values
+(the NXdata signal), one dataset per axis with its units, the uncertainties as `errors`, and the
+metadata, parents and history as JSON attributes.
+
+```python
+import tempfile
+import numpy as np
+import xarray as xr
+from bexa.workspace import DataObject
+from bexa.workspace import files
+
+out = tempfile.mkdtemp()  # a scratch folder
+curve = DataObject("c", xr.DataArray([1.0, 4.0, 9.0], dims=("mu",), coords={"mu": [0.0, 1.0, 2.0]}), sigma=np.ones(3))  # a curve
+```
+
+#### `load_file`
+`bexa.workspace.files.load_file(path, dataset=None, index=None, name=None)`
+
+The objects in a file that is not a scan: a bexa cube (one object per
+variable), one HDF5 dataset (`dataset=` or `file.h5::/path`, cut by `index` while it is read),
+npy, TIFF (a multi-page file is a stack along `frame`), PNG/JPEG, CSV or text tables, JSON.
+
+```python
+# a curve written as NeXus, then one slice of its data read back
+files.export_object(curve, f"{out}/c.h5")       # Path('.../c.h5')
+files.load_file(f"{out}/c.h5", dataset="/entry/c/data", index="1:")[0].describe()  # 'curve index[2] float64'
+```
+
+#### `export_object`
+`bexa.workspace.files.export_object(obj, path, format=None)`
+
+Write an object; `format` (`h5`, `csv`, `npy`, `tiff`, `png`,
+`txt`, `json`) defaults to the suffix. A curve's CSV has x, y and sigma columns; a map's CSV is a
+grid with the coordinates as row and column labels.
+
+```python
+# the curve as CSV and as a picture
+files.export_object(curve, f"{out}/c.csv").name  # 'c.csv'
+open(f"{out}/c.csv").read().splitlines()[:2]    # ['mu,value,sigma', '0.0,1.0,1.0']
+```
+
+#### `write_nexus`
+`bexa.workspace.files.write_nexus(objects, path)`
+
+Several objects in one NeXus HDF5 file, one NXdata group each
+(tables as one dataset per column, texts as NXnote, scans by their recipes).
+
+```python
+# two objects in one file
+files.write_nexus([curve, curve.copy("c2")], f"{out}/both.h5").name  # 'both.h5'
+```
+
+#### `parse_index`
+`bexa.workspace.files.parse_index(text)`
+
+`"0, :, 10:20"` as `(0, slice(None), slice(10, 20))`; empty text
+gives `None`.
+
+```python
+# a slice typed in the Browse tab
+files.parse_index("3, :, 100:200")              # (3, slice(None, None, None), slice(100, 200, None))
+```
+
+- `EXPORT_FORMATS`: the formats of `export_object`.
+- `H5_SUFFIXES`: the suffixes read as HDF5.
+
+### bexa.workspace.convert: conversions between formats
+
+The Convert tab's conversions. Frames are streamed batch by batch into the target, never a
+whole scan in memory; every frame target gets a `*_positions.csv` with the frame number, its grid
+indices and every per-frame channel.
+
+```python
+import tempfile
+import bexa
+from bexa.workspace import convert
+
+scan = bexa.demo("rocking")  # a synthetic mu scan
+out = tempfile.mkdtemp()  # a scratch folder
+```
+
+#### `convert_scan`
+`bexa.workspace.convert.convert_scan(scan, target, out, roi=None, downsample=None, compression="gzip", overwrite=False)`
+
+One scan as a target: `package` (a bexa scan package, reopened by
+`bexa.open` as the same scan), `cube` (the frames on their grid, in memory first), `nexus`,
+`tiff_stack`, `tiff_folder` or `npy`. `roi` and `downsample` cut and bin the frames on the way
+(not for a package). Returns the files written.
+
+```python
+# the scan as one NPY array and its positions
+[f.name for f in convert.convert_scan(scan, "npy", f"{out}/rock")]  # ['rock.npy', 'rock_positions.csv']
+```
+
+#### `convert_session`
+`bexa.workspace.convert.convert_session(path, out_dir, scans=None, target="package", compression="gzip", overwrite=False, status="finished")`
+
+Every scan (or `scans`) of a dataset or session as a target;
+packages go through `bexa.io.package.write_packages`, which keeps the packages that are current.
+
+```python
+# the alignment demo: four scans, four packages
+[f.name for f in convert.convert_session(bexa.demo("alignment").path, f"{out}/packages")]  # ['demo_align_S001.h5', 'demo_align_S002.h5', 'demo_align_S003.h5', 'demo_align_S004.h5']
+```
+
+#### `convert_dataset`
+`bexa.workspace.convert.convert_dataset(path, dataset, target, out, index=None, overwrite=False)`
+
+One dataset of any HDF5 file as `npy`, `tiff_stack`,
+`tiff_folder` or `csv`, copied in blocks of about 64 MiB along its first axis; `index` cuts it
+first.
+
+```python
+# the NeXus copy of the scan: its first 5 frames as NPY
+convert.convert_scan(scan, "nexus", f"{out}/rock_nx")  # [Path('.../rock_nx.h5'), Path('.../rock_nx_positions.csv')]
+[f.name for f in convert.convert_dataset(f"{out}/rock_nx.h5", "/entry/data/frames", "npy", f"{out}/five", index="0:5, :, :")]  # ['five.npy']
+```
+
+#### `convert_file`
+`bexa.workspace.convert.convert_file(path, target, out)`
+
+A file bexa loads as objects written as another export format
+(one file per object).
+
+```python
+# the NPY array as a multi-page TIFF
+[f.name for f in convert.convert_file(f"{out}/rock.npy", "tiff", f"{out}/rock.tif")]  # ['rock.tif']
+```
+
+#### `positions_table`
+`bexa.workspace.convert.positions_table(scan)`
+
+One row per frame: its number, grid indices and every per-frame
+channel.
+
+```python
+# the scan's frames
+list(convert.positions_table(scan).columns)[:4]  # ['frame', 'index_mu', 'mu', 'elapsed_time']
+```
+
+- `SCAN_TARGETS`: the scan targets with a description each.
+- `DATASET_TARGETS`: `("npy", "tiff_stack", "tiff_folder", "csv")`.
+- `BLOCK_BYTES`: the block size of a dataset copy.
+
+### bexa.workspace.jobs: background work with progress and Cancel
+
+One worker thread runs the GUI's jobs one after another, so the notebook stays responsive.
+Every `bexa._log.progress` loop of a job (reduction batches, scans of a stack, packages, fits)
+reports to it through `bexa._log.progress_hook`; Cancel raises `bexa._log.CancelledError` at
+the next step.
+
+```python
+import time
+from bexa._log import progress
+from bexa.workspace.jobs import Job, JobRunner
+
+def work():  # 20 steps that report their progress
+    for _ in progress(range(20), total=20, desc="steps", enabled=False):
+        time.sleep(0.01)
+    return 42
+```
+
+#### `JobRunner`
+`bexa.workspace.jobs.JobRunner(background=True, on_change=None)`
+
+Runs jobs in a background thread (inline with `background=False`).
+`on_change(job)` hears when a job starts, progresses (at most every 0.15 s) and ends; `history`
+keeps every job and `current` the running one.
+
+- `busy`: Property: a job running or queued.
+- `submit(label, function, done=None, failed=None)`: queue a callable; `done(result)` or `failed(error)` follows when it ends.
+- `cancel()`: stop the running job at its next step and drop the queued ones.
+- `wait(timeout=None)`: block until every job has ended (`False` on timeout).
+
+```python
+# a job in the background, then one cancelled half way
+runner = JobRunner(background=True)
+job = runner.submit("steps", work)
+runner.wait(10), job.status, job.result         # (True, 'done', 42)
+```
+
+#### `Job`
+`bexa.workspace.jobs.Job(label, function, done=None, failed=None, status="queued", fraction=0.0, message="", started=0.0, seconds=0.0, error=None, result=None, _loops=[])`
+
+One piece of work: `label`, `function`, `done`, `failed`, and its `status`
+(`queued`, `running`, `done`, `failed`, `cancelled`), `fraction`, `message`, `seconds`, `error`,
+`result`. `report(done, total, desc)` composes nested loops into one fraction.
+
+```python
+# two nested loops: scan 2 of 4, half way through its batches
+job = Job("nested", work)
+job.report(1, 4, "scans")
+job.report(5, 10, "batches")
+job.fraction, job.message                       # (0.375, 'batches 5/10')
+```
+
+- `REPORT_INTERVAL_S`: how often progress reaches the views.
+
+### bexa.workspace.source: Python source for logged values
+
+The logged commands of a workspace are valid Python: objects by their names, Windows paths
+with forward slashes, NaN and infinities as `float(...)`.
+
+```python
+import numpy as np
+from bexa.workspace.source import call_text, jsonable, source_text
+```
+
+#### `source_text`
+`bexa.workspace.source.source_text(value)`
+
+Python source that evaluates to a value.
+
+```python
+# numbers, paths, tuples
+source_text(np.float32(0.5)), source_text("C:\\data\\scan"), source_text((1, float("nan")))  # ('0.5', "'C:/data/scan'", "(1, float('nan'))")
+```
+
+#### `call_text`
+`bexa.workspace.source.call_text(function, *args, **kwargs)`
+
+`function(arg, key=value)` with every value as source; keywords
+that are `None` are left out.
+
+```python
+# a logged call
+call_text("ws.open_scan", "/data/rock", scan=None, name="rock")  # "ws.open_scan('/data/rock', name='rock')"
+```
+
+#### `jsonable`
+`bexa.workspace.source.jsonable(value)`
+
+A value made of JSON types only (numpy to Python, the rest to text).
+
+```python
+# numpy values inside a dict
+jsonable({"a": np.arange(3), "b": np.float64(1.5)})  # {'a': [0, 1, 2], 'b': 1.5}
+```
+
+### bexa.workspace.storage: reading back a saved workspace
+
+`Workspace.load` reads every group of a saved workspace with `read_object`.
+
+```python
+import tempfile
+import h5py
+import numpy as np
+import xarray as xr
+from bexa.workspace import DataObject
+from bexa.workspace.files import write_nexus
+from bexa.workspace.storage import read_object
+
+path = write_nexus([DataObject("c", xr.DataArray([1.0, 2.0], dims=("mu",)), sigma=np.ones(2))], tempfile.mkdtemp() + "/c.h5")  # one curve written
+```
+
+#### `read_object`
+`bexa.workspace.storage.read_object(name, group, cache=True)`
+
+The object kept in one group: arrays with their axes and errors,
+tables, texts; scans and scan sets opened again from their recipes (a text object saying why
+when that fails).
+
+```python
+# the curve, read back
+with h5py.File(path) as f:
+    described = read_object("c", f["entry/c"]).describe()
+described                                       # 'curve mu[2] float64 +/-'
+```
+
+### bexa.gui: the notebook GUI package
+
+`bexa.gui.App` and `bexa.gui.launch` (loaded on first use, so `import bexa.gui` is cheap). The
+modules below are the app, its figures, forms and drawing, and its panels and tabs.
+
+### bexa.gui.app: the notebook GUI
+
+`bexa.gui.App` is the whole GUI in one cell: the objects panel on the left, the tabs Data,
+Browse, View, Analysis, Fit, Convert and Log on the right, a progress bar with Cancel on top.
+Work runs in a background thread; the widget updates that follow a job are handed to the
+kernel's event loop, so they happen in the main thread. `app.ws` is the
+`bexa.workspace.Workspace` behind it. Needs ipywidgets; with ipympl the figures are interactive
+(`figures="auto"` switches matplotlib to the widget backend when ipympl is installed), without it
+they are pictures. See [The notebook GUI](#the-notebook-gui) for a tour.
+
+```python
+import bexa
+from bexa.gui import App
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+```
+
+#### `App`
+`bexa.gui.app.App(root=None, workspace=None, *, background=True, figures="auto", cache=True)`
+
+The GUI. `root` starts the Data tab's picker and the Browse tab;
+`workspace` continues an existing workspace; `background=False` runs every job in the calling
+thread (scripts, tests); `figures` is `"auto"`, `"interactive"` or `"static"`. Its parts are
+attributes: `objects` (`ObjectsPanel`), `data`, `browse`, `view`, `analysis`, `fit`, `convert`,
+`log` (the tabs), `jobs` (`bexa.workspace.jobs.JobRunner`), `tabs`, `box` (what the cell shows).
+Members:
+
+- `current`: Property: the first selected object.
+- `set_selection(names)`: select objects: the View draws them, the other tabs take them as inputs.
+- `show_results(made)`: select what an action made, refresh, and show the View tab.
+- `show_tab(name)`: show a tab by its title.
+- `say(text, kind="info")`: a message under the header (`kind` `info`, `ok` or `error`, in red).
+- `guarded(function, show=None)`: run a callable now; a failure becomes a red message instead of a traceback.
+- `submit(label, function, done=None)`: run a callable in the background; `done(result)` follows in the main thread.
+- `run_op(key, inputs, values, name=None, then=None)`: run an operation of the catalog in the background; its results are selected and drawn, then `then(results)`.
+- `data_path(path)`: put a path in the Data tab and show it.
+- `set_workspace(workspace)`: continue with another workspace (an opened file).
+- `refresh()`: bring every panel up to date with the workspace.
+- `close()`: stop the jobs, close the files of every scan and file shown, and close the widgets (ipywidgets keeps every widget, and with it the app and its scans, until closed).
+
+```python
+# app: an ROI and the rocking curve through the catalog, then what is selected
+app.ws.set_roi("peak", y=(16, 48), x=(20, 60))  # ROI(y=(16, 48), x=(20, 60))
+app.run_op("roi_curves", [rock.name], {"rois": ["peak"]})  # Job
+app.current, app.tabs.titles[app.tabs.selected_index]  # ('demo_rocking_roi_peak', 'View')
+```
+
+#### `launch`
+`bexa.gui.app.launch(root=None, **kwargs)`
+
+Make an `App` and show it (in a kernel); the last line of a cell
+shows an `App` too.
+
+```python
+# outside a kernel it is only made
+type(bexa.gui.launch(background=False, figures="static", cache=False)).__name__  # 'App'
+```
+
+- `TABS`: the tab titles, in order.
+- `CSS`: the style the app adds to the page.
+- `MESSAGE_COLOURS`: the colours of `say`.
+
+### bexa.gui.figures: figures inside the GUI
+
+With ipympl a figure is a canvas widget (zoom, pan, clicks); without it the figure is drawn
+into a PNG shown in an `ipywidgets.Image`, which works on any server.
+
+```python
+from bexa.gui.figures import FigurePane, interactive_backend
+
+pane = FigurePane((4, 3), interactive=False)  # a picture figure
+```
+
+#### `FigurePane`
+`bexa.gui.figures.FigurePane(size=(7.0, 4.6), interactive=None)`
+
+One matplotlib figure that redraws in place: `fig` (the
+figure), `widget` (the canvas, or the Image), `interactive`.
+
+- `clear()`: an empty figure; the caller adds the axes.
+- `draw()`: show what was drawn (the canvas redraws, or the picture is rendered again).
+- `savefig(path, dpi=150)`: write the figure to a file.
+- `close()`: close an interactive figure.
+- `on_click(callback)`: a callback for clicks inside the axes (ipympl only).
+- `on_move(callback)`: a callback for mouse moves over the axes (ipympl only).
+
+```python
+# a curve drawn into the picture
+ax = pane.clear().add_subplot(111)
+ax.plot([0, 1, 4])                              # [Line2D]
+pane.draw()
+len(pane.widget.value) > 1000                   # True
+```
+
+#### `interactive_backend`
+`bexa.gui.figures.interactive_backend()`
+
+True when matplotlib draws into ipympl widgets
+(`%matplotlib widget`).
+
+```python
+# a script uses another backend
+interactive_backend()                           # False
+```
+
+### bexa.gui.forms: the forms of the catalog
+
+A `Form` turns an operation of `bexa.workspace.catalog` into widgets: a text field per number
+(empty means "not given" for an optional one), checkboxes, drop-downs for choices, objects, ROIs,
+dims and channels (refreshed from the workspace and the first input), two fields for a range,
+each with its help under it.
+
+```python
+from bexa.gui.forms import Form, kind_label, object_options, set_tooltip
+from bexa.workspace import Workspace
+from bexa.workspace.catalog import find
+
+ws = Workspace(cache=False)  # an empty workspace
+form = Form(find("integrate_powder"), ws)  # the form of Azimuthal Integration
+```
+
+#### `Form`
+`bexa.gui.forms.Form(op, ws)`
+
+The widgets of one operation's settings: `fields` by setting name,
+`box` (what the tab shows), `op`, `first` (the first input, for dims and channels).
+
+- `refresh(first=None)`: fill the drop-downs from the workspace and the first input.
+- `values()`: the parsed values that differ from the defaults (`ValueError` names the field at fault).
+- `set_values(values)`: put remembered values back (stale ones are skipped).
+
+```python
+# a distance and a range typed, then read back
+form.fields["distance_mm"].value = "150"
+form.fields["x_range"].low.value = "10"
+form.values()                                   # {'distance_mm': 150.0, 'x_range': (10.0, None)}
+```
+
+#### `kind_label`
+`bexa.gui.forms.kind_label(obj)`
+
+An object as a line of a list: `[kind] name  dims`.
+
+```python
+# a demo scan
+(rock,) = ws.demo("rocking")
+kind_label(rock)                                # '[scan] demo_rocking  mu[25] x y[64] x x[80]'
+```
+
+#### `object_options`
+`bexa.gui.forms.object_options(ws, kinds, blank=None)`
+
+Drop-down options `(label, name)` for the objects of some
+kinds (a scan set where scans are taken), with an optional blank first entry.
+
+```python
+# the scans of the workspace
+object_options(ws, ("scan",), "none")           # [('none', None), ('[scan] demo_rocking  mu[25] x y[64] x x[80]', 'demo_rocking')]
+```
+
+#### `set_tooltip`
+`bexa.gui.forms.set_tooltip(widget, text)`
+
+The text shown when the mouse rests on a widget (`tooltip` in
+ipywidgets 8, `description_tooltip` in 7).
+
+```python
+# a tooltip on a field
+set_tooltip(form.fields["bins"], "about one bin per pixel of radius")
+form.fields["bins"].tooltip                     # 'about one bin per pixel of radius'
+```
+
+- `LABEL_WIDTH`: the width of the field labels.
+- `PIXEL_NAMES`: the pixel dim names.
+- `KIND_TAGS`: the tags of `kind_label`.
+
+### bexa.gui.drawing: objects drawn into a figure
+
+Pure matplotlib, no widgets: the View tab calls these with the options of its controls.
+
+```python
+import numpy as np
+import xarray as xr
+from matplotlib.figure import Figure
+import bexa
+from bexa.gui.drawing import CurveOptions, ImageOptions, draw_curves, draw_image, draw_rgb, extent_of
+
+image = xr.DataArray(np.random.default_rng(0).random((20, 30)), dims=("y", "x"), coords={"y": np.arange(100, 120), "x": np.arange(30)})  # a window of a frame
+curve = xr.DataArray(np.arange(1.0, 6.0), dims=("mu",), coords={"mu": np.linspace(0, 1, 5)})  # a curve
+```
+
+#### `draw_image`
+`bexa.gui.drawing.draw_image(fig, da, options, title="", rois=None)`
+
+A 2-D DataArray as an image on its coordinates (every n-th
+pixel above 2048), percentile limits unless `vmin`/`vmax` are set, the named ROIs drawn over the
+dims they limit. Returns the axes.
+
+```python
+# the window with an ROI box, log scale
+draw_image(Figure(), image, ImageOptions(log=True), "frame", rois={"box": bexa.ROI(y=(105, 110), x=(5, 15))}).get_title()  # 'frame'
+```
+
+#### `draw_curves`
+`bexa.gui.drawing.draw_curves(fig, curves, options, fits=(), title="")`
+
+Curves `[(label, data, sigma), ...]` on one axes with error bars,
+and fitted curves `[(label, data), ...]` dashed. Returns the axes.
+
+```python
+# two curves on a log axis
+draw_curves(Figure(), [("a", curve, np.ones(5)), ("b", 2 * curve, None)], CurveOptions(log_y=True)).get_yscale()  # 'log'
+```
+
+#### `draw_rgb`
+`bexa.gui.drawing.draw_rgb(fig, da, title="")`
+
+A colour picture `(y, x, rgb)` on its coordinates.
+
+```python
+# a grey picture
+draw_rgb(Figure(), xr.DataArray(np.full((4, 4, 3), 0.5), dims=("y", "x", "rgb")), "grey").get_title()  # 'grey'
+```
+
+#### `extent_of`
+`bexa.gui.drawing.extent_of(da)`
+
+The imshow extent from the coordinates of a 2-D array (`None` for
+plain indices).
+
+```python
+# the window's extent
+extent_of(image)                                # [-0.5, 29.5, 119.5, 99.5]
+```
+
+#### `ImageOptions`
+`bexa.gui.drawing.ImageOptions(cmap="viridis", log=False, percentiles=(1.0, 99.5), vmin=None, vmax=None, colorbar=True, aspect="equal")`
+
+How an image is drawn: `cmap`, `log`, `percentiles`, `vmin`,
+`vmax`, `colorbar`, `aspect`.
+
+```python
+# the defaults
+ImageOptions()                                  # ImageOptions
+```
+
+#### `CurveOptions`
+`bexa.gui.drawing.CurveOptions(log_y=False, errors=True, markers=True, normalize=False, legend=True)`
+
+How curves are drawn: `log_y`, `errors`, `markers`,
+`normalize` (each divided by its maximum, for the view only), `legend`.
+
+```python
+# the defaults
+CurveOptions()                                  # CurveOptions(log_y=False, errors=True, markers=True, normalize=False, legend=True)
+```
+
+- `CMAPS`: the colour maps the View tab offers.
+- `MAX_SHOWN`: the largest image side drawn in full.
+- `ROI_COLOURS`: the colours of the ROI boxes.
+- `PIXEL_ALIASES`: binned pixel dims to pixel dims.
+
+### bexa.gui.objects_panel: the objects of the workspace
+
+The left column of the app: every object (raw scans first, then results in the order made),
+filtered by kind or name; rename, duplicate, delete (with a confirmation), notes; what the
+selected object is (its metadata, parents and history); the named ROIs.
+
+```python
+import bexa
+from bexa.gui import App
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+```
+
+#### `ObjectsPanel`
+`bexa.gui.objects_panel.ObjectsPanel(app)`
+
+The panel of an `App`: `listing` (a `SelectMultiple`
+of the objects), `filter`, `search`, `details`, `notes`, `rois`, `box`. `refresh()` lists the
+objects again, `select(names)` selects from code.
+
+```python
+# the panel lists the scan; a filter by kind
+[label for label, _ in app.objects.listing.options]  # ['[scan] demo_rocking  mu[25] x y[64] x x[80]']
+app.objects.filter.value = "curve"
+app.objects.listing.options                     # ()
+```
+
+- `KIND_FILTERS`: the choices of the kind filter.
+
+### bexa.gui.data_tab: opening data
+
+The Data tab: a path sniffed against every format spec and opened as one scan, every scan of
+a dataset, a scan set, or loaded as objects; the scan picker (`bexa.notebook.ScanPicker`) of a
+beamtime folder, its selection added as scans, a scan set or a series; a beamtime profile and a
+sample; demo data.
+
+```python
+import bexa
+from bexa.gui import App
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+```
+
+#### `DataTab`
+`bexa.gui.data_tab.DataTab(app, root=None)`
+
+The tab: `path`, `scan_numbers`, `format`, `sniffed` (what
+"What is it?" found), `root` and `picker` (the scan picker once shown), `profile`, `sample`,
+`demo`. Its buttons call the workspace through `App.submit`.
+
+```python
+# the folder of the scan typed and sniffed, then opened again
+app.data.path.value = str(rock.data.files[0].parent)
+app.data._sniff()
+app.data._open(as_set=False)
+app.ws.names()                                  # ['demo_rocking', 'demo_rocking_1']
+```
+
+- `DEMO_KINDS`: the demo data sets.
+
+### bexa.gui.browse_tab: the inside of folders and files
+
+The Browse tab: folders with sizes and what bexa recognises in them; an HDF5/NeXus file as a
+tree (groups open on a click; a dataset's shape, dtype, chunks, filters, compression ratio,
+attributes and a preview of one slice at a time, read from the file as the sliders move);
+a SPEC session's scans, headers and columns; TIFF tags; arrays; text. Any dataset or slice
+loads as an object, and the Convert tab takes it from here.
+
+```python
+import bexa
+from bexa.gui import App
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+master = next(rock.data.files[0].parent.glob("*.h5"))  # the scan's master file
+```
+
+#### `BrowseTab`
+`bexa.gui.browse_tab.BrowseTab(app, root=None)`
+
+The tab: `path`, `listing` (the folder), `head`, `body`,
+`pane` (the preview figure), `inspector` (the `H5Inspector` or `SpecInspector` of the file shown).
+`go(folder)` lists a folder (a file: its folder, the file selected); `show_figure()`,
+`show_text(text)` and `show_html(markup)` fill the preview area.
+
+```python
+# the master file: its tree, the first group opened
+app.browse.go(master)
+tree = app.browse.inspector.tree
+tree.value = tree.options[1][1]
+[label for label, _ in tree.options][:4]        # ['▾ demo_rocking.h5', '  ▾ 1.1/  (7)', '      end_reason  () object', '      end_time  ...
+```
+
+- `H5_SUFFIXES`: the suffixes shown as HDF5 trees.
+- `TEXT_SUFFIXES`: the suffixes shown as text.
+- `MAX_ENTRIES`: the most entries a folder lists.
+
+### bexa.gui.inspectors: HDF5 trees, SPEC sessions, TIFF
+
+What the Browse tab shows inside a file; each inspector reads only what it shows, so a file of
+hundreds of gigabytes browses as fast as a small one.
+
+```python
+import bexa
+from bexa.gui import App
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+from bexa.gui.inspectors import H5Inspector, SpecInspector, array_preview, attrs_table, tiff_summary
+from bexa.testing import make_aps_session
+import tempfile
+master = next(rock.data.files[0].parent.glob("*.h5"))  # the scan's master file
+session = make_aps_session(tempfile.mkdtemp())  # a synthetic APS SPEC session
+```
+
+#### `H5Inspector`
+`bexa.gui.inspectors.H5Inspector(tab, path)`
+
+An HDF5 file as an expandable `tree` (a `Select`; a
+group toggles open when chosen), `info` (a dataset's facts and attributes), sliders for the
+leading axes of an N-D dataset, `index` and the Load and Convert buttons. `close()` closes the
+file.
+
+```python
+# the tree of the master file, one level open
+inspector = H5Inspector(app.browse, master)
+inspector.tree.value = inspector.tree.options[1][1]
+len(inspector.tree.options) > 2                 # True
+inspector.close()
+```
+
+#### `SpecInspector`
+`bexa.gui.inspectors.SpecInspector(tab, path)`
+
+A SPEC session: its scans, a scan's header and first
+rows, a column plotted against another (`x`, `y`), and Open this scan.
+
+```python
+# the synthetic session
+spec = SpecInspector(app.browse, session.path)
+len(spec.scans.options), spec.x.value           # (5, None)
+```
+
+#### `attrs_table`
+`bexa.gui.inspectors.attrs_table(attrs, limit=60)`
+
+The attributes of an HDF5 node as an HTML table.
+
+```python
+# the master file's root attributes
+import h5py
+with h5py.File(master) as f:
+    table = attrs_table(f["1.1"].attrs)
+"NXentry" in table                              # True
+```
+
+#### `array_preview`
+`bexa.gui.inspectors.array_preview(pane, values, title="")`
+
+A 1-D array as a curve, 2-D as an image (percentile
+limits), into a `FigurePane`.
+
+```python
+# a ramp drawn into the Browse tab's figure
+import numpy as np
+array_preview(app.browse.pane, np.arange(12.0).reshape(3, 4), "ramp")
+len(app.browse.pane.widget.value) > 1000        # True
+```
+
+#### `tiff_summary`
+`bexa.gui.inspectors.tiff_summary(path, page=0)`
+
+The tags of a TIFF page as HTML, its image and the number of
+pages.
+
+```python
+# the first frame of the APS session
+head, picture, pages = tiff_summary(next(session.root.rglob("*.tif")))
+picture.shape, pages                            # ((24, 32), 1)
+```
+
+- `MAX_LINES`: the most tree lines listed at once.
+- `PREVIEW_PIXELS`: an image preview is cut to about this many pixels a side.
+
+### bexa.gui.view_tab: drawing the selection
+
+The View tab: a scan's raw frames (a slider per motor, one frame read per move), a scan set's
+scans, a stack with a slider per motor dim or its frames summed (maximum, mean), images and maps
+on their coordinates (colour map, limits, log, colour bar, ROIs), curves overlaid with error bars
+and their fits, a map as curves, a volume with two dims as the image, colour pictures, tables
+and text. ROIs are typed, or drawn with ipympl; a line drawn on an image makes its line profile;
+the value under the mouse shows; the figure saves; a stack renders in 3-D (plotly).
+
+```python
+import bexa
+from bexa.gui import App
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+```
+
+#### `ViewTab`
+`bexa.gui.view_tab.ViewTab(app)`
+
+The tab: `pane`, `mode`, `member` (the scan of a set), `row_dim`
+and `col_dim` (a volume), `sliders` by dim, the image options (`cmap`, `log`, `percent`, `vmin`,
+`vmax`, `colorbar`, `show_rois`, `aspect`), the curve options (`log_y`, `errors`, `markers`,
+`normalize`, `fits`), the ROI tools (`roi_list`, `roi_name`, `roi_ranges`, `draw`, `line`).
+`refresh()` follows the selection, `redraw()` draws again.
+
+```python
+# the raw frames of the scan, then an ROI typed
+app.set_selection([rock.name])
+list(app.view.sliders), len(app.view.pane.widget.value) > 1000  # (['mu'], True)
+app.view.roi_name.value, app.view.roi_ranges.value = "peak", "y=16:48, x=20:60"
+app.view._set_roi()
+app.ws.rois["peak"]                             # ROI(y=(16, 48), x=(20, 60))
+```
+
+- `MODES`: the choices of the mode drop-down per kind.
+- `MAX_CURVES`: the most curves a map shows.
+
+### bexa.gui.analysis_tab: every operation, by group
+
+The Analysis tab: the groups of the catalog as buttons, the operations of a group (or of a
+search over all), the help of the one chosen, its inputs (defaulting to the selected objects) and
+its form; Run sends it to the background, Show command shows the `ws.run(...)` line, "Run on each
+selected object" makes a batch. Form values are remembered (`Workspace.settings`).
+
+```python
+import bexa
+from bexa.gui import App
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+```
+
+#### `AnalysisTab`
+`bexa.gui.analysis_tab.AnalysisTab(app)`
+
+The tab: `group`, `search`, `listing`, `title`, `help`,
+`inputs`, `forms` (one `Form` per operation shown), `name`, `each`, `command`. `select_op(key)`
+shows an operation, `refresh()` follows the workspace and the selection.
+
+```python
+# Image from Frames on the scan, through the tab
+app.set_selection([rock.name])
+app.analysis.select_op("reduce_frames")
+app.analysis._run()
+app.current                                     # 'demo_rocking_sum'
+```
+
+### bexa.gui.fit_tab: peaks with every parameter in hand
+
+The Fit tab: a curve (or a map, to fit each of its curves), peaks guessed, added, or placed with
+a click (ipympl), each parameter with a start value, bounds or fixed, a background with its start
+values, a fit range; Fit runs `fit_peaks` with these and writes the fitted values back into the
+rows, so a second Fit refines; the plot shows data, fit, components and residuals; the parameter
+table saves to CSV, JSON or HDF5.
+
+```python
+import bexa
+from bexa.gui import App
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+app.ws.set_roi("peak", y=(16, 48), x=(20, 60))  # ROI(y=(16, 48), x=(20, 60))
+(curve,) = app.ws.run("roi_curves", rock, rois=["peak"])  # a rocking curve to fit
+```
+
+#### `FitTab`
+`bexa.gui.fit_tab.FitTab(app)`
+
+The tab: `target`, `along` and `row` (a map), `low`/`high` (the
+range), `use_sigma`, `background` and its `bg_rows`, `peaks` (one `PeakRow` each), `n_guess`,
+`guess_shape`, `click`, `pane`, `results`. Members:
+
+- `refresh()`: follow the selection (a fit's own results never become the target).
+- `data()`: `(dim, x, y, sigma)` of the curve fitted.
+- `x_range()`: the fit range typed, or `None`.
+- `guess()`: rows for the most prominent peaks.
+- `add_peak(shape=None, start=None)`: a row of a shape with start values.
+- `remove_peak(row)`: remove a row.
+- `spec()`: the rows as peak specs and background starts, as `fit_peaks` takes them.
+- `draw(start=False)`: the data with the start model (`start=True`) or the last fit.
+- `fit()`: fit the curve in the background.
+- `fit_series()`: fit every curve of a map along a dim.
+
+```python
+# guess one peak, fit, read the refined centre back from its row
+app.fit.refresh()
+app.fit.guess()
+app.fit.fit()
+app.fit.peaks[0].params["center"].value.value   # '0.000780066'
+```
+
+#### `PeakRow`
+`bexa.gui.fit_tab.PeakRow(tab, shape="gaussian", start=None)`
+
+One peak of the Fit tab: `shape` and a `ParamRow` per parameter of
+the shape (rebuilt when the shape changes); `spec()` and `update(values)`.
+
+```python
+# the row of the guessed peak
+app.fit.peaks[0].spec()["shape"], sorted(app.fit.peaks[0].params)  # ('gaussian', ['amplitude', 'center', 'fwhm'])
+```
+
+#### `ParamRow`
+`bexa.gui.fit_tab.ParamRow(name, value=None)`
+
+One parameter: `value`, `low`, `high` (text fields) and `fixed`;
+`spec()` (`None` when the value is empty) and `set(value)`.
+
+```python
+# the centre fixed at 0
+row = app.fit.peaks[0].params["center"]
+row.set(0.0)
+row.fixed.value = True
+row.spec()                                      # {'value': 0.0, 'min': None, 'max': None, 'fixed': True}
+```
+
+- `BACKGROUND_NAMES`: the backgrounds offered.
+
+### bexa.gui.convert_tab: conversions and exports
+
+The Convert tab: a scan or scan set to a package, cube, NeXus, TIFF or NPY (with an ROI, a
+binning, a compression); a whole dataset or session; one HDF5 dataset (or a slice) to NPY, TIFF
+or CSV; a file to another format; objects to NeXus, CSV, NPY, TIFF, PNG, text or JSON. Each runs
+in the background and is logged.
+
+```python
+import bexa
+from bexa.gui import App
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+import tempfile
+out = tempfile.mkdtemp()  # a scratch folder
+```
+
+#### `ConvertTab`
+`bexa.gui.convert_tab.ConvertTab(app)`
+
+The tab: the scan section (`scan`, `scan_target`,
+`scan_out`, `scan_roi`, `scan_bin`, `compression`, `overwrite`), the session section, the HDF5
+section (`h5_file`, `h5_dataset`, `h5_index`, `h5_target`, `h5_out`), the file section, the export
+section (`objects`, `export_format`, `export_out`) and `result`. `refresh()` lists the objects
+and ROIs, `use_dataset(path, dataset, index)` fills the HDF5 section from the Browse tab.
+
+```python
+# the scan written as a package
+app.convert.refresh()
+app.convert.scan.value = rock.name
+app.convert.scan_out.value = f"{out}/rock.h5"
+app.convert._convert_scan()
+app.convert.result.value[:40]                   # '<b>wrote 1 file(s)</b><ul><li><code>C:\\U'
+```
+
+- `COMPRESSIONS`: the compressions offered for packages and NeXus files.
+
+### bexa.gui.log_tab: commands, script, workspace files, jobs
+
+The Log tab: every command run (newest first, with its time, status and duration, and the
+error of a failure), the script that replays the session, saving and opening the workspace, and
+the job history.
+
+```python
+import bexa
+from bexa.gui import App
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+```
+
+#### `LogTab`
+`bexa.gui.log_tab.LogTab(app)`
+
+The tab: `entries`, `script` (a text area), `script_path`,
+`ws_path`, `jobs`. `refresh()` shows the log again.
+
+```python
+# the script of this session
+app.log._show_script()
+app.log.script.value.splitlines()[-1]           # "ws.demo('rocking')"
+```
+
+- `STATUS_COLOURS`: the colours of the statuses.
+- `SHOWN_ENTRIES`: the most log lines shown.
 
 ### bexa.pipelines.dfxm_report: the standard DFXM figure set
 
@@ -12242,6 +15627,42 @@ True in IPython or when stderr is a terminal; `reduce` then shows a progress bar
 ```python
 # whether someone is watching (a kernel or a terminal)
 interactive_session()                        # False in a batch job writing to a log file
+```
+
+#### `progress_hook`
+`bexa._log.progress_hook(callback)`
+
+Report every `progress` loop of the calling thread to
+`callback(done, total, desc)`, called before the first item and after each one, instead of
+drawing a bar; raising from the callback (`CancelledError`) stops the loop there. Other threads
+are not affected: the GUI's background jobs watch their own reductions, stacks, packages and
+fits this way.
+
+```python
+# a callback that hears every step of a loop
+steps = []
+with bexa._log.progress_hook(lambda done, total, desc: steps.append((done, total))):
+    for _ in progress(range(3), total=3, desc="scans"):
+        pass
+steps                                           # [(0, 3), (1, 3), (2, 3), (3, 3)]
+```
+
+#### `CancelledError`
+`bexa._log.CancelledError`, a subclass of `Exception`
+
+Raised by a progress callback to stop the work it watches (the
+GUI's Cancel button); `bexa.reduce` lets it through untouched.
+
+```python
+# a loop stopped at its second step
+def stop_at_two(done, total, desc):
+    if done == 2:
+        raise bexa._log.CancelledError("stopped")
+try:
+    with bexa._log.progress_hook(stop_at_two):
+        list(progress(range(5), total=5))
+except bexa._log.CancelledError as error:
+    print(error)  # stopped
 ```
 
 Constants:
