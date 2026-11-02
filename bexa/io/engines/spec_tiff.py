@@ -81,6 +81,7 @@ class SpecScan:
     comments: list[str] = field(default_factory=list)
     aborted: bool = False
     lines: tuple[int, int] = (0, 0)
+    ended: bool = False  # SPEC closed it: #UXML or #R after the rows, or the abort comment
 
     @property
     def n_rows(self) -> int:
@@ -243,7 +244,9 @@ def _parse(path: Path) -> SpecFile:
             elif tag == "C":
                 scan.comments.append(rest.strip())
                 if "aborted" in rest.lower():
-                    scan.aborted = True
+                    scan.aborted = scan.ended = True
+            elif tag in ("R", "UXML"):
+                scan.ended = True
     close(number if scan is not None else 0)
     return session
 
@@ -455,7 +458,8 @@ class SpecTiffSource(BaseSource):
         found = scan_frames(self.spec_file, self.scan, frame_templates(self.spec.layout))
         self.points = [p for p in sorted(found) if p < self.record.n_rows]
         self.frames = [found[p] for p in self.points]
-        if len(found) > len(self.points):
+        # while it runs, a frame is often written before SPEC writes its row
+        if len(found) > len(self.points) and self.status is not ScanStatus.RUNNING:
             log.warning(
                 "%s scan %d: %d frames have no data row and are left out",
                 self.spec_file.name,
@@ -599,7 +603,7 @@ class SpecTiffSource(BaseSource):
             why = ": SPEC aborted it before its first point" if record.aborted else " yet"
             raise ScanNotReadyError(
                 f"scan {self.scan} of {self.spec_file.name} has no data row{why}",
-                ScanStatus.EMPTY,
+                self.status,  # running when SPEC has just started it
                 self.scan,
             )
         names = session.channel_names(record)
@@ -645,11 +649,17 @@ class SpecTiffSource(BaseSource):
 
     @property
     def status(self) -> ScanStatus:
-        """``empty`` without a frame or row; ``aborted`` when SPEC says so or frames are missing."""
+        """``running`` while SPEC writes it (the session's last scan, short of its points and
+        not closed yet); ``empty`` without a frame or row; ``aborted`` when SPEC says so or
+        frames are missing."""
         record = self.record
+        planned = self.command.n_points if self.command.exact else None
+        last = max(self.session.scans) == self.scan
+        short = planned is None or record.n_rows < planned
+        if last and not record.ended and short:
+            return ScanStatus.RUNNING
         if record.n_rows == 0 or not self.frames:
             return ScanStatus.EMPTY
-        planned = self.command.n_points if self.command.exact else None
         if record.aborted or (planned is not None and record.n_rows < planned):
             return ScanStatus.ABORTED
         return ScanStatus.COMPLETE if len(self.frames) >= record.n_rows else ScanStatus.ABORTED

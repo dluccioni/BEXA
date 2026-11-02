@@ -49,7 +49,8 @@ class App:
     Parameters
     ----------
     root
-        A folder to start from: the Data tab's picker root and the Browse tab's folder.
+        The folder to work in (:meth:`bexa.gui.data_tab.DataTab.use_folder`): the scan
+        picker lists its datasets, the Browse tab starts there. It may hold no scan yet.
     workspace
         Continue with this workspace (``Workspace.load(...)``) instead of a new one.
     background
@@ -83,6 +84,7 @@ class App:
 
         self.ws = workspace if workspace is not None else Workspace(cache=cache)
         self.selection: list[str] = []
+        self.folder: Path | None = None  # the folder worked in (Data tab, Use folder)
         self.interactive_figures = self._figures(figures)
         self._main = threading.main_thread()
         self._loop = _kernel_loop() if background else None
@@ -116,10 +118,7 @@ class App:
         )
         header = ipw.HBox(
             [
-                ipw.HTML(
-                    f"<b style='font-size:15px'>bexa</b> "
-                    f"<span style='color:#757575'>{figures_note}</span>"
-                ),
+                ipw.HTML(f"<b style='font-size:15px' title='{figures_note}'>bexa</b>"),
                 self.progress,
                 self.cancel,
                 self.status,
@@ -141,6 +140,8 @@ class App:
         )
         self.box.add_class("bexa-app")
         self.ws.observe(self._changed)
+        if root is not None and Path(root).is_dir():
+            self.data.use_folder(root)
 
     @staticmethod
     def _figures(figures: str) -> bool:
@@ -245,10 +246,19 @@ class App:
         return result
 
     def submit(
-        self, label: str, function: Callable[[], Any], done: Callable[[Any], None] | None = None
+        self,
+        label: str,
+        function: Callable[[], Any],
+        done: Callable[[Any], None] | None = None,
+        *,
+        quiet: bool = False,
     ) -> Job:
-        """Run ``function`` in the background; ``done(result)`` follows in the main thread."""
-        self.say(f"{label} ...")
+        """Run ``function`` in the background; ``done(result)`` follows in the main thread.
+
+        ``quiet``: no message when it starts (the header still shows the job).
+        """
+        if not quiet:
+            self.say(f"{label} ...")
 
         def finished(result: Any) -> None:
             if done is not None:
@@ -294,6 +304,17 @@ class App:
         else:
             self._loop.add_callback(function)
 
+    def later(self, seconds: float, function: Callable[[], None]) -> Any:
+        """Run ``function`` in the main thread in ``seconds``; ``None`` without a kernel loop
+        to wait in. :meth:`cancel_later` takes back what it returns."""
+        if self._loop is None:
+            return None
+        return self._loop.call_later(seconds, function)
+
+    def cancel_later(self, handle: Any) -> None:
+        if handle is not None and self._loop is not None:
+            self._loop.remove_timeout(handle)
+
     def _changed(self, event: str, info: dict[str, Any]) -> None:
         if event == "log":
             self._soon(self.log.refresh)
@@ -326,6 +347,7 @@ class App:
         scans: close an app that is not needed any more to free its files and memory.
         """
         self.jobs.cancel()
+        self.data.stop_auto()
         self.ws.unobserve(self._changed)
         self.ws.close()
         if self.browse.inspector is not None:

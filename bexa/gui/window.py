@@ -69,7 +69,7 @@ def app_notebook(
 ) -> dict[str, Any]:
     """The notebook Voilà runs: one cell that makes the :class:`~bexa.gui.App` and shows it.
 
-    ``root`` is the folder the Data and Browse tabs start from, ``workspace`` a
+    ``root`` is the folder to work in (scans or not yet), ``workspace`` a
     saved workspace to continue (``Workspace.save``), ``cwd`` the folder relative
     paths are read from (the kernel would otherwise start in the notebook's
     temporary folder). The cell puts this bexa checkout on ``sys.path``, since
@@ -298,12 +298,16 @@ def serve(
     """
     server = start(root, workspace, port=port, figures=figures)
     try:
+        # flushed: the address must reach a log file at once (nohup, an ssh session)
         if window and server.open_window(browser):
-            print(f"bexa GUI in its window ({server.url}); close the window to stop")
+            print(f"bexa GUI in its window ({server.url}); close the window to stop", flush=True)
         else:
             if window:
-                print("no Edge, Chrome or Chromium found: the GUI opens in the default browser")
-            print(f"bexa GUI at {server.url} ; Ctrl+C here stops it")
+                print(
+                    "no Edge, Chrome or Chromium found: the GUI opens in the default browser",
+                    flush=True,
+                )
+            print(f"bexa GUI at {server.url} ; Ctrl+C here stops it", flush=True)
         server.wait()
     finally:
         server.stop()

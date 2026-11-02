@@ -78,9 +78,16 @@ class BrowseTab:
         enter = ipw.Button(
             description="Open folder", icon="folder-open", layout=ipw.Layout(width="120px")
         )
+        use = ipw.Button(
+            description="Use this folder",
+            icon="check",
+            tooltip="work in this folder (Data tab), scans or not",
+            layout=ipw.Layout(width="140px"),
+        )
         go.on_click(lambda _b: self.go(self.path.value))
         up.on_click(lambda _b: self.go(self.folder.parent))
         enter.on_click(lambda _b: self._enter())
+        use.on_click(lambda _b: self._use())
         self.listing = ipw.Select(options=[], rows=24, layout=ipw.Layout(width="100%"))
         self.listing.add_class("bexa-files")
         self.listing.observe(lambda c: self._picked(c["new"]), names="value")
@@ -92,7 +99,7 @@ class BrowseTab:
         self.box = ipw.HBox(
             [
                 ipw.VBox(
-                    [ipw.HBox([up, self.path, go]), enter, self.listing],
+                    [ipw.HBox([up, self.path, go]), ipw.HBox([enter, use]), self.listing],
                     layout=ipw.Layout(width="38%", padding="0 8px 0 0"),
                 ),
                 ipw.VBox(
@@ -139,6 +146,11 @@ class BrowseTab:
         chosen = self.listing.value
         if chosen and Path(chosen).is_dir():
             self.go(chosen)
+
+    def _use(self) -> None:
+        """Work in the folder shown: the Data tab's folder, scans or not."""
+        self.app.data.use_folder(self.folder)
+        self.app.show_tab("Data")
 
     # ------------------------------------------------------------------ inspecting
     def show_figure(self) -> None:
@@ -198,11 +210,8 @@ class BrowseTab:
 
         scored = match_spec(path)
         spec = scored[0][1] if scored and scored[0][0] >= 1.0 else None
-        if spec is not None:
-            note = f"bexa reads this as <b>{spec.name}</b> ({spec.engine})"
-        else:
-            note = "no scan layout matches: load datasets as objects"
-        self.head.value = f"<b>{html.escape(path.name)}</b> ({_size(path)}). {note}"
+        note = f"{spec.name} ({spec.engine})" if spec is not None else "no scan layout"
+        self.head.value = f"<b>{html.escape(path.name)}</b> ({_size(path)}): {note}"
         to_data = ipw.Button(
             description="Open with the Data tab",
             icon="share",
@@ -224,11 +233,7 @@ class BrowseTab:
         scored = match_spec(path)
         spec = scored[0][1] if scored and scored[0][0] >= 1.0 else None
         files = sum(1 for e in entries if e.is_file())
-        note = (
-            f"bexa reads it as <b>{spec.name}</b> ({spec.engine})"
-            if spec
-            else "no dataset layout recognised here"
-        )
+        note = f"{spec.name} ({spec.engine})" if spec else "no scans"
         self.head.value = (
             f"<b>{html.escape(path.name)}/</b>: {len(entries) - files} folders, "
             f"{files} files. {note}"

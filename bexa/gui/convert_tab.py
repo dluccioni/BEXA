@@ -26,12 +26,11 @@ COMPRESSIONS = ("gzip", "bitshuffle", "lzf", "none")
 
 
 def _section(title: str, note: str) -> Any:
+    """A heading; the note shows when the mouse rests on it."""
     import ipywidgets as ipw
 
     return ipw.HTML(
-        f"<h4 style='margin:12px 0 4px 0'>{html.escape(title)} "
-        f"<span style='color:#757575;font-size:11px;font-weight:normal'>"
-        f"{html.escape(note)}</span></h4>"
+        f"<h4 style='margin:12px 0 4px 0' title='{html.escape(note)}'>{html.escape(title)}</h4>"
     )
 
 
@@ -57,14 +56,14 @@ class ConvertTab:
             description="file or folder",
             style=style,
             layout=wide,
-            placeholder="out/scan_7.h5 (a scan set: a folder)",
+            placeholder="file (a scan set: a folder)",
         )
         self.scan_roi = ipw.Dropdown(
             description="ROI", style=style, layout=ipw.Layout(width="300px")
         )
         self.scan_bin = ipw.Text(
             description="bin pixels",
-            placeholder="empty: none",
+            placeholder="none",
             style=style,
             layout=ipw.Layout(width="250px"),
         )
@@ -81,13 +80,13 @@ class ConvertTab:
         # a session
         self.session = ipw.Text(
             description="dataset",
-            placeholder="a dataset folder or SPEC file",
+            placeholder="folder or SPEC file",
             style=style,
             layout=wide,
         )
         self.session_scans = ipw.Text(
             description="scans",
-            placeholder="empty: all; 1-20, 25",
+            placeholder="all, or 1-20, 25",
             style=style,
             layout=ipw.Layout(width="350px"),
         )
@@ -110,7 +109,7 @@ class ConvertTab:
         )
         self.h5_index = ipw.Text(
             description="slice",
-            placeholder="empty: all; 0:100, :, :",
+            placeholder="all, or 0:100, :, :",
             style=style,
             layout=ipw.Layout(width="350px"),
         )
@@ -154,7 +153,7 @@ class ConvertTab:
             description="file or folder",
             style=style,
             layout=wide,
-            placeholder="one object: a file; several: a folder (h5: one file)",
+            placeholder="file or folder",
         )
         go_export = ipw.Button(description="Export", button_style="primary", icon="save")
         go_export.on_click(lambda _b: self._export())

@@ -56,9 +56,7 @@ class ObjectsPanel:
         duplicate.on_click(lambda _b: self._duplicate())
         self.delete.observe(lambda c: self._arm_delete(c["new"]), names="value")
         self.confirm.on_click(lambda _b: self._delete())
-        self.notes = ipw.Textarea(
-            placeholder="notes on the selected object", rows=2, layout=ipw.Layout(width="100%")
-        )
+        self.notes = ipw.Textarea(placeholder="notes", rows=2, layout=ipw.Layout(width="100%"))
         save_notes = ipw.Button(description="Save notes", layout=ipw.Layout(width="100px"))
         save_notes.on_click(lambda _b: self._save_notes())
         self.details = ipw.HTML(layout=ipw.Layout(width="100%"))
@@ -66,8 +64,8 @@ class ObjectsPanel:
         self.box = ipw.VBox(
             [
                 ipw.HTML(
-                    "<b>Objects</b> <span style='color:#757575;font-size:11px'>raw scans are "
-                    "read-only; every operation makes a new object</span>"
+                    "<b title='raw scans are read-only; every operation makes a new object'>"
+                    "Objects</b>"
                 ),
                 ipw.HBox([self.filter, self.search]),
                 self.listing,
@@ -152,7 +150,7 @@ class ObjectsPanel:
     def _show_rois(self) -> None:
         rois = self.app.ws.rois
         if not rois:
-            self.rois.value = "<i>none yet: draw or type one on the View tab</i>"
+            self.rois.value = "<i>none</i>"
             return
         rows = "".join(
             f"<tr><td><b>{html.escape(n)}</b></td><td>{html.escape(_ranges(r))}</td></tr>"

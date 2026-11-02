@@ -16,11 +16,8 @@ CSS = (
     "<style>.bexa-selection select, .bexa-selection option "
     "{ font-family: monospace; font-size: 12px; }</style>"
 )
-EMPTY = "<i>nothing selected yet: choose scans in the list above, in any folder</i>"
-HELP = (
-    "<span style='color:#757575'>(every folder; highlight scans here to remove them "
-    "or to list their folder)</span>"
-)
+EMPTY = "<i>nothing selected yet</i>"
+HELP = "the selected scans of every folder; highlight some to remove them or list their folder"
 
 
 class SelectionPanel:
@@ -70,7 +67,7 @@ class SelectionPanel:
         self.scans.layout.display = None if keys else "none"
         self.buttons.layout.display = None if keys else "none"
         if keys:
-            self.title.value = f"<b>selection</b>&nbsp; {m.selection_text()} &nbsp;{HELP}"
+            self.title.value = f"<b title='{HELP}'>selection</b>&nbsp; {m.selection_text()}"
         else:
             self.title.value = f"<b>selection</b>&nbsp; {EMPTY}"
 

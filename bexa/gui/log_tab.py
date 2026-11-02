@@ -48,9 +48,8 @@ class LogTab:
         self.box = ipw.VBox(
             [
                 ipw.HTML(
-                    "<b>Commands</b> <span style='color:#757575;font-size:11px'>"
-                    "each line runs the same "
-                    "in a notebook cell, with <code>ws = app.ws</code></span>"
+                    "<b title='each line runs the same in a notebook cell, with ws = app.ws'>"
+                    "Commands</b>"
                 ),
                 self.entries,
                 ipw.HBox([show_script, self.script_path, save_script]),

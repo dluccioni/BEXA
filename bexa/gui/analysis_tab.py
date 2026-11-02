@@ -36,11 +36,9 @@ class AnalysisTab:
             layout=ipw.Layout(width="100%"),
         )
         self.only_fitting = ipw.Checkbox(
-            value=False, indent=False, description="only operations for the selected object"
+            value=False, indent=False, description="for the selection only"
         )
-        self.search = ipw.Text(
-            placeholder="search every operation", layout=ipw.Layout(width="240px")
-        )
+        self.search = ipw.Text(placeholder="search", layout=ipw.Layout(width="240px"))
         self.listing = ipw.Select(options=[], rows=16, layout=ipw.Layout(width="100%"))
         self.listing.add_class("bexa-ops")
         self.group.observe(lambda _c: self._fill(), names="value")
@@ -51,12 +49,11 @@ class AnalysisTab:
         self.help = ipw.HTML()
         self.inputs = ipw.VBox()
         self.form_box = ipw.VBox()
-        self.name = ipw.Text(placeholder="result name (optional)", layout=ipw.Layout(width="260px"))
+        self.name = ipw.Text(placeholder="result name", layout=ipw.Layout(width="260px"))
         self.each = ipw.Checkbox(
-            value=False,
-            indent=False,
-            description="Run on each selected object (a batch: one run per object)",
+            value=False, indent=False, description="Run on each selected object"
         )
+        set_tooltip(self.each, "a batch: one run per selected object")
         self.run_button = ipw.Button(
             description="Run", button_style="success", icon="play", layout=ipw.Layout(width="110px")
         )
@@ -135,7 +132,9 @@ class AnalysisTab:
             return
         op = find(key)
         self.title.value = f"<h3 style='margin:4px 0'>{html.escape(op.label)}</h3>"
-        self.help.value = f"<div style='max-width:760px'>{html.escape(op.help)}</div>"
+        self.help.value = (
+            f"<div style='max-width:760px;color:#555;font-size:12px'>{html.escape(op.help)}</div>"
+        )
         form = self.forms.get(key)
         if form is None:
             form = Form(op, self.app.ws)
@@ -184,7 +183,7 @@ class AnalysisTab:
             self.input_widgets.append(widget)
             rows.append(widget)
         if not op.inputs:
-            rows.append(ipw.HTML("<i>a calculator: no input object</i>"))
+            rows.append(ipw.HTML("<i>none</i>"))
         self.inputs.children = rows
         self.each.layout.display = "" if op.inputs and not op.inputs[0].many else "none"
         self._first_changed()

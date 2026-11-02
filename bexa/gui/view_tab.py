@@ -23,6 +23,7 @@ import xarray as xr
 from bexa._log import get_logger
 from bexa.gui.drawing import CMAPS, CurveOptions, ImageOptions, draw_curves, draw_image, draw_rgb
 from bexa.gui.figures import FigurePane
+from bexa.gui.forms import set_tooltip
 from bexa.workspace.objects import DataObject, has_pixel_dims
 
 log = get_logger(__name__)
@@ -213,20 +214,14 @@ class ViewTab:
         )
         self.draw.observe(lambda c: self._draw_mode(c["new"]), names="value")
         self.line.observe(lambda c: self._line_mode(c["new"]), names="value")
-        hint = (
-            ""
-            if self.pane.interactive
-            else (
-                "<span style='color:#757575;font-size:11px'>no ipympl: type the ranges; the Line "
-                "Profile operation takes typed points</span>"
-            )
+        set_tooltip(
+            self.roi_ranges,
+            "pixel ranges: full-detector pixels, end excluded; motor ranges: values"
+            + ("" if self.pane.interactive else " (no ipympl: type them)"),
         )
         return ipw.VBox(
             [
-                ipw.HTML(
-                    "<b>ROIs</b> <span style='color:#757575;font-size:11px'>pixel ranges are "
-                    "full-detector pixels (end excluded); motor ranges are values</span> " + hint
-                ),
+                ipw.HTML("<b>ROIs</b>"),
                 ipw.HBox(
                     [
                         self.roi_list,
@@ -273,7 +268,7 @@ class ViewTab:
         self.roi_list.options = list(self.app.ws.rois)
         if not objects:
             self._key = None
-            self.title.value = "<i>select an object in the list on the left</i>"
+            self.title.value = "<i>select an object</i>"
             self._visible(False, False)
             self.figure_box.layout.display = "none"
             self.table.value = ""
@@ -281,26 +276,32 @@ class ViewTab:
         main = objects[0]
         key = (main.name, main.kind, main.shape)
         if key != self._key:
+            same = self._key is not None and self._key[:2] == key[:2]  # a scan that grew
             self._key = key
-            self._build(main)
+            self._build(main, keep=same)
         self.redraw()
 
     def _visible(self, image: bool, curves: bool) -> None:
         self.image_options.layout.display = "" if image else "none"
         self.curve_options.layout.display = "" if curves else "none"
 
-    def _build(self, main: DataObject) -> None:
-        """The controls for one object: mode, member scan, image dims, sliders."""
+    def _build(self, main: DataObject, keep: bool = False) -> None:
+        """The controls for one object: mode, member scan, image dims, sliders.
+
+        ``keep``: the same object again (a scan being written grew), whose mode
+        and member scan stay as they were.
+        """
         self._syncing = True
         try:
             modes = MODES.get(main.kind, ("default",))
+            mode, member = self.mode.value, self.member.value
             self.mode.options = modes
-            self.mode.value = modes[0]
+            self.mode.value = mode if keep and mode in modes else modes[0]
             self.mode.layout.display = "" if len(modes) > 1 else "none"
             self.member.layout.display = "" if main.kind == "scanset" else "none"
             if main.kind == "scanset":
                 self.member.options = [(label, k) for k, label in enumerate(main.data.labels)]
-                self.member.value = 0
+                self.member.value = member if keep and member in range(len(main.data)) else 0
             volume = main.kind == "volume"
             self.row_dim.layout.display = self.col_dim.layout.display = "" if volume else "none"
             if volume:
@@ -328,14 +329,17 @@ class ViewTab:
         import ipywidgets as ipw
 
         old = {d: s.value for d, s in self.sliders.items()}
+        at_end = {d for d, s in self.sliders.items() if s.max > 0 and s.value == s.max}
         self.sliders = {}
         rows = []
         for dim, values in self._slider_dims(main):
             last = max(len(values) - 1, 0)
+            # a slider left at its last point follows a scan being written
+            start = last if dim in at_end else min(old.get(dim, len(values) // 2), last)
             slider = ipw.IntSlider(
                 min=0,
                 max=last,
-                value=min(old.get(dim, len(values) // 2), last),
+                value=start,
                 description=dim,
                 continuous_update=self.pane.interactive,
                 layout=ipw.Layout(width="60%"),

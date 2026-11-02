@@ -1,4 +1,4 @@
-"""Forms made from the catalog: one field per setting, its help under it, values checked.
+"""Forms made from the catalog: one field per setting, its help in the tooltip, values checked.
 
 A :class:`Form` turns an :class:`bexa.workspace.catalog.Op` into widgets: text
 fields for numbers (empty means "not given" for optional ones), checkboxes,
@@ -107,14 +107,7 @@ class Form:
                 continue
             widget = self._widget(p, style, wide)
             self.fields[p.name] = widget
-            parts = [widget]
-            if p.help:
-                note = ipw.HTML(
-                    f"<div style='color:#6b6b6b;font-size:11px;margin:-2px 0 4px 196px'>"
-                    f"{html.escape(p.help)}</div>"
-                )
-                parts.append(note)
-            rows.extend(parts)
+            rows.append(widget)
         if not rows:
             rows.append(ipw.HTML("<i>no settings</i>"))
         self.box = ipw.VBox(rows, layout=ipw.Layout(width="100%"))
@@ -122,14 +115,14 @@ class Form:
 
     def _widget(self, p: P, style: dict[str, str], layout: Any) -> Any:
         widget = self._make(p, style, layout)
-        set_tooltip(widget, p.help or p.label)
+        set_tooltip(widget, p.help or p.label)  # the help shows when the mouse rests on it
         return widget
 
     @staticmethod
     def _make(p: P, style: dict[str, str], layout: Any) -> Any:
         import ipywidgets as ipw
 
-        label = p.label + ("" if not p.optional or p.kind in ("bool",) else " (optional)")
+        label = p.label
         common = {"description": label, "style": style, "layout": layout}
         if p.kind == "bool":
             return ipw.Checkbox(value=bool(p.default), indent=True, **common)
@@ -154,6 +147,8 @@ class Form:
             box.low, box.high = low, high  # type: ignore[attr-defined]
             return box
         placeholder = {"numbers": "1, 2.5, 4", "ints": "0-3, 7"}.get(p.kind, "")
+        if p.optional and not placeholder:
+            placeholder = "optional"
         return ipw.Text(value=p.text(p.default), placeholder=placeholder, **common)
 
     # ------------------------------------------------------------------ choices

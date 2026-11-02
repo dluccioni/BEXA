@@ -197,15 +197,37 @@ class Workspace:
     def close(self) -> None:
         """Close the files of every scan (they reopen by themselves when read again)."""
         for obj in self.objects.values():
-            scans = (
-                [obj.data]
-                if obj.kind == "scan"
-                else obj.data.scans
-                if obj.kind == "scanset"
-                else []
-            )
-            for scan in scans:
+            for scan in _scans_of(obj):
                 scan.close()
+
+    def refresh(self, names: Sequence[str] | None = None) -> list[str]:
+        """Read again the scans still being written (of every object, or of the named ones).
+
+        A scan that was running, or had nothing to read yet, when it was last
+        read gets its new points; finished scans are left alone (their files do
+        not change any more). Objects made from a scan keep what they were made
+        from: run the operation again. Not logged, since a script reads the
+        files as they are when it runs. Returns the names of the objects that
+        changed.
+        """
+        from bexa.core.status import FINISHED
+
+        changed = []
+        for name in list(self.objects) if names is None else list(names):
+            obj = self[name]
+            grew = False
+            for scan in _scans_of(obj):
+                before = _reading(scan)
+                if before[0] in FINISHED:
+                    continue
+                scan.refresh()
+                grew = _reading(scan) != before or grew
+            if grew:
+                if obj.kind == "scan":
+                    obj.meta.update(_scan_meta(obj.data))
+                self._emit("changed", name=obj.name)
+                changed.append(obj.name)
+        return changed
 
     # --------------------------------------------------------------------- ROIs
     def set_roi(self, name: str, roi: ROI | Mapping[str, Any] | None = None, **ranges: Any) -> ROI:
@@ -668,6 +690,21 @@ def _names_of(item: Any) -> Any:
 
 def _scan_name(scan: Any) -> str:
     return _clean(scan_label(scan).replace(" #", "_"))
+
+
+def _scans_of(obj: DataObject) -> list[Any]:
+    """The scans an object reads from: its scan, the scans of a scan set, or none."""
+    if obj.kind == "scan":
+        return [obj.data]
+    return list(obj.data.scans) if obj.kind == "scanset" else []
+
+
+def _reading(scan: Any) -> tuple[Any, int]:
+    """A scan's status and frame count, which change as a scan being written grows."""
+    try:
+        return scan.status, scan.n_frames
+    except (OSError, KeyError, ValueError):  # nothing to read yet
+        return None, 0
 
 
 def _scan_meta(scan: Any) -> dict[str, Any]:

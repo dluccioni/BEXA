@@ -1317,10 +1317,12 @@ def make_aps_session(
     ``scans`` holds ``(number, command, options)``: SPEC step scans (``ascan``,
     ``a2scan``, whose motors step together) and ``loopscan`` (frames only).
     The options are ``partial`` (points not taken: the scan ends with SPEC's
-    "aborted" comment), ``frames=False`` (rows without frames, as a copy of
-    the session without its TIFFs), ``missing`` (point numbers whose frame
-    is left out) and ``step=True`` (the spot brightens in a blurred step
-    mid-scan instead of peaking there, as in a pump-probe delay scan). Every
+    "aborted" comment), ``running=True`` with ``partial`` (the points not taken
+    yet and no comment: SPEC is still writing the scan), ``frames=False`` (rows
+    without frames, as a copy of the session without its TIFFs), ``missing``
+    (point numbers whose frame is left out) and ``step=True`` (the spot
+    brightens in a blurred step mid-scan instead of peaking there, as in a
+    pump-probe delay scan). Every
     frame holds a Gaussian spot whose centre moves with the first motor and
     whose intensity peaks mid-scan; the ``r1`` and ``r5`` counter columns are
     the frame's total, ``Rmax`` its brightest pixel.
@@ -1367,7 +1369,7 @@ def make_aps_session(
         values = {m.name: np.linspace(m.start, m.stop, n) for m in cmd.motors}
         recorded = n - int(options.get("partial", 0))
         missing = {int(i) for i in options.get("missing", ())}
-        if cmd.motors:
+        if cmd.motors and recorded:  # none recorded: a scan SPEC has just started
             lead = values[cmd.motors[0].name][:recorded]
             span = max(float(lead.max() - lead.min()), 1e-9)
             rel = (lead - lead.mean()) / span  # -0.5 .. 0.5 over the scan
@@ -1421,7 +1423,7 @@ def make_aps_session(
             monitor = 56000 + int(rng.integers(-100, 100))
             row += [epoch + 2 * i, 1, monitor, 0, 360000, totals[i], peaks[i], totals[i]]
             lines.append(" ".join(f"{v:g}" for v in row))
-        if recorded < n:
+        if recorded < n and not options.get("running"):
             lines.append(f"#C {date}.  Scan aborted after {recorded} points.")
         lines.append("")
         out.scans[number] = command

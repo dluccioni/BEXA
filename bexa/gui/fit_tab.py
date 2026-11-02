@@ -158,9 +158,7 @@ class FitTab:
             layout=ipw.Layout(width="200px"),
         )
         self.high = ipw.Text(placeholder="to", layout=ipw.Layout(width="110px"))
-        self.use_sigma = ipw.Checkbox(
-            value=True, description="weight by the uncertainties", indent=False
-        )
+        self.use_sigma = ipw.Checkbox(value=True, description="weight by errors", indent=False)
         self.background = ipw.Dropdown(
             options=BACKGROUND_NAMES,
             value="linear",
@@ -222,9 +220,8 @@ class FitTab:
                         ipw.HBox([self.n_guess, self.guess_shape, guess]),
                         ipw.HBox([add, self.click, draw_start]),
                         ipw.HTML(
-                            "<b>Peaks</b> <span style='color:#757575;font-size:11px'>"
-                            "value (empty: guessed), "
-                            "min, max, fixed; centre and FWHM in x units, amplitude = height</span>"
+                            "<b title='value (empty: guessed), min, max, fixed; centre and FWHM "
+                            "in x units, amplitude = height'>Peaks</b>"
                         ),
                         self.peak_box,
                         ipw.HBox([fit, series]),

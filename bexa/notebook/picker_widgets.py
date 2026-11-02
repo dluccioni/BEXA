@@ -36,10 +36,6 @@ CSS = (
     "<style>.bexa-mono select, .bexa-mono option { font-family: monospace; font-size: 12px; }"
     " .bexa-head button { font-weight: bold; font-family: monospace; font-size: 12px; }</style>"
 )
-HINT = (
-    "<span style='color:#757575;font-size:11px'>no widgets? run bin/esrf_setup.sh with "
-    "BEXA_LINK_LABEXTENSIONS=1, or ScanPicker(..., interactive=False) and select in code</span>"
-)
 
 
 class PickerWidgets:
@@ -151,13 +147,13 @@ class PickerWidgets:
         motor_box = ipw.VBox(
             [
                 ipw.HTML(
-                    "<b>1. motors to extract</b> <span style='color:#757575'>(pressed = "
-                    "extracted; the defaults are what bexa detects)</span>"
+                    "<b title='pressed = extracted; the defaults are what bexa detects'>"
+                    "1. motors to extract</b>"
                 ),
                 self.motor_row,
                 ipw.HTML(
-                    "<b>2. roles</b> <span style='color:#757575'>(one motor is the stack axis, "
-                    "every other extracted motor is a scan axis)</span>"
+                    "<b title='one motor is the stack axis, every other extracted motor a "
+                    "scan axis'>2. roles</b>"
                 ),
                 self.roles_row,
             ],
@@ -173,7 +169,6 @@ class PickerWidgets:
                 self.body,
                 self.panels[0].box,
                 motor_box,
-                ipw.HTML(HINT),
             ]
         )
         self.box.add_class("bexa-mono")

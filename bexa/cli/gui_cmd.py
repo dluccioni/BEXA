@@ -11,7 +11,7 @@ def register(app: typer.Typer) -> None:
     @app.command("gui")
     def gui(
         root: Path | None = typer.Argument(
-            None, help="The folder the Data and Browse tabs start from."
+            None, help="The folder to work in; it may hold no scan yet."
         ),
         workspace: Path | None = typer.Option(
             None, "--workspace", "-w", exists=True, help="A saved workspace to continue."

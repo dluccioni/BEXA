@@ -236,6 +236,7 @@ class Dataset:
         # the table rows and the problems of the scans that could not be read, by (folder, number)
         self._rows: dict[tuple[int, int], dict[str, Any]] = {}
         self._problems: dict[tuple[int, int], str] = {}
+        self._warned: dict[tuple[int, int], str] = {}  # logged once, not at every refresh
 
     # ------------------------------------------------------------- basics
     @property
@@ -406,7 +407,9 @@ class Dataset:
                     except ScanNotReadyError as exc:
                         row = placeholder_row(scan_id, number, exc.status, name)
                         self._problems[(k, number)] = str(exc)
-                        log.warning("%s", exc)
+                        if self._warned.get((k, number)) != str(exc):
+                            self._warned[(k, number)] = str(exc)
+                            log.warning("%s", exc)
                     self._rows[(k, number)] = row
                 rows.append({**row, "id": scan_id})
             self._table = arrange(rows)

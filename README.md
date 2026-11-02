@@ -588,6 +588,8 @@ the h5web viewer inside JupyterLab plots them directly.
   `python -m bexa scan list FOLDER` prints the same table from the shell.
 - A scan that is still being written can be opened; `scan.refresh()` (or re-opening) picks up
   the new frames and `scan.info()` says its status and how many planned frames are missing.
+  In the GUI, Refresh on the Data tab does it for every opened scan (`Workspace.refresh`), and
+  its auto toggle every 10 s: the View follows the scan as it grows.
 - `python -m bexa scan preview ... --plot` right after each scan is the quickest check that the
   reflection sits inside the rocking range.
 - Keep paths in the profile, not in notebooks: with `path_aliases` the same notebook runs on
@@ -618,7 +620,7 @@ app  # the last line of the cell shows it
 
 | Tab | What it does |
 |---|---|
-| Data | open a path (the layout is sniffed) as one scan, every scan of a dataset or one scan set; the scan picker of a beamtime folder, its selection added as scans, a scan set or a series; a beamtime profile; demo data |
+| Data | the folder to work in, scans or not yet: the scan picker of its datasets (running scans included), its selection added as scans, a scan set or a series; Refresh (or auto, every 10 s) lists new scans and reads the new points of the opened scans still being written; open a path (the layout is sniffed) as one scan, every scan of a dataset or one scan set; a beamtime profile; demo data |
 | Browse | walk folders and look inside files before opening anything: HDF5/NeXus trees with shapes, chunks, compression and attributes and a preview of one slice at a time, SPEC sessions (scans, headers, columns), TIFF tags, arrays, text; load any dataset or slice as an object |
 | View | a scan's raw frames with a slider per motor (one frame read per move), stacks, images and maps on their coordinates (colour map, limits, log, ROIs), curves overlaid with error bars and fits, maps as curves, volumes, colour pictures, tables; ROIs typed or drawn; line profiles; the value under the mouse; 3-D rendering of a stack |
 | Analysis | every operation of `bexa.workspace.catalog` (Extract, Process, Combine, Multi-scan, Fit, Imaging, XRD, XRR, Calculators), each with its help, its inputs and a form; Run in the background; "Run on each selected object" for a batch |
@@ -1524,8 +1526,8 @@ A pandas DataFrame with one row per scan: `id` (`dataset` next, for several fold
 `frames`, `missing` (grid points without a frame, or planned frames not taken), `energy_keV`,
 then one column per positioner recorded in the master file (`samz`, `ccmth`, `phi`, ...). A
 scan that cannot be read yet (running without a frame, empty, unreadable) keeps a row with its
-status and nothing else, its reason goes to `problems` and one warning is logged: one such
-scan never hides the others. Built once and kept; `refresh=True` looks at the folders again
+status and nothing else, its reason goes to `problems` and one warning is logged (once, not
+again at every refresh): one such scan never hides the others. Built once and kept; `refresh=True` looks at the folders again
 first (`refresh`). `compact=True` drops the positioner columns that never change or change by
 less than the spec's `motors.min_step` (drift), a motor also listed under an alias, the
 followers of a motor that steps (`samz` when `uz` does; the spec's `motors.coupled`), the
@@ -3873,7 +3875,11 @@ areaDetector TIFF per point, `<session>_S004_00012.tif`: at the beamline in a fo
 both, tried in that order). The rows are the per-frame motor and counter values, the TIFFs the
 frames; a point whose frame was not saved (or not copied along) is a missing frame whose motors
 and counters stay in `point_table()`, a scan SPEC aborted (`#C ... Scan aborted after N
-points.`) reports the points it planned, and the file is parsed once per process. The camera is
+points.`) reports the points it planned, and the file is parsed once per process (again when
+it changes). The session's last scan, short of its points and not closed yet (no abort
+comment, `#R` or `#UXML` line), is running: it opens and reads as far as SPEC has written it,
+`refresh()` reads it again, and a frame written before its data row waits for the row without
+a warning. A scan short of its points is aborted once the next one starts. The camera is
 the EIGER2 Si 500K of 7-ID-C (512 x 1028 uint32, 75 um pixels); a pixel at the detector's
 `invalid_value`, the 2**32 - 1 the EIGER writes for a dead or masked pixel, reads as 0.
 `bexa.open(folder, scan=4)`, `bexa.open(frame.tif)` and `bexa.open_dataset(folder)` all work; a
@@ -3983,13 +3989,14 @@ log["started"].iloc[0], log["mono_Energy"].iloc[0]   # (Timestamp('2025-07-30 18
 ```
 
 #### `SpecScan`
-`bexa.io.engines.spec_tiff.SpecScan(number, command, date="", labels=<factory>, rows=<factory>, positions=<factory>, header=<factory>, comments=<factory>, aborted=False, lines=(0, 0))`
+`bexa.io.engines.spec_tiff.SpecScan(number, command, date="", labels=<factory>, rows=<factory>, positions=<factory>, header=<factory>, comments=<factory>, aborted=False, lines=(0, 0), ended=False)`
 
 One scan of the file: its `number` and `command` (the `#S` line, whitespace normalised), `date`,
 the `#L` `labels` and the data `rows` (`(n_rows, n_columns)`), the `positions` (`#P`, by
 mnemonic), the `header` (`{block: {field: value}}` from the `#U_` lines), the `#C` `comments`,
-`aborted` (SPEC's "aborted" comment) and the `lines` of the file it spans. `n_rows` is the number
-of points recorded and `column(label)` one data column.
+`aborted` (SPEC's "aborted" comment), the `lines` of the file it spans and `ended` (SPEC closed
+the scan: the abort comment, a `#R` or `#UXML` line; a scan without one may still be running).
+`n_rows` is the number of points recorded and `column(label)` one data column.
 
 ```python
 # parsed.scans[2]: ascan phi 8.8 9.8 8 1 of the synthetic session
@@ -8868,6 +8875,11 @@ without an entry of their own:
 - `set_notes(name, text)`: the notes of an object.
 - `clear()`: remove every object and ROI (the log stays).
 - `close()`: close the files of every scan (they reopen by themselves when read again).
+- `refresh(names=None)`: read again the scans still being written, of every object or of the
+  named ones (a scan set's scans too): a scan that was running, or had nothing to read yet,
+  gets its new points; finished scans are left alone, and objects made from a scan keep what
+  they were made from (run the operation again). Emits `changed` for each object that grew
+  and returns their names; not logged, since a script reads the files as they are.
 - `remove_roi(name)`: forget a named ROI.
 - `roi(name)`: a named ROI (`ValueError` naming those defined).
 - `demo(kind="mosa")`: synthetic data from `bexa.demo` as a scan, or a scan set for the z-stack and alignment demos.
@@ -10868,11 +10880,12 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 #### `App`
 `bexa.gui.app.App(root=None, workspace=None, *, background=True, figures="auto", cache=True)`
 
-The GUI. `root` starts the Data tab's picker and the Browse tab;
+The GUI. `root` is the folder to work in (`DataTab.use_folder`), scans or not yet;
 `workspace` continues an existing workspace; `background=False` runs every job in the calling
 thread (scripts, tests); `figures` is `"auto"`, `"interactive"` or `"static"`. Its parts are
 attributes: `objects` (`ObjectsPanel`), `data`, `browse`, `view`, `analysis`, `fit`, `convert`,
-`log` (the tabs), `jobs` (`bexa.workspace.jobs.JobRunner`), `tabs`, `box` (what the cell shows).
+`log` (the tabs), `jobs` (`bexa.workspace.jobs.JobRunner`), `tabs`, `box` (what the cell shows),
+`folder` (the folder worked in, or `None`).
 Members:
 
 - `current`: Property: the first selected object.
@@ -10881,7 +10894,8 @@ Members:
 - `show_tab(name)`: show a tab by its title.
 - `say(text, kind="info")`: a message under the header (`kind` `info`, `ok` or `error`, in red).
 - `guarded(function, show=None)`: run a callable now; a failure becomes a red message instead of a traceback.
-- `submit(label, function, done=None)`: run a callable in the background; `done(result)` follows in the main thread.
+- `submit(label, function, done=None, *, quiet=False)`: run a callable in the background; `done(result)` follows in the main thread. `quiet`: no message when it starts (the header still shows the job).
+- `later(seconds, function)`: run a callable in the main thread in `seconds`, through the kernel's loop; `None` without one. `cancel_later(handle)` takes it back.
 - `run_op(key, inputs, values, name=None, then=None)`: run an operation of the catalog in the background; its results are selected and drawn, then `then(results)`.
 - `data_path(path)`: put a path in the Data tab and show it.
 - `set_workspace(workspace)`: continue with another workspace (an opened file).
@@ -11016,11 +11030,11 @@ without voila, `ImportError` saying what to install. `command` replaces the Voil
 its `{notebook}`, `{port}` and `{token}` filled in.
 
 ```python
-# without voila the message says what to install
+# a server that stops at once: the error carries the end of its log
 try:
-    window.start("X:/beamtime/RAW_DATA").stop()
-except ImportError as exc:
-    print(exc)                                  # the GUI window needs voila: pip install voila (or use the GUI in a notebook)
+    window.start(command=[sys.executable, "-c", "raise SystemExit('no notebook here')"])
+except RuntimeError as exc:
+    str(exc).splitlines()                       # ['the GUI server stopped at its start:', 'no notebook here']
 ```
 
 #### `serve`
@@ -11088,7 +11102,7 @@ interactive_backend()                           # False
 A `Form` turns an operation of `bexa.workspace.catalog` into widgets: a text field per number
 (empty means "not given" for an optional one), checkboxes, drop-downs for choices, objects, ROIs,
 dims and channels (refreshed from the workspace and the first input), two fields for a range,
-each with its help under it.
+each with its help as its tooltip.
 
 ```python
 from bexa.gui.forms import Form, kind_label, object_options, set_tooltip
@@ -11272,11 +11286,15 @@ app.objects.listing.options                     # ()
 
 ### bexa.gui.data_tab: opening data
 
-The Data tab: a path sniffed against every format spec and opened as one scan, every scan of
-a dataset, a scan set, or loaded as objects (scans named by number open whatever their status, so
-a SPEC scan whose frames were not copied opens with its counters); the scan picker (`bexa.notebook.ScanPicker`) of a
-beamtime folder, its selection added as scans, a scan set or a series; a beamtime profile and a
-sample; demo data.
+The Data tab: the folder to work in, any existing folder, scans or not yet (a beamtime folder
+before its first scan): the scan picker (`bexa.notebook.ScanPicker`) lists its datasets once
+there are any, running scans included, and its selection is added as scans, a scan set or a
+series; Refresh looks again and reads the new points of the opened scans still being written,
+auto does it every 10 s. A path is sniffed against every format spec and opened as one scan,
+every scan of a dataset (complete, aborted or running), a scan set, or loaded as objects (scans
+named by number open whatever their status, so a SPEC scan whose frames were not copied opens
+with its counters); a folder with nothing to open becomes the folder to work in. Then a
+beamtime profile and a sample; demo data.
 
 ```python
 import bexa
@@ -11289,9 +11307,17 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 #### `DataTab`
 `bexa.gui.data_tab.DataTab(app, root=None)`
 
-The tab: `path`, `scan_numbers`, `format`, `sniffed` (what
-"What is it?" found), `root` and `picker` (the scan picker once shown), `profile`, `sample`,
-`demo`. Its buttons call the workspace through `App.submit`.
+The tab: `root` (the folder field), `folder_note` (how many datasets, or none yet), `datasets`
+and `picker` (the folder's datasets and their scan picker, `None` without any), `auto` (the
+toggle), `path`, `scan_numbers`, `format`, `sniffed` (what "What is it?" found), `profile`,
+`sample`, `demo`. Its buttons call the workspace through `App.submit`. Members:
+
+- `use_folder(path)`: work in this folder, whatever it holds yet: it becomes `App.folder`, the
+  Browse tab and the path field go there, and `refresh()` lists it.
+- `refresh(quiet=False)`: in the background, the opened scans still being written read their
+  new points (`Workspace.refresh`), and the picker lists the folder's datasets and their new
+  scans; `quiet` (auto) says something only when a scan grew.
+- `stop_auto()`: stop the automatic refresh (`App.close` does).
 
 ```python
 # the folder of the scan typed and sniffed, then opened again
@@ -11299,9 +11325,22 @@ app.data.path.value = str(rock.data.files[0].parent)
 app.data._sniff()
 app.data._open(as_set=False)
 app.ws.names()                                  # ['demo_rocking', 'demo_rocking_1']
+# a beamtime folder before its first scan, then after SPEC wrote some
+import tempfile
+from pathlib import Path
+from bexa.testing import make_aps_session
+folder = Path(tempfile.mkdtemp())
+app.data.use_folder(folder)
+app.folder == folder, app.data.picker            # (True, None)
+make_aps_session(folder)
+app.data.refresh()
+app.data.datasets == [folder], app.data.picker.selectable   # (True, [1, 2, 3, 4])
 ```
 
 - `DEMO_KINDS`: the demo data sets.
+- `NO_SCANS`: the note of a folder without scans yet.
+- `LIVE`: the statuses listed and opened: complete, aborted and running.
+- `AUTO_SECONDS`: the period of the automatic refresh (10).
 
 ### bexa.gui.browse_tab: the inside of folders and files
 
@@ -11325,7 +11364,8 @@ master = next(rock.data.files[0].parent.glob("*.h5"))  # the scan's master file
 
 The tab: `path`, `listing` (the folder), `head`, `body`,
 `pane` (the preview figure), `inspector` (the `H5Inspector` or `SpecInspector` of the file shown).
-`go(folder)` lists a folder (a file: its folder, the file selected); `show_figure()`,
+`go(folder)` lists a folder (a file: its folder, the file selected); **Use this folder** makes
+the folder listed the one to work in (`DataTab.use_folder`), scans or not; `show_figure()`,
 `show_text(text)` and `show_html(markup)` fill the preview area.
 
 ```python
@@ -11451,7 +11491,9 @@ The tab: `pane`, `mode`, `member` (the scan of a set), `row_dim`
 and `col_dim` (a volume), `sliders` by dim, the image options (`cmap`, `log`, `percent`, `vmin`,
 `vmax`, `colorbar`, `show_rois`, `aspect`), the curve options (`log_y`, `errors`, `markers`,
 `normalize`, `fits`), the ROI tools (`roi_list`, `roi_name`, `roi_ranges`, `draw`, `line`).
-`refresh()` follows the selection, `redraw()` draws again.
+`refresh()` follows the selection: an object that grew (a scan being written) keeps its mode
+and member scan, and a slider at its last point moves to the new last point. `redraw()` draws
+again.
 
 ```python
 # the raw frames of the scan, then an ROI typed
@@ -12694,8 +12736,10 @@ spec.path.name, spec.n_recorded, spec.images.shape      # ('p0001.h5', 8, (8, 20
 Write an APS 7-ID session: `<root>/<name>.spec` with the 7-ID-C motor and counter lists, and
 one areaDetector TIFF per scan point, `<name>_S<scan:03d>_<point:05d>.tif`. `scans` holds
 `(number, command, options)`: SPEC step scans (`ascan`, `a2scan`) and `loopscan`; the options are
-`partial` (points not taken, with SPEC's "aborted" comment), `frames=False` (rows without frames,
-as a session copied without its TIFFs), `missing` (point numbers whose frame is left out) and
+`partial` (points not taken, with SPEC's "aborted" comment), `running=True` with `partial`
+(the points not taken yet and no comment: SPEC still writes the scan; `partial` equal to the
+points: just started, no row yet), `frames=False` (rows without frames, as a session copied
+without its TIFFs), `missing` (point numbers whose frame is left out) and
 `step=True` (the spot brightens in a blurred step mid-scan instead of peaking there, as in a
 pump-probe delay scan). Every frame holds a Gaussian spot whose centre moves with the first motor
 and whose intensity peaks mid-scan; the `r1` and `r5` counter columns are the frame's total,
@@ -15346,8 +15390,9 @@ plots.get("com_with_contours")                  # function
 `bexa.core.registry.load_builtins()`
 
 Imports `bexa.io.engines` and `bexa.core.reductions` once, registering the built-in engines and
-accumulators; an engine whose optional dependency is missing (`extra_data`) is skipped. Call it
-before `len()` or `in` on a registry.
+accumulators; an engine whose optional dependency is missing (`extra_data`) is skipped.
+Thread-safe: a lookup in another thread waits until every built-in has registered, instead of
+finding the registry still empty. Call it before `len()` or `in` on a registry.
 
 ```python
 # every built-in engine and accumulator registered; the engine names
@@ -16721,7 +16766,8 @@ App on 127.0.0.1 behind a token, Edge or Chrome shows it as an application windo
 (`pip install voila`); without it, or when the server cannot start, it says why and exits with
 code 1.
 
-- `ROOT` (optional): the folder the Data and Browse tabs start from.
+- `ROOT` (optional): the folder to work in (the Data tab's folder, where Browse starts); it may
+  hold no scan yet.
 - `--workspace PATH` / `-w PATH`: a saved workspace (`Workspace.save`) to continue.
 - `--port INTEGER` (default 0: a free one): the port to serve on.
 - `--window` / `--no-window` (default `--window`): an application window; `--no-window` prints the

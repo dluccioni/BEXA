@@ -16,6 +16,7 @@ Examples
 from __future__ import annotations
 
 import importlib
+import threading
 from collections.abc import Callable, Iterator
 from typing import Generic, TypeVar
 
@@ -91,16 +92,29 @@ def register_plot(name: str | None = None, replace: bool = False):
 
 _BUILTIN_MODULES = ("bexa.io.engines", "bexa.core.reductions")
 _loaded = False
+_loading = False
+_LOCK = threading.RLock()
 
 
 def load_builtins() -> None:
-    """Import the modules that register the built-in engines and accumulators."""
-    global _loaded
+    """Import the modules that register the built-in engines and accumulators.
+
+    Thread-safe: a lookup in another thread waits until every built-in has
+    registered, instead of finding the registry still empty.
+    """
+    global _loaded, _loading
     if _loaded:
         return
-    _loaded = True
-    for module in _BUILTIN_MODULES:
+    with _LOCK:
+        if _loaded or _loading:  # loaded meanwhile, or this thread is importing them
+            return
+        _loading = True
         try:
-            importlib.import_module(module)
-        except ImportError:  # a module is still being built or an extra is missing
-            continue
+            for module in _BUILTIN_MODULES:
+                try:
+                    importlib.import_module(module)
+                except ImportError:  # a module is still being built or an extra is missing
+                    continue
+        finally:
+            _loading = False
+        _loaded = True
