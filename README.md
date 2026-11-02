@@ -46,7 +46,7 @@ lists the everyday jobs with the function that does each.
   - Units and optics: [bexa.core.units](#bexacoreunits-physical-constants-and-unit-conversions) · [bexa.optics.conversions](#bexaopticsconversions-energy-wavelength-and-monochromator-angles) · [bexa.optics.attenuation](#bexaopticsattenuation-transmission-and-attenuation-lengths) · [bexa.optics.nist](#bexaopticsnist-nist-mass-attenuation-tables) · [bexa.optics.bragg_magnifier](#bexaopticsbragg_magnifier-asymmetric-bragg-magnifier)
   - Machinery and configuration: [bexa.core.structure](#bexacorestructure-dims-coordinates-and-frame-to-grid-mapping-of-a-scan) · [bexa.core.backend](#bexacorebackend-numpy-or-cupy-devices-memory-budget-batch-sizes) · [bexa.core.resources](#bexacoreresources-memory-and-cpus-of-the-process-slurm-cgroups) · [bexa.core.settings](#bexacoresettings-what-bexa-uses-right-now-bexasettings) · [bexa.core.cache](#bexacorecache-the-result-cache) · [bexa.core.parallel](#bexacoreparallel-threads-processes-and-prefetching) · [bexa.core.provenance](#bexacoreprovenance-provenance-attrs-and-fingerprints) · [bexa.core.registry](#bexacoreregistry-plugin-registries-for-engines-accumulators-and-plots) · [bexa.config](#bexaconfig-profiles-models-and-paths-in-one-import) · [bexa.config.loader](#bexaconfigloader-finding-loading-and-writing-beamtime-profiles) · [bexa.config.models](#bexaconfigmodels-the-fields-of-a-beamtime-profile) · [bexa.config.paths](#bexaconfigpaths-repository-cache-folder-and-path-aliases) · [bexa._log](#bexa_log-logging-and-progress-bars) · [bexa._profiling](#bexa_profiling-timing-a-block-with-cprofile-bexaprofile) · [bexa._help](#bexa_help-the-api-listing-bexahelp) · [Environment variables](#environment-variables)
 - [Command-line reference](#command-line-reference)
-  - [Global options](#global-options) · [General commands](#general-commands) · [bexa profile](#bexa-profile-beamtime-profiles-and-format-specs) · [bexa cache](#bexa-cache-the-result-cache) · [bexa scan](#bexa-scan-frame-stack-scans) · [bexa cube](#bexa-cube-laser-onoff-cubes-of-xfel-runs) · [bexa auto](#bexa-auto-the-beamtime-watcher) · [bexa crystal](#bexa-crystal-crystallography) · [bexa optics](#bexa-optics-x-ray-optics-estimates) · [bexa bench](#bexa-bench-timings-and-regressions) · [Python helpers of the command line](#python-helpers-of-the-command-line)
+  - [Global options](#global-options) · [General commands](#general-commands) · [bexa profile](#bexa-profile-beamtime-profiles-and-format-specs) · [bexa cache](#bexa-cache-the-result-cache) · [bexa scan](#bexa-scan-frame-stack-scans) · [bexa cube](#bexa-cube-laser-onoff-cubes-of-xfel-runs) · [bexa auto](#bexa-auto-the-beamtime-watcher) · [bexa crystal](#bexa-crystal-crystallography) · [bexa optics](#bexa-optics-x-ray-optics-estimates) · [bexa bench](#bexa-bench-timings-and-regressions) · [bexa gui](#bexa-gui-the-gui-in-a-window-of-its-own) · [Python helpers of the command line](#python-helpers-of-the-command-line)
 
 ## Getting started
 
@@ -657,6 +657,27 @@ fit, table = ws.run("fit_peaks", curve, shape="pseudo_voigt", background="linear
 print(ws.script())
 ```
 
+**In a window of its own.** `bexa gui RAW_DATA` (`bexa.cmd gui ...` on Windows, `bin/bexa gui
+...` on Linux) shows the same GUI without the notebook around it: Voilà runs the cell that makes
+the App and serves its widgets alone, on this computer only and behind a token, and Edge or Chrome
+shows them as an application window; closing the window stops the server and its kernel. It needs
+voila (`pip install voila`) on top of the GUI's ipywidgets and ipympl; `--workspace` continues a
+saved workspace, `--no-window` prints the address for any browser instead
+([bexa gui](#bexa-gui-the-gui-in-a-window-of-its-own), `bexa.gui.window`).
+
+```bash
+bexa gui "X:/Dresselhaus Lab/Data"                 # the window; it returns when the window is closed
+bexa gui --workspace session.bexa.h5               # continue a saved workspace
+```
+
+`docs/gui_guide.md` explains every tab with screenshots of the GUI in its window and in
+JupyterLab (`examples/17_gui_guide.ipynb` is the same guide with a live GUI on demo data);
+`docs/commands.html` lists every operation of the GUI and of `ws.run` with all its settings, the
+workspace's methods, every command line and every public function, with a search box (written by
+`tools/commands/make_command_list.py`). `examples/16_aps_7id_analysis.ipynb` explains the files
+of an APS 7-ID session line by line and analyses a whole session in a workspace, the GUI opened on
+it at the end.
+
 ## Find a function by task
 
 The everyday jobs and the functions that do them; each name has an entry in the
@@ -753,6 +774,7 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | I want to | Use | notebook 13 |
 |---|---|---|
 | everything in a GUI in a notebook: open data of any facility, browse files, view, analyse, fit, convert | `bexa.gui.App`; `examples/15_notebook_gui.ipynb` |  |
+| the same GUI in a window of its own | `bexa gui`, `bexa.gui.window.serve` |  |
 | look inside an HDF5/NeXus file, a SPEC session or a TIFF before opening it | the Browse tab (`bexa.gui.inspectors.H5Inspector`, `SpecInspector`); `bexa.io.inspect.h5_tree` |  |
 | keep results as objects that remember how they were made, and replay the session as a script | `bexa.workspace.Workspace`, `Workspace.run`, `Workspace.script`, `Workspace.save`, `Workspace.load` |  |
 | run one analysis on many scans at once | `Workspace.open_scans` (a scan set), any operation run on the set, `bexa.workspace.ops.multiscan.stack_scans` |  |
@@ -9319,15 +9341,25 @@ Analysis tab: Extract, "Projections"; in code `ws.run("projections", ...)`.
 ```
 
 #### `counters`
-`bexa.workspace.ops.extract.counters(obj, channels=None)`
+`bexa.workspace.ops.extract.counters(obj, channels=None, x=None, monitor=None, monitor_dark=0.0)`
 
-Per-frame channels (counters, monitors, readbacks) on the scan's grid: curves or maps.  Without
-`channels` every channel that is not a scanned motor is given. On the Analysis tab: Extract,
-"Counters"; in code `ws.run("counters", ...)`.
+Per-point channels (counters, monitors, readbacks) as curves or maps, without a frame read. A scan
+of one motor whose source keeps every recorded point (a SPEC scan, `source.point_table()`) gives
+curves against `x` from every row, the rows without a saved frame too: its motor by default
+(`Time` for a loop scan), or any recorded channel. Other scans give their per-frame channels on
+the motor grid (`x` is refused there: the motors are the axes). Without `channels` every channel but the scanned motors. `monitor` divides the
+other channels by a monitor channel less `monitor_dark` (its counts per second without beam)
+times the count time (the first of `COUNT_TIMES` recorded); points without beam become NaN. On
+the Analysis tab: Extract, "Counters"; in code `ws.run("counters", ...)`.
 
 ```python
-# rock: the recorded channels on the grid
+# rock: the recorded channels on the grid; an APS scan copied without its frames: every SPEC row
 [o.name for o in extract.counters(rock)]        # ['demo_rocking_elapsed_time']
+import tempfile
+from bexa.testing import make_aps_session
+frameless = ws.open_scan(make_aps_session(tempfile.mkdtemp()).root, scan=5)   # 5 rows, no frame
+(r1,) = extract.counters(frameless, channels=["r1"], monitor="IC_1", monitor_dark=100.0)
+r1.describe(), r1.meta["normalized_by"]         # ('curve phi[5] float64', 'IC_1')
 ```
 
 #### `point_table`
@@ -9452,6 +9484,8 @@ extract.channel_on_grid(mosa.data, "elapsed_time").dims  # ('chi', 'mu')
 ```
 
 - `SCAN_HOWS`: `("sum", "mean", "max", "min")`: what a scan streams.
+- `COUNT_TIMES`: the count-time channels `counters` takes a monitor's dark rate times (`"Seconds"`, `"sec"`, `"count_time"`, `"acq_time"`, `"exposure_time"`, `"integration_time"`).
+- `BOOKKEEPING`: `("point", "frame")`, the columns of a point table that number its rows.
 
 ### bexa.workspace.ops.process: one object in, a new one out
 
@@ -9929,13 +9963,30 @@ multiscan.layers(mosa, "chi").describe()        # 'scan set of 6 scans'
 
 The results of one operation run on every scan of a set
 (`per_scan[i]` for scan `i`, named `<base>_<suffix>`), stacked along `ScanSet.axis()` where they
-are arrays of one shape and dims; otherwise each kept on its own, named after its scan. What
+are arrays on one grid (`same_grid`); otherwise each kept on its own, named after its scan. What
 `Workspace.run` does with a scan set given to a single-scan operation.
 
 ```python
 # the ROI curve of every height, then stacked
 per_scan = [extract.roi_curves(DataObject("z", scan), {"peak": peak}) for scan in zset.data]
 multiscan.stack_per_scan(zset.data, per_scan, "z")[0].describe()  # 'volume samz[5] x chi[6] x mu[15] float64 +/-'
+```
+
+#### `same_grid`
+`bexa.workspace.ops.multiscan.same_grid(objects)`
+
+True when the objects are arrays with the first one's dims, shape and coordinates. Numeric
+coordinates may differ by a quarter of their smallest step (the readback jitter of one grid);
+rocking curves over other ranges, even with as many points, are other grids, which stacking would
+have put on the first one's axis.
+
+```python
+# phi steps, the same steps jittered, and the same number of steps elsewhere
+import numpy as np
+import xarray as xr
+phi = np.linspace(8.8, 9.8, 41)
+def curve(x): return DataObject("c", xr.DataArray(np.ones(41), dims=("phi",), coords={"phi": x}))
+multiscan.same_grid([curve(phi), curve(phi + 0.001)]), multiscan.same_grid([curve(phi), curve(phi - 5.2)])  # (True, False)
 ```
 
 - `STACK_QUANTITIES`: what `stack_scans` can give.
@@ -10793,7 +10844,8 @@ described                                       # 'curve mu[2] float64 +/-'
 ### bexa.gui: the notebook GUI package
 
 `bexa.gui.App` and `bexa.gui.launch` (loaded on first use, so `import bexa.gui` is cheap). The
-modules below are the app, its figures, forms and drawing, and its panels and tabs.
+modules below are the app, its window of its own (`bexa.gui.window`, `bexa gui`), its figures,
+forms and drawing, and its panels and tabs.
 
 ### bexa.gui.app: the notebook GUI
 
@@ -10857,6 +10909,136 @@ type(bexa.gui.launch(background=False, figures="static", cache=False)).__name__ 
 - `TABS`: the tab titles, in order.
 - `CSS`: the style the app adds to the page.
 - `MESSAGE_COLOURS`: the colours of `say`.
+
+### bexa.gui.window: the GUI in a window of its own
+
+`bexa gui` on the command line, or `serve` in Python: the App without the notebook around it.
+Voilà runs a one-cell notebook that makes the App and serves its widgets alone, on 127.0.0.1 with
+a token, and a Chromium browser (Edge, Chrome, Chromium) shows the page as an application window
+(`--app`: no tabs, no address bar) with a profile of its own, so the browser's process ends when
+the window closes, and the server with it. Without such a browser the page opens in the default
+browser and Ctrl+C stops the server. Needs voila (`pip install voila`).
+
+```python
+import sys
+from bexa.gui import window
+FAKE = [sys.executable, "-m", "http.server", "{port}", "--bind", "127.0.0.1"]  # a stand-in for Voila in the examples
+```
+
+#### `app_notebook`
+`bexa.gui.window.app_notebook(root=None, workspace=None, *, figures="auto", cwd=None)`
+
+The notebook Voilà runs, as a dict (nbformat 4): one cell that puts this bexa checkout on
+`sys.path`, changes to `cwd` (default: the current folder; the kernel would start in the
+notebook's temporary folder), and makes `bexa.gui.App(root, workspace=Workspace.load(workspace),
+figures)`.
+
+```python
+# the cell for a data folder
+cell = window.app_notebook("X:/beamtime/RAW_DATA")["cells"][0]["source"]
+cell.splitlines()[-2]                           # "app = bexa.gui.App(root='X:\\beamtime\\RAW_DATA', workspace=None, figures='auto')"
+```
+
+#### `find_browser`
+`bexa.gui.window.find_browser(name=None)`
+
+A Chromium browser that opens application windows: Edge, then Chrome, then Chromium, at their
+usual places (`BROWSERS`), else on the `PATH`; `name` is a path or a command to use instead.
+`None` when none is found.
+
+```python
+# this machine's
+window.find_browser()                           # WindowsPath('C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe'), or None
+```
+
+#### `free_port`
+`bexa.gui.window.free_port()`
+
+A TCP port of 127.0.0.1 that nobody listens on (the system picks it).
+
+```python
+# a port for the server
+1024 < window.free_port() < 65536               # True
+```
+
+#### `voila_command`
+`bexa.gui.window.voila_command(notebook, port, token)`
+
+The command that serves a notebook with Voilà on 127.0.0.1:`port` behind `token`: no browser of
+its own, the light theme, tracebacks shown.
+
+```python
+# the arguments after the interpreter
+from pathlib import Path
+window.voila_command(Path("bexa.ipynb"), 8866, "secret")[1:5]   # ['-m', 'voila', 'bexa.ipynb', '--no-browser']
+```
+
+#### `window_command`
+`bexa.gui.window.window_command(browser, url, profile, size=WINDOW_SIZE)`
+
+The command that opens `url` as an application window of `browser`, with the profile folder
+`profile` (with the user's own profile the browser would hand the window to its running process
+and return at once, so the window's end could not be followed).
+
+```python
+# Edge on the page, a profile of its own
+window.window_command(Path("msedge.exe"), "http://127.0.0.1:8866/?token=t", Path("profile"))[1:4]   # ['--app=http://127.0.0.1:8866/?token=t', '--user-data-dir=profile', '--window-size=1500,950']
+```
+
+#### `GuiServer`
+`bexa.gui.window.GuiServer(url, process, folder, window=None, log_file=Path())`
+
+A running GUI server (what `start` returns): `url` (with its token), `process` (Voilà),
+`folder` (the notebook, the server's log and the window's profile), `window` (the browser's
+process once opened), `log_file`. Members:
+
+- `open_window(browser=None, size=WINDOW_SIZE)`: show the page as an application window; `False` when it went to the default browser instead.
+- `running()`: whether the server still runs.
+- `wait()`: until the window closes (without one: until the server stops, or Ctrl+C).
+- `log_tail(lines=30)`: the end of the server's log.
+- `stop()`: stop the window and the server (its kernels follow) and remove the folder.
+
+```python
+# a stand-in server: started, listening, stopped
+server = window.start(command=FAKE)
+server.url.startswith("http://127.0.0.1:"), server.running()   # (True, True)
+server.stop()
+server.running(), server.folder.exists()        # (False, False)
+```
+
+#### `start`
+`bexa.gui.window.start(root=None, workspace=None, *, port=0, figures="auto", command=None)`
+
+Start the GUI server and return once it listens: writes `app_notebook` into a temporary folder,
+starts `voila_command` on `port` (0: `free_port`) with a fresh token, and waits up to
+`START_TIMEOUT` seconds. A server that stops at once raises `RuntimeError` with the end of its log;
+without voila, `ImportError` saying what to install. `command` replaces the Voilà command (tests),
+its `{notebook}`, `{port}` and `{token}` filled in.
+
+```python
+# without voila the message says what to install
+try:
+    window.start("X:/beamtime/RAW_DATA").stop()
+except ImportError as exc:
+    print(exc)                                  # the GUI window needs voila: pip install voila (or use the GUI in a notebook)
+```
+
+#### `serve`
+`bexa.gui.window.serve(root=None, workspace=None, *, port=0, window=True, browser=None, figures="auto")`
+
+What `bexa gui` runs: `start`, then the application window (`browser` names one), then waits and
+stops everything when the window is closed. `window=False` only prints the address (any browser
+on this computer; Ctrl+C stops it).
+
+```python
+# from a script: the window opens, the call returns when it is closed
+window.serve("X:/beamtime/RAW_DATA")            # bexa GUI in its window (http://127.0.0.1:...); close the window to stop
+```
+
+- `WINDOW_SIZE`: `(1500, 950)`, the window's size in pixels.
+- `START_TIMEOUT`: `60.0` seconds for Voilà to listen (the App appears about ten seconds later).
+- `NOTEBOOK_NAME`: `"bexa.ipynb"`; Voilà titles the window after the notebook.
+- `BROWSERS`: the browsers looked for, by platform (`win32`, `darwin`, `linux`), in order.
 
 ### bexa.gui.figures: figures inside the GUI
 
@@ -11091,7 +11273,8 @@ app.objects.listing.options                     # ()
 ### bexa.gui.data_tab: opening data
 
 The Data tab: a path sniffed against every format spec and opened as one scan, every scan of
-a dataset, a scan set, or loaded as objects; the scan picker (`bexa.notebook.ScanPicker`) of a
+a dataset, a scan set, or loaded as objects (scans named by number open whatever their status, so
+a SPEC scan whose frames were not copied opens with its counters); the scan picker (`bexa.notebook.ScanPicker`) of a
 beamtime folder, its selection added as scans, a scan set or a series; a beamtime profile and a
 sample; demo data.
 
@@ -16527,6 +16710,29 @@ bexa --headless bench
 bexa --headless bench --full --no-plots --real scan7_frames.npy --baselines ~/bexa/benchmarks/baselines
 ```
 
+### bexa gui: the GUI in a window of its own
+
+#### `bexa gui`
+Python: `bexa.cli.gui_cmd.register` (the command function `gui` is defined inside it), which
+calls `bexa.gui.window.serve`
+
+Opens the bexa GUI in a window of its own and returns when the window is closed: Voilà serves the
+App on 127.0.0.1 behind a token, Edge or Chrome shows it as an application window. Needs voila
+(`pip install voila`); without it, or when the server cannot start, it says why and exits with
+code 1.
+
+- `ROOT` (optional): the folder the Data and Browse tabs start from.
+- `--workspace PATH` / `-w PATH`: a saved workspace (`Workspace.save`) to continue.
+- `--port INTEGER` (default 0: a free one): the port to serve on.
+- `--window` / `--no-window` (default `--window`): an application window; `--no-window` prints the
+  address for any browser on this computer (Ctrl+C stops it).
+- `--browser TEXT`: the Chromium browser to open the window with (a path or a command).
+
+```bash
+bexa gui "X:/Dresselhaus Lab/Data"          # bexa GUI in its window (http://127.0.0.1:...); close the window to stop
+bexa gui --no-window --port 8866            # bexa GUI at http://127.0.0.1:8866/?token=... ; Ctrl+C here stops it
+```
+
 ### Python helpers of the command line
 
 The command functions take Typer option objects as defaults, so run them through the
@@ -16688,6 +16894,17 @@ Adds the `bench` command to a Typer application in the same way and returns `Non
 from bexa.cli import bench_cmd
 bench_cmd.register(app)
 sorted(c.name for c in app.registered_commands)        # ['auto', 'bench']
+```
+
+#### `gui_cmd.register`
+`bexa.cli.gui_cmd.register(app)`
+
+Adds the `gui` command to a Typer application in the same way and returns `None`.
+
+```python
+from bexa.cli import gui_cmd
+gui_cmd.register(app)
+sorted(c.name for c in app.registered_commands)        # ['auto', 'bench', 'gui']
 ```
 
 #### `CliState`
