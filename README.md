@@ -2554,26 +2554,40 @@ weight `w_f` of frame `f` at motor value `m_f`, per pixel:
 
 - `axes`: motor dims to analyse (default all).
 - `sigma`: Gaussian smoothing of every frame, in pixels, before weighting (as in the lab's
-  notebooks); 0 disables it.
+  notebooks); 0 disables it. The moment sums are smoothed instead of the frames, with the
+  same result (below).
 - `weights`: `"linear"` (the intensity) or `"log"` (`log10(1 + I)`, as v9's preview COM).
-- `clip`: weights below it are raised to it, so empty pixels do not divide by zero.
+- `clip`: a floor under every weight, so empty pixels do not divide by zero (in a batch
+  with a negative value, weights below it are raised to it).
 - `moments`: 1 gives `com_<axis>`; 2 adds `width_<axis>`; 3 adds `skew_<axis>`; 4 adds
   `kurtosis_<axis>` (excess kurtosis). `total`, the sum of the weights, is always returned.
 - `min_prominence`: leave out (NaN in every map but `total`; the attr `min_prominence` says
   so) the pixels whose peak rises above their lowest weight by less than this fraction of the
   strongest pixel's rise (`prominent`): the background, whose COM is noise. The rise is a
   pixel's highest smoothed weight over the frames less its lowest, kept as the frames come
-  (two images more, no second pass); 0 keeps every pixel and leaves the cache key as it was.
+  (two images more, no second pass): the one part that smooths every frame
+  (`bexa.core.backend.gaussian_extremes`); 0 keeps every pixel and leaves the cache key as
+  it was.
 
-The moments of a batch are formed about the middle of each motor axis, in the frames' dtype
-(float32 BLAS through `tensordot`, no float64 copy of the batch), and accumulated in float64
-across batches; the centre of mass gets the middle added back and the width, skew and kurtosis
-are unchanged by the shift, so the width of an energy series at 17 keV (a millionth of the
-value squared) keeps its precision. The smoothing goes through
-`bexa.core.backend.gaussian_frames`, in `BEXA_THREADS` threads on the CPU. On the lab
-workstation (16 cores, RTX 4090), Sum and MotorCOM(sigma=3) over 160 frames of 1024 x 1024
-take 1.6 s on the CPU (4.9 s before the threads and the dropped copy) and 0.6 s on the GPU
-(1.4 s before). `scan.com` uses it. Replaces the per-pixel loops of the `betterCOM*` notebooks.
+The frames are not smoothed one by one. The smoothing is linear, so each batch adds its
+frames to the moment sums as they are, all of them in one matrix product (`1` and the powers
+of the motor values about the middle of each axis, times the batch), and those few images are
+smoothed once at the end (`bexa.core.backend.gaussian_frames`, in `BEXA_THREADS` threads on
+the CPU): the moments of the smoothed frames. The clip becomes a floor of `clip` added under
+every weight (`w + clip` instead of `max(w, clip)`), which only an empty pixel notices: one
+with nothing but the floor gets the middle of each motor, as before; a pixel with a
+thousandth of a count or more, the same maps to float32 precision. A batch with a negative
+value (frames less a background), whose clip would matter, is smoothed and clipped frame by
+frame. The sums are formed in the frames' dtype (float32 BLAS, no float64 copy of the batch)
+and accumulated in float64 across batches; the centre of mass gets the middle added back and
+the width, skew and kurtosis are unchanged by the shift, so the width of an energy series at
+17 keV (a millionth of the value squared) keeps its precision. On the lab workstation (16
+cores, RTX 4090), the COM Maps of 369 frames of 1024 x 1024 take 1.0 s on the CPU (2.4 s
+frame by frame; reading the frames alone 0.8 s), and those of an 11 x 91 mosaicity scan of
+2048 x 2048 frames from the lab's network drive 10 s instead of 33 s; on the GPU both were
+and are as long as reading the frames (9 s for the mosaicity scan, their bitshuffle-LZ4
+decompressed in one thread by HDF5). `scan.com` uses it. Replaces the per-pixel loops of the
+`betterCOM*` notebooks.
 
 ```python
 # scan: the demo chi x mu scan; window: a pixel ROI; moments of every pixel's rocking curve
@@ -2594,8 +2608,16 @@ motors along and `("y", "x")` over are the maps of `MotorCOM`. With weights `w` 
 smoothed by `sigma` pixels, clipped to `clip`) and coordinates `c` (full-resolution pixel indices,
 or the motor values of each frame): `com = sum(w c) / sum(w)`, `width = sqrt(sum(w c^2) / sum(w)
 - com^2)`. One pass; each batch is summed over its pixel axes first, then folded into the kept
-grid points. Results: `total`, `com_<dim>` and, with `moments=2` (`1`: the COM alone, the
-second moments not summed), `width_<dim>`; a point without a frame is NaN. `min_prominence`
+grid points. As in `MotorCOM` the frames are not smoothed one by one: scipy's Gaussian
+(reflect mode) is symmetric and keeps sums, so a smoothed frame summed over a pixel dim with
+some weights is the frame summed with the weights smoothed. A batch is summed with the
+smoothed coordinate weights (along `x` one matrix product, its one pass, then along `y`), the
+pixel dims of the maps are smoothed at the end, and the clip is a floor under every weight; a
+batch with a negative value is smoothed and clipped frame by frame, and with `min_prominence`
+every frame is smoothed for its rise. The frame centres of 369 frames of 1024 x 1024 take
+0.85 s on the CPU instead of 9.9 s. Results: `total`, `com_<dim>` and, with `moments=2` (`1`:
+the COM alone, the second moments not summed), `width_<dim>`; a point without a frame is NaN.
+`min_prominence`
 leaves out (NaN but in `total`) the points whose peak rises above their lowest weight by less
 than this fraction of the strongest point's rise (`prominent`); the rise is the highest
 weight the point's COM is taken from (its frames, and its pixels along) less the lowest, a
@@ -10240,8 +10262,11 @@ intensity-weighted mean motor position (`com_<axis>`) and spread (`width_<axis>`
 "x")` of an `a x b` scan gives every frame's centre on the detector (bivariate) as `a x b`
 maps; `("mu",)` over `("chi", "x")` the rocking centre per chi and detector column. A scan
 is streamed (`MotorCOM`, or `DimCOM` for other dims), a stack, map or volume reduced in memory.
-Frames are smoothed by `sigma` pixels first (0 to switch off). `min_prominence` leaves out (NaN)
-the points whose peak rises above its lowest value by less than this fraction of the strongest
+Frames are smoothed by `sigma` pixels first (0 to switch off); in memory as in a scan, values
+without a negative one or a NaN are not smoothed themselves but their weighted sums are (one
+`einsum` pass each, in float64): the same maps, two to eight times faster. `min_prominence`
+leaves out (NaN) the points whose peak rises above its lowest value by less than this fraction
+of the strongest
 point's rise: the background, whose COM is noise (0 keeps every point). The rise is measured
 as `MotorCOM` and `DimCOM` measure it, in memory too: a point's highest smoothed weight over
 the frames (and the pixels along) less its lowest. `widths`
@@ -16165,14 +16190,29 @@ axes, numpy or cupy, the same kind back; `sigma <= 0` returns the input itself. 
 frames are split over `bexa.core.parallel.compute_threads` threads of the shared
 `bexa.core.parallel.compute_pool`: scipy's filters release the GIL, and eight threads smooth
 about five times faster than one. A single image, an integer array or a cupy array goes through
-`gaussian_filter` directly. The weights of `MotorCOM` and the `sigma` of
-`bexa.analysis.rocking.motor_com` go through it.
+`gaussian_filter` directly. The moment sums of `MotorCOM`, the maps of `DimCOM` and the `sigma`
+of `bexa.analysis.rocking.motor_com` go through it.
 
 ```python
 # frames: eight frames; each smoothed with a Gaussian of 3 pixels, in threads
 frames = np.random.default_rng(0).random((8, 64, 80), dtype=np.float32)
 smooth = backend.gaussian_frames(frames, 3.0)                 # (8, 64, 80), smoothed in threads
 backend.gaussian_frames(frames, 0) is frames                  # True
+```
+
+#### `gaussian_extremes`
+`bexa.core.backend.gaussian_extremes(frames, sigma)`
+
+The highest and the lowest value of every pixel over the frames of `(n, y, x)`, each frame
+smoothed as by `gaussian_frames`, without keeping the smoothed frames: numpy frames are
+smoothed one at a time in each of the compute threads, which keep their own highest and lowest
+values (a cupy array is smoothed at once). The rise of `MotorCOM` and of a stack's COM Maps
+with `min_prominence` goes through it.
+
+```python
+# frames: the eight frames above; every pixel's highest and lowest value, smoothed by 3 pixels
+high, low = backend.gaussian_extremes(frames, 3.0)
+high.shape, bool((high >= low).all())          # ((64, 80), True)
 ```
 
 #### `median_frames`

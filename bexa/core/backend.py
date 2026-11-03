@@ -205,6 +205,38 @@ def gaussian_frames(frames: Any, sigma: float) -> Any:
     return out
 
 
+def gaussian_extremes(frames: Any, sigma: float) -> tuple[Any, Any]:
+    """The highest and the lowest value of every pixel over the frames of ``(n, y, x)``, each
+    frame smoothed as by :func:`gaussian_frames`, without keeping the smoothed frames.
+
+    numpy frames are smoothed one at a time in each of the compute threads, which keep
+    their own highest and lowest values; a cupy array is smoothed at once.
+    """
+    if is_cupy_array(frames) or frames.ndim != 3 or frames.dtype.kind != "f" or sigma <= 0:
+        smoothed = gaussian_frames(frames, sigma)
+        return smoothed.max(axis=0), smoothed.min(axis=0)
+    from scipy.ndimage import gaussian_filter
+
+    from bexa.core.parallel import compute_pool, compute_threads
+
+    def extremes(part: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        smoothed = np.empty(part.shape[1:], part.dtype)
+        high = np.full(part.shape[1:], -np.inf, part.dtype)
+        low = np.full(part.shape[1:], np.inf, part.dtype)
+        for frame in part:
+            gaussian_filter(frame, sigma, output=smoothed)
+            np.maximum(high, smoothed, out=high)
+            np.minimum(low, smoothed, out=low)
+        return high, low
+
+    threads = min(compute_threads(), frames.shape[0])
+    bounds = np.linspace(0, frames.shape[0], threads + 1).astype(int)
+    pool = compute_pool()
+    futures = [pool.submit(extremes, frames[a:b]) for a, b in itertools.pairwise(bounds) if b > a]
+    parts = [future.result() for future in futures]
+    return np.maximum.reduce([h for h, _ in parts]), np.minimum.reduce([lo for _, lo in parts])
+
+
 def median_frames(frames: Any, size: int, mode: str = "nearest") -> Any:
     """Every frame (the last two axes) median-filtered over ``size x size`` pixels (numpy or cupy).
 

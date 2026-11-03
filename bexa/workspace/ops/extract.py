@@ -308,23 +308,32 @@ def _com_stack(
     rise of a pixel is its highest smoothed weight over the frames less its lowest, as
     :class:`~bexa.core.reductions.MotorCOM` measures it."""
     from bexa.analysis.rocking import moments
-    from bexa.core.backend import gaussian_frames
+    from bexa.core.backend import gaussian_extremes
     from bexa.core.reductions import prominent
 
     data, _ = windowed(obj, roi)
+    pixels = pixel_dims(data)
     keep = None
-    if min_prominence:
-        pixels = pixel_dims(data)
+    if min_prominence:  # the extremes of the clipped weights
         frames = np.asarray(data.transpose(*other_dims(data), *pixels).values, np.float32)
-        w = np.clip(gaussian_frames(frames.reshape(-1, *frames.shape[-2:]), sigma), 1e-10, None)
-        keep = prominent(w.max(axis=0) - w.min(axis=0), min_prominence)
+        high, low = gaussian_extremes(frames.reshape(-1, *frames.shape[-2:]), sigma)
+        keep = prominent(np.clip(high, 1e-10, None) - np.clip(low, 1e-10, None), min_prominence)
+    linear = _linear(data)
     out = []
     keys = (("com", "com"), ("std", "width")) if widths else (("com", "com"),)
     for axis in along:
-        others = [d for d in other_dims(data) if d != axis]
-        summed = reduce_over(data, others, "sum").transpose(axis, *pixel_dims(data))
-        stats = moments(summed.values, _coord_values(summed, axis), axis=0, sigma=sigma)
-        template = summed.isel({axis: 0}, drop=True)
+        if linear:  # the weights summed over the other motors, then smoothed: the same sums
+            sums = _linear_com_sums(data, [axis], list(pixels), sigma, floor_dims=[axis])
+            mean1 = sums[(axis, 1)] / sums[None]
+            width = (sums[(axis, 2)] / sums[None] - mean1**2).clip(min=0) ** 0.5
+            middle = float(_coord_values(data, axis).mean())
+            stats = {"com": (mean1 + middle).values, "std": width.values}
+            template = sums[None]
+        else:
+            others = [d for d in other_dims(data) if d != axis]
+            summed = reduce_over(data, others, "sum").transpose(axis, *pixels)
+            stats = moments(summed.values, _coord_values(summed, axis), axis=0, sigma=sigma)
+            template = summed.isel({axis: 0}, drop=True)
         for key, prefix in keys:
             name = f"{prefix}_{axis}"
             values = stats[key] if keep is None else np.where(keep, stats[key], np.nan)
@@ -336,7 +345,10 @@ def _com_stack(
                     meta={"quantity": name, "motor": axis},
                 )
             )
-    total = reduce_over(data, other_dims(data), "sum").rename("total")
+    if linear:  # no NaN to skip
+        total = data.sum(other_dims(data), skipna=False, keep_attrs=True).rename("total")
+    else:
+        total = reduce_over(data, other_dims(data), "sum").rename("total")
     out.append(new(obj, total, "total", meta={"quantity": "total"}))
     return out
 
@@ -456,36 +468,120 @@ def _com_arrays(
     smoothed over the pixel dims by ``sigma`` and clipped to 1e-10, the other dims summed;
     ``min_prominence`` leaves out the points whose weights rise least (NaN), the rise
     measured as :class:`~bexa.core.reductions.DimCOM` does: the pixel dims neither along
-    nor over summed, the highest weight over the rest less the lowest."""
+    nor over summed, the highest weight over the rest less the lowest. Values without a
+    negative one or a NaN are not smoothed themselves (:func:`_linear_com_sums`)."""
     pixels = pixel_dims(data)
-    if sigma and pixels:
-        from scipy.ndimage import gaussian_filter
+    rest = [d for d in pixels if d not in along and d not in over]  # summed before the rise
+    rise = None
+    if _linear(data):
+        summed = [d for d in data.dims if d not in over]
+        sums = _linear_com_sums(data, along, over, sigma, floor_dims=summed)
+        if min_prominence:
+            v = _smooth_pixels(data.sum(rest, skipna=False) if rest else data, pixels, sigma)
+            spread = [d for d in v.dims if d not in over]
+            rise = v.max(spread) - v.min(spread)
+    else:
+        if sigma and pixels:
+            from bexa.core.backend import gaussian_frames
 
-        widths = [float(sigma) if d in pixels else 0.0 for d in data.dims]
-        data = data.copy(data=gaussian_filter(np.asarray(data.values, float), widths))
-    clipped = data.clip(min=1e-10)
-    w = clipped.sum([d for d in data.dims if d not in along and d not in over])
-    total = w.sum(along)
+            flat = np.asarray(data.values, float).reshape(-1, *data.shape[-2:])
+            data = data.copy(data=gaussian_frames(flat, sigma).reshape(data.shape))
+        clipped = data.clip(min=1e-10)
+        w = clipped.sum([d for d in data.dims if d not in along and d not in over])
+        sums = {None: w.sum(along)}
+        for d in along:
+            c = xr.DataArray(_coord_values(w, d), dims=(d,))
+            c = c - float(c.mean())  # about the middle: the second moment keeps its precision
+            sums.update({(d, 1): (w * c).sum(along), (d, 2): (w * c**2).sum(along)})
+        if min_prominence:
+            v = clipped.sum(rest) if rest else clipped
+            spread = [d for d in v.dims if d not in over]
+            rise = v.max(spread) - v.min(spread)
+    total = sums[None]
     out = {"total": total.transpose(*over).rename("total")}
     keep = None
     if min_prominence:
         from bexa.core.reductions import prominent
 
-        summed = [d for d in pixels if d not in along and d not in over]
-        v = clipped.sum(summed) if summed else clipped
-        spread = [d for d in v.dims if d not in over]
-        keep = prominent(v.max(spread) - v.min(spread), min_prominence)
+        keep = prominent(rise, min_prominence)
     for d in along:
-        c = xr.DataArray(_coord_values(w, d), dims=(d,))
-        c = c - float(c.mean())  # about the middle: the second moment keeps its precision
-        mean1 = (w * c).sum(along) / total
-        width = ((w * c**2).sum(along) / total - mean1**2).clip(min=0) ** 0.5
-        middle = float(_coord_values(w, d).mean())
+        mean1 = sums[(d, 1)] / total
+        width = (sums[(d, 2)] / total - mean1**2).clip(min=0) ** 0.5
+        middle = float(_coord_values(data, d).mean())
         if keep is not None:
             mean1, width = mean1.where(keep), width.where(keep)
         out[f"com_{d}"] = (mean1 + middle).transpose(*over).rename(f"com_{d}")
         out[f"width_{d}"] = width.transpose(*over).rename(f"width_{d}")
     return out
+
+
+def _linear(data: xr.DataArray) -> bool:
+    """Whether the weight sums of ``data`` come from its values as they are: none that the
+    clip changes (a negative one) or the sums skip (a NaN)."""
+    return bool(data.size) and bool(np.min(data.values) >= 0)
+
+
+def _linear_com_sums(
+    data: xr.DataArray,
+    along: Sequence[str],
+    over: Sequence[str],
+    sigma: float,
+    floor_dims: Sequence[str],
+) -> dict[Any, xr.DataArray]:
+    """The weight sums of a COM of ``data`` along ``along``, as maps over ``over`` (the
+    other dims summed): ``None`` the weights, ``(d, k)`` the weights times the coordinate
+    of ``d`` about its middle to the power ``k`` (1, 2). The weights are the values
+    smoothed over the pixel dims by ``sigma``, with a floor of 1e-10 under each value of
+    ``floor_dims``, for values without a negative one or a NaN.
+
+    The values are not smoothed: scipy's Gaussian (reflect mode) is symmetric and keeps
+    sums, so the coordinates of a pixel dim summed are smoothed instead, and the pixel
+    dims of the maps at the end. Each sum is one pass over the values (``einsum``).
+    """
+    from scipy.ndimage import gaussian_filter1d
+
+    pixels = pixel_dims(data)
+    summed = [d for d in data.dims if d not in over]
+    letters = dict(zip(data.dims, "abcdefghijklmnopqrstuvwxyz", strict=False))
+    kept = [d for d in data.dims if d not in summed]
+    to = "".join(letters[d] for d in kept)
+    coords = {d: data.coords[d] for d in kept if d in data.coords}
+    floor = 1e-10 * float(np.prod([data.sizes[d] for d in floor_dims]))
+
+    def weighted(dim: str | None, weight: Any = None) -> xr.DataArray:
+        spec = "".join(letters[d] for d in data.dims)
+        operands = [data.values]
+        if dim is not None:
+            spec += "," + letters[dim]
+            operands.append(weight)
+        values = np.einsum(f"{spec}->{to}", *operands, dtype=np.float64, casting="same_kind")
+        return _smooth_pixels(xr.DataArray(values, dims=kept, coords=coords), pixels, sigma)
+
+    sums = {None: weighted(None) + floor}
+    for d in along:  # each among floor_dims
+        c = _coord_values(data, d)
+        c = c - c.mean()  # about the middle: the second moment keeps its precision
+        for k in (1, 2):
+            weight = gaussian_filter1d(c**k, sigma) if d in pixels and sigma else c**k
+            sums[(d, k)] = weighted(d, weight) + floor * float(np.mean(c**k))
+    return sums
+
+
+def _smooth_pixels(da: xr.DataArray, pixels: Sequence[str], sigma: float) -> xr.DataArray:
+    """``da`` smoothed by ``sigma`` along those of ``pixels`` it has, as its frames would be;
+    both, the last two dims, over the compute threads."""
+    kept = [d for d in pixels if d in da.dims]
+    if not kept or not sigma:
+        return da
+    values = np.asarray(da.values, float)
+    if len(kept) == 2:
+        from bexa.core.backend import gaussian_frames
+
+        flat = values.reshape(-1, *values.shape[-2:])
+        return da.copy(data=gaussian_frames(flat, sigma).reshape(values.shape))
+    from scipy.ndimage import gaussian_filter1d
+
+    return da.copy(data=gaussian_filter1d(values, sigma, axis=da.get_axis_num(kept[0])))
 
 
 def _coord_values(da: xr.DataArray, dim: str) -> np.ndarray:

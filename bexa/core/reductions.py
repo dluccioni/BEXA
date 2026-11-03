@@ -9,8 +9,8 @@ running on the GPU when asked. Results are xarray objects with coordinates
 and provenance.
 
 The formulas are written once, in plain numpy or cupy, with no loops over
-pixels or frames inside a batch. Motor-weighted quantities use ``tensordot``
-over the frame axis so that no array of the full stack size is ever created.
+pixels or frames inside a batch. Motor-weighted quantities are matrix products
+over the frame axis, so that no array of the full stack size is ever created.
 """
 
 from __future__ import annotations
@@ -692,6 +692,12 @@ class MotorCOM(Accumulator):
     (``sigma`` pixels, as in the lab's notebooks) and clipping to ``clip``;
     ``weights="log"`` uses ``log10(1 + I)`` as v9's preview-based COM did.
 
+    The smoothing is linear, so the frames are not smoothed one by one: each batch
+    adds its frames to the moment sums (one matrix product for every moment), and
+    those few images are smoothed once at the end. The clip then becomes a floor of
+    ``clip`` added to every weight, which only an empty pixel notices. A batch with a
+    negative value, whose clip would matter, is smoothed and clipped frame by frame.
+
     Parameters
     ----------
     axes
@@ -709,7 +715,7 @@ class MotorCOM(Accumulator):
     """
 
     name = "motor_com"
-    live_copies = 2
+    live_copies = 1
 
     def __init__(
         self,
@@ -749,11 +755,16 @@ class MotorCOM(Accumulator):
                 f"axes {missing} are not motor dims of this scan {self.plan.motor_dims}"
             )
         shape = self.plan.window.shape
-        self.s0 = self._zeros(shape)
-        self.sums = {a: [self._zeros(shape) for _ in range(self.moments)] for a in self.use_axes}
+        # the moment sums, one image per row: the weights, then each axis' powers 1 to moments;
+        # ``raw`` sums the frames as they come and is smoothed at the end, ``smoothed`` the
+        # frames of the batches with a negative value, smoothed and clipped one by one
+        n_rows = 1 + self.moments * len(self.use_axes)
+        self.raw = self._zeros((n_rows, *shape))
+        self.smoothed: Any = None
+        self.raw_rows = np.zeros(n_rows)  # each row's motor powers summed: the clip floor's sums
         if self.min_prominence:  # every pixel's highest and lowest weight
-            self.peak = self._zeros(shape)
-            self.floor = self.xp.full(shape, self.xp.inf, dtype=self.s0.dtype)
+            self.peak = self.xp.full(shape, -self.xp.inf, dtype=self.dtype)
+            self.floor = self.xp.full(shape, self.xp.inf, dtype=self.dtype)
         # motor values are taken from the middle of each axis: the moments of a batch are then
         # formed in the frames' dtype (float32 BLAS, no float64 copy of the batch) without
         # losing the width, which for an energy of 17 keV is 1e-6 of the value squared
@@ -762,60 +773,77 @@ class MotorCOM(Accumulator):
             for a in self.use_axes
         }
 
-    def _weights(self, frames: Any) -> Any:
+    def _rows(self, frame_ids: np.ndarray) -> np.ndarray:
+        """``(rows, n)``: each frame's factor in every moment sum, 1 and then the powers of
+        its motor values about the origin."""
+        rows = [np.ones(len(frame_ids))]
+        for axis in self.use_axes:
+            m = np.asarray(self.plan.motor_values(axis, frame_ids), dtype=np.float64)
+            rows += [(m - self.origin[axis]) ** k for k in range(1, self.moments + 1)]
+        return np.stack(rows)
+
+    def update(self, frames: Any, frame_ids: np.ndarray) -> None:
         xp = self.xp
         w = frames if frames.dtype.kind == "f" else frames.astype(self.dtype)
         if self.weights == "log":
             w = xp.log10(1.0 + xp.clip(w, 0, None))
-        w = backend.gaussian_frames(w, self.sigma)  # threads on the CPU
-        return xp.clip(w, self.clip, None)
-
-    def update(self, frames: Any, frame_ids: np.ndarray) -> None:
-        xp = self.xp
-        w = self._weights(frames)
-        self.s0 += w.sum(axis=0, dtype=self.s0.dtype)
         if self.min_prominence:
-            xp.maximum(self.peak, w.max(axis=0), out=self.peak)
-            xp.minimum(self.floor, w.min(axis=0), out=self.floor)
-        for axis in self.use_axes:
-            m = np.asarray(self.plan.motor_values(axis, frame_ids), dtype=np.float64)
-            m = xp.asarray(m - self.origin[axis], dtype=w.dtype)
-            power = m
-            for k in range(self.moments):
-                self.sums[axis][k] += xp.tensordot(power, w, axes=(0, 0))
-                power = power * m
+            high, low = backend.gaussian_extremes(w, self.sigma)  # threads on the CPU
+            xp.maximum(self.peak, high, out=self.peak)
+            xp.minimum(self.floor, low, out=self.floor)
+        rows = self._rows(frame_ids)
+        if float(xp.nanmin(w)) < 0:  # the clip changes these weights: smooth them one by one
+            w = xp.clip(backend.gaussian_frames(w, self.sigma), self.clip, None)
+            if self.smoothed is None:
+                self.smoothed = self._zeros(self.raw.shape)
+            target = self.smoothed
+        else:
+            target = self.raw
+            self.raw_rows += rows.sum(axis=1)
+        sums = xp.asarray(rows, dtype=w.dtype) @ w.reshape(len(frame_ids), -1)
+        target += sums.reshape(target.shape)
         self.n_frames_seen += len(frame_ids)
+
+    def _sums(self) -> Any:
+        """The moment sums of the smoothed weights, a floor of ``clip`` under each."""
+        xp = self.xp
+        floor = self.clip * xp.asarray(self.raw_rows).reshape(-1, 1, 1)
+        sums = backend.gaussian_frames(self.raw, self.sigma) + floor
+        return sums if self.smoothed is None else sums + self.smoothed
 
     def result(self) -> dict[str, xr.DataArray]:
         xp = self.xp
-        s0 = xp.clip(self.s0, self.clip, None)
+        sums = self._sums()
+        s0 = xp.clip(sums[0], self.clip, None)
         attrs = {"sigma": self.sigma, "weights": self.weights}
-        out: dict[str, xr.DataArray] = {"total": self._image(self.s0, "total", **attrs)}
-        for axis in self.use_axes:
+        out: dict[str, xr.DataArray] = {"total": self._image(sums[0], "total", **attrs)}
+        for i, axis in enumerate(self.use_axes):
             unit = self.plan.structure.units.get(axis, "")
-            mean1 = self.sums[axis][0] / s0  # about the origin; the central moments do not move
+            row = 1 + i * self.moments  # the axis' first power
+            mean1 = sums[row] / s0  # about the origin; the central moments do not move
             out[f"com_{axis}"] = self._image(
                 mean1 + self.origin[axis], f"com_{axis}", motor=axis, units=unit, **attrs
             )
             if self.moments >= 2:
-                mean2 = self.sums[axis][1] / s0
+                mean2 = sums[row + 1] / s0
                 var = xp.clip(mean2 - mean1**2, 0, None)
                 width = xp.sqrt(var)
                 out[f"width_{axis}"] = self._image(
                     width, f"width_{axis}", motor=axis, units=unit, **attrs
                 )
             if self.moments >= 3:
-                mean3 = self.sums[axis][2] / s0
+                mean3 = sums[row + 2] / s0
                 third = mean3 - 3 * mean1 * mean2 + 2 * mean1**3
                 skew = third / xp.clip(width**3, 1e-30, None)
                 out[f"skew_{axis}"] = self._image(skew, f"skew_{axis}", motor=axis, **attrs)
             if self.moments >= 4:
-                mean4 = self.sums[axis][3] / s0
+                mean4 = sums[row + 3] / s0
                 fourth = mean4 - 4 * mean1 * mean3 + 6 * mean1**2 * mean2 - 3 * mean1**4
                 kurt = fourth / xp.clip(var**2, 1e-30, None) - 3.0
                 out[f"kurtosis_{axis}"] = self._image(kurt, f"kurtosis_{axis}", motor=axis, **attrs)
-        if self.min_prominence:
-            keep = backend.to_host(prominent(self.peak - self.floor, self.min_prominence))
+        if self.min_prominence:  # the extremes of the clipped weights
+            rise = xp.clip(self.peak, self.clip, None) - xp.clip(self.floor, self.clip, None)
+            keep = backend.to_host(prominent(rise, self.min_prominence))
             for name, data in out.items():
                 if name != "total":
                     data.values[~keep] = np.nan
@@ -843,10 +871,17 @@ class DimCOM(Accumulator):
     points whose peak rises above their lowest weight by less than this fraction of
     the strongest point's rise; the rise is the highest weight the point's COM is taken
     from (its frames, its pixels along) less the lowest.
+
+    As in :class:`MotorCOM` the frames are not smoothed one by one: scipy's Gaussian
+    (reflect mode) is symmetric and keeps sums, so a smoothed frame summed over a pixel
+    dim with some weights is the frame summed with the weights smoothed. Each batch is
+    summed with smoothed coordinate weights (one matrix product), the pixel dims of
+    the maps are smoothed at the end, and the clip is a floor of ``clip`` under every
+    weight. A batch with a negative value is smoothed and clipped frame by frame.
     """
 
     name = "dim_com"
-    live_copies = 3
+    live_copies = 2
 
     def __init__(
         self,
@@ -888,29 +923,77 @@ class DimCOM(Accumulator):
         # the batch's pixel axes summed: those of no map (the COM ones among them)
         self.summed = tuple(1 + i for i, d in enumerate(PIXEL_DIMS) if d not in self.over)
         pixels = plan.window.coords()
-        self.pixels = {d: self.xp.asarray(pixels[d], dtype=np.float64) for d in PIXEL_DIMS}
         # coordinates about their middle: the second moment keeps its precision
         self.origin = {
             d: float(np.mean(pixels[d] if d in PIXEL_DIMS else plan.coords[d])) for d in self.along
         }
+        # every summed pixel dim's weights, a column per power of its coordinate about the
+        # origin (the zeroth all ones, the others for a dim the COM is along): ``plain`` for
+        # smoothed frames, ``smooth`` (smoothed as the frames would be) for the frames as read
+        self.plain: dict[str, np.ndarray] = {}
+        self.smooth: dict[str, np.ndarray] = {}
+        for d in PIXEL_DIMS:
+            if d in self.over:
+                continue
+            c = pixels[d] - self.origin.get(d, 0.0)
+            powers = range(self.moments + 1) if d in self.along else range(1)
+            self.plain[d] = np.stack([c**k for k in powers], axis=1)
+            self.smooth[d] = self.plain[d].copy()
+            if self.sigma > 0:
+                from scipy.ndimage import gaussian_filter1d
+
+                self.smooth[d][:, 1:] = gaussian_filter1d(self.plain[d][:, 1:], self.sigma, axis=0)
+        # the sums: ``None`` the weights, ``(dim, k)`` the weights times the dim's coordinate to
+        # the power k; ``raw`` of the frames as read, smoothed along the map's pixel dims at the
+        # end, ``direct`` of the batches with a negative value, smoothed and clipped one by one
+        self.terms: list[Any] = [None]
+        self.terms += [(d, k) for d in self.along for k in range(1, self.moments + 1)]
         shape = [plan.grid_shape[i] for i in self.kept_motors]
         shape += [n for d, n in zip(PIXEL_DIMS, plan.window.shape, strict=True) if d in self.over]
-        self.s0 = self._zeros(shape)
-        self.s1 = {d: self._zeros(shape) for d in self.along}
-        self.s2 = {d: self._zeros(shape) for d in self.along} if self.moments > 1 else {}
+        self.raw = {t: self._zeros(shape) for t in self.terms}
+        self.direct: dict[Any, Any] | None = None
+        # what a floor of ``clip`` under every weight adds to the sums of one frame
+        ones = self.xp.ones((1, *plan.window.shape))
+        self.floor_sums = {t: self.clip * s for t, s in self._pixel_sums(ones, self.plain).items()}
         if self.min_prominence:  # every point's highest and lowest weight
             self.peak = self._zeros(shape)
-            self.floor = self.xp.full(shape, self.xp.inf, dtype=self.s0.dtype)
+            self.floor = self.xp.full(shape, self.xp.inf, dtype=np.float64)
 
-    def _pixel_sum(self, w: Any, dim: str | None = None, power: int = 0) -> Any:
-        """``w`` (times the coordinate of the pixel ``dim`` to ``power``) summed over the
-        summed pixel axes: ``(n, map pixels...)``."""
-        if dim is None:
-            return w.sum(axis=self.summed) if self.summed else w
-        axis = 1 + PIXEL_DIMS.index(dim)
-        weighted = self.xp.tensordot(w, (self.pixels[dim] - self.origin[dim]) ** power, (axis, 0))
-        rest = tuple(a if a < axis else a - 1 for a in self.summed if a != axis)
-        return weighted.sum(axis=rest) if rest else weighted
+    def _pixel_sums(self, w: Any, weights: dict[str, np.ndarray]) -> dict[Any, Any]:
+        """The batch ``w`` ``(n, y, x)`` summed over the summed pixel dims with the coordinate
+        ``weights`` of each, for every pixel term (and ``None``): ``(n, map pixels...)`` each.
+        Along ``x`` one matrix product, the batch's one full pass; then along ``y``."""
+        xp = self.xp
+        t = w
+        if "x" in weights:
+            columns = xp.asarray(weights["x"], dtype=w.dtype)
+            t = (w.reshape(-1, w.shape[-1]) @ columns).reshape(*w.shape[:-1], -1)
+        if "y" in weights:
+            rows = xp.asarray(weights["y"].T, dtype=w.dtype if t is w else np.float64)
+            t = rows @ (t if t is w else t.astype(np.float64))  # (n, y powers, x or x powers)
+
+        def pick(dim: str | None, k: int) -> Any:
+            index: list[Any] = [slice(None)] * 3
+            for axis, d in ((1, "y"), (2, "x")):
+                if d in weights:
+                    index[axis] = k if d == dim else 0
+            return t[tuple(index)]
+
+        sums: dict[Any, Any] = {None: pick(None, 0)}
+        for d in self.along:
+            if d in weights:
+                sums.update({(d, k): pick(d, k) for k in range(1, self.moments + 1)})
+        return sums
+
+    def _smooth_maps(self, data: Any) -> Any:
+        """``data`` smoothed along its pixel dims (the last ones), as the frames would be."""
+        kept = sum(d in self.over for d in PIXEL_DIMS)
+        if not kept or self.sigma <= 0:
+            return data
+        if kept == 2:
+            flat = data.reshape(-1, *data.shape[-2:])
+            return backend.gaussian_frames(flat, self.sigma).reshape(data.shape)
+        return backend.ndimage_module(data).gaussian_filter1d(data, self.sigma, axis=-1)
 
     def _extremes(self, w: Any) -> tuple[Any, Any]:
         """Each frame's highest and lowest weight over the pixel dims the COM is along (the
@@ -926,37 +1009,47 @@ class DimCOM(Accumulator):
     def update(self, frames: Any, frame_ids: np.ndarray) -> None:
         xp = self.xp
         w = frames if frames.dtype.kind == "f" else frames.astype(self.dtype)
-        w = xp.clip(backend.gaussian_frames(w, self.sigma), self.clip, None).astype(np.float64)
         positions = self.plan.grid_positions(frame_ids)
         index = tuple(xp.asarray(positions[i]) for i in self.kept_motors)
-
-        def fold(target: Any, part: Any) -> None:
-            if index:
-                _scatter(xp, "add", target, index, part)
-            else:  # every motor summed: the batch folds into one array
-                target += part.sum(axis=0)
-
-        s0 = self._pixel_sum(w)
-        fold(self.s0, s0)
+        smoothed = None
         if self.min_prominence:
-            high, low = self._extremes(w)
+            smoothed = xp.clip(backend.gaussian_frames(w, self.sigma), self.clip, None)
+            high, low = self._extremes(smoothed)
             if index:
                 _scatter(xp, "maximum", self.peak, index, high)
                 _scatter(xp, "minimum", self.floor, index, low)
             else:
                 xp.maximum(self.peak, high.max(axis=0), out=self.peak)
                 xp.minimum(self.floor, low.min(axis=0), out=self.floor)
+        if float(xp.nanmin(w)) < 0:  # the clip changes these weights: smooth them one by one
+            if smoothed is None:
+                smoothed = xp.clip(backend.gaussian_frames(w, self.sigma), self.clip, None)
+            sums = self._pixel_sums(smoothed, self.plain)
+            if self.direct is None:
+                self.direct = {t: self._zeros(a.shape) for t, a in self.raw.items()}
+            target = self.direct
+        else:
+            sums = self._pixel_sums(w, self.smooth)
+            sums = {t: s + self.floor_sums[t] for t, s in sums.items()}
+            target = self.raw
+
+        def fold(term: Any, part: Any) -> None:
+            if index:
+                _scatter(xp, "add", target[term], index, part)
+            else:  # every motor summed: the batch folds into one array
+                target[term] += part.sum(axis=0)
+
+        s0 = sums[None]
+        for term, part in sums.items():
+            fold(term, part)
         for d in self.along:
             if d in PIXEL_DIMS:
-                fold(self.s1[d], self._pixel_sum(w, d, 1))
-                if self.moments > 1:
-                    fold(self.s2[d], self._pixel_sum(w, d, 2))
                 continue
             m = np.asarray(self.plan.motor_values(d, frame_ids), dtype=np.float64) - self.origin[d]
             m = xp.asarray(m).reshape((-1,) + (1,) * (s0.ndim - 1))
-            fold(self.s1[d], s0 * m)
+            fold((d, 1), s0 * m)
             if self.moments > 1:
-                fold(self.s2[d], s0 * m * m)
+                fold((d, 2), s0 * m * m)
         self.n_frames_seen += len(frame_ids)
 
     def result(self) -> dict[str, xr.DataArray]:
@@ -964,7 +1057,10 @@ class DimCOM(Accumulator):
         dims = [plan.motor_dims[i] for i in self.kept_motors]
         dims += [d for d in PIXEL_DIMS if d in self.over]
         coords = plan.all_coords()
-        total = xp.where(self.s0 > 0, self.s0, xp.nan)  # 0: no frame at that point
+        sums = {t: self._smooth_maps(s) for t, s in self.raw.items()}
+        if self.direct is not None:
+            sums = {t: s + self.direct[t] for t, s in sums.items()}
+        total = xp.where(sums[None] > 0, sums[None], xp.nan)  # 0: no frame at that point
         attrs = {"sigma": self.sigma, "along": list(self.along), "over": list(self.over)}
 
         def array(data: Any, name: str, **more: Any) -> xr.DataArray:
@@ -980,17 +1076,17 @@ class DimCOM(Accumulator):
         keep = None
         if self.min_prominence:
             keep = prominent(
-                xp.where(self.s0 > 0, self.peak - self.floor, 0.0), self.min_prominence
+                xp.where(sums[None] > 0, self.peak - self.floor, 0.0), self.min_prominence
             )
             attrs["min_prominence"] = self.min_prominence
         for d in self.along:
-            mean1 = self.s1[d] / total
+            mean1 = sums[(d, 1)] / total
             if keep is not None:
                 mean1 = xp.where(keep, mean1, xp.nan)
             unit = self.plan.structure.units.get(d, "px" if d in PIXEL_DIMS else "")
             out[f"com_{d}"] = array(mean1 + self.origin[d], f"com_{d}", dim=d, units=unit)
             if self.moments > 1:
-                width = xp.sqrt(xp.clip(self.s2[d] / total - mean1**2, 0, None))
+                width = xp.sqrt(xp.clip(sums[(d, 2)] / total - mean1**2, 0, None))
                 out[f"width_{d}"] = array(width, f"width_{d}", dim=d, units=unit)
         return out
 
