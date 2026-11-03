@@ -236,6 +236,10 @@ def com_maps(
     roi: ROI | None = None,
     downsample: int | None = None,
     over: Sequence[str] | None = None,
+    min_prominence: float = 0.0,
+    widths: bool = True,
+    total: bool = True,
+    bivariate: bool = True,
 ) -> list[DataObject]:
     """Centre-of-mass and width maps along any dims, and the total intensity.
 
@@ -245,39 +249,76 @@ def com_maps(
     in ``axes``). ``("y", "x")`` of an ``a x b`` scan gives every frame's centre on
     the detector as ``a x b`` maps. Results: ``com_<dim>`` (the intensity-weighted
     mean coordinate), ``width_<dim>`` (its spread) and ``total``. Frames are
-    smoothed by ``sigma`` pixels first (0 to switch off).
+    smoothed by ``sigma`` pixels first (0 to switch off). ``min_prominence`` leaves
+    out (NaN) the points whose peak rises above its lowest value by less than this
+    fraction of the strongest point's rise: the background, whose COM is noise (0
+    keeps every point). ``widths`` and ``total`` choose those maps (no widths: they
+    are not computed). Along two dims, ``bivariate`` adds the two COMs as one picture,
+    ``com_<a>_<b>``: the first through RdBu, the second through PiYG, averaged
+    (:func:`bexa.viz.maps.bivariate_rgb`), each scaled over its 1st to 99th percentile.
     """
     require(obj, ("scan", *ANY), "COM Maps")
     along, over = _com_dims(obj, axes, over)
     pixels = list(obj.dims[-2:]) if obj.kind == "scan" else list(pixel_dims(obj.array))
     if over != pixels or any(d in pixels for d in along) or obj.kind not in ("scan", "stack"):
-        return _com_any(obj, along, over, sigma, roi, downsample)
-    axes = along
-    if obj.kind == "scan":
+        made = _com_any(obj, along, over, sigma, roi, downsample, min_prominence, widths)
+    elif obj.kind == "scan":
         from bexa.core.reductions import MotorCOM
 
         ds = None if not downsample else (1,) * len(obj.data.dims[:-2]) + (downsample,) * 2
-        result = obj.data.reduce(
-            [MotorCOM(axes=list(axes) if axes else None, sigma=sigma)], roi=roi, downsample=ds
+        com = MotorCOM(
+            axes=along, sigma=sigma, moments=2 if widths else 1, min_prominence=min_prominence
         )
-        return [
+        result = obj.data.reduce([com], roi=roi, downsample=ds)
+        made = [
             _from_scan(obj, result[name], name, meta={"quantity": name})
             for name in result.data_vars
         ]
+    else:
+        made = _com_stack(obj, along, sigma, roi, min_prominence, widths)
+    if not total:
+        made = [o for o in made if o.meta.get("quantity") != "total"]
+    if bivariate and len(along) == 2:
+        made.append(_bivariate(obj, made, along))
+    return made
+
+
+def _com_stack(
+    obj: DataObject,
+    along: list[str],
+    sigma: float,
+    roi: ROI | None,
+    min_prominence: float,
+    widths: bool,
+) -> list[DataObject]:
+    """:func:`com_maps` of a stack along its motors, one at a time, over its pixels; the
+    rise of a pixel is its highest smoothed weight over the frames less its lowest, as
+    :class:`~bexa.core.reductions.MotorCOM` measures it."""
     from bexa.analysis.rocking import moments
+    from bexa.core.backend import gaussian_frames
+    from bexa.core.reductions import prominent
 
     data, _ = windowed(obj, roi)
+    keep = None
+    if min_prominence:
+        pixels = pixel_dims(data)
+        frames = np.asarray(data.transpose(*other_dims(data), *pixels).values, np.float32)
+        w = np.clip(gaussian_frames(frames.reshape(-1, *frames.shape[-2:]), sigma), 1e-10, None)
+        keep = prominent(w.max(axis=0) - w.min(axis=0), min_prominence)
     out = []
-    for axis in axes or other_dims(data):
+    keys = (("com", "com"), ("std", "width")) if widths else (("com", "com"),)
+    for axis in along:
         others = [d for d in other_dims(data) if d != axis]
         summed = reduce_over(data, others, "sum").transpose(axis, *pixel_dims(data))
         stats = moments(summed.values, _coord_values(summed, axis), axis=0, sigma=sigma)
         template = summed.isel({axis: 0}, drop=True)
-        for key, name in (("com", f"com_{axis}"), ("std", f"width_{axis}")):
+        for key, prefix in keys:
+            name = f"{prefix}_{axis}"
+            values = stats[key] if keep is None else np.where(keep, stats[key], np.nan)
             out.append(
                 new(
                     obj,
-                    template.copy(data=stats[key]).rename(name),
+                    template.copy(data=values).rename(name),
                     name,
                     meta={"quantity": name, "motor": axis},
                 )
@@ -285,6 +326,38 @@ def com_maps(
     total = reduce_over(data, other_dims(data), "sum").rename("total")
     out.append(new(obj, total, "total", meta={"quantity": "total"}))
     return out
+
+
+def _bivariate(obj: DataObject, made: list[DataObject], along: list[str]) -> DataObject:
+    """The two COM maps of ``made`` as one RGB picture, its key in the attrs."""
+    from bexa.viz.maps import BIVARIATE_CMAPS, bivariate_rgb
+
+    by_name = {o.meta.get("quantity"): o for o in made}
+    first, second = (by_name[f"com_{d}"].array for d in along)
+    limits = []
+    for values in (first.values, second.values):
+        finite = values[np.isfinite(values)]
+        lo, hi = np.percentile(finite, (1, 99)) if finite.size else (0.0, 1.0)
+        limits.append((float(lo), float(hi)))
+    rgb, lim_a, lim_b = bivariate_rgb(first, second, BIVARIATE_CMAPS, (limits[0], limits[1]))
+    dims = tuple(str(d) for d in first.dims)
+    name = f"com_{along[0]}_{along[1]}"
+    key = {
+        "key_x": str(first.name),
+        "key_x_range": list(lim_a),
+        "key_y": str(second.name),
+        "key_y_range": list(lim_b),
+        "key_cmaps": list(BIVARIATE_CMAPS),
+    }
+    picture = xr.DataArray(
+        rgb,
+        dims=(*dims, "rgb"),
+        coords={**{d: first.coords[d] for d in dims if d in first.coords}, "rgb": list("rgb")},
+        name=name,
+        attrs=key,
+    )
+    parents = [by_name[f"com_{d}"].name for d in along]
+    return new(obj, picture, name, kind="rgb", parents=parents, meta={"quantity": name})
 
 
 def _com_dims(
@@ -318,18 +391,24 @@ def _com_any(
     sigma: float,
     roi: ROI | None,
     downsample: int | None,
+    min_prominence: float = 0.0,
+    widths: bool = True,
 ) -> list[DataObject]:
     """:func:`com_maps` along any dims: a scan streamed (``DimCOM``), an array in memory."""
     if obj.kind == "scan":
         from bexa.core.reductions import DimCOM
 
         ds = None if not downsample else (1,) * len(obj.data.dims[:-2]) + (downsample,) * 2
-        result = obj.data.reduce([DimCOM(along, over, sigma=sigma)], roi=roi, downsample=ds)
+        com = DimCOM(
+            along, over, sigma=sigma, moments=2 if widths else 1, min_prominence=min_prominence
+        )
+        result = obj.data.reduce([com], roi=roi, downsample=ds)
         maps = {str(name): result[name] for name in result.data_vars}
     else:
         data, _ = windowed(obj, roi)
-        maps = _com_arrays(data, along, over, sigma)
-    names = [n for d in along for n in (f"com_{d}", f"width_{d}")] + ["total"]
+        maps = _com_arrays(data, along, over, sigma, min_prominence)
+    kinds = ("com", "width") if widths else ("com",)
+    names = [f"{k}_{d}" for d in along for k in kinds] + ["total"]
     meta = {"along": along, "over": over}
     return [
         _from_scan(obj, maps[n], n, meta={"quantity": n, **meta})
@@ -340,25 +419,43 @@ def _com_any(
 
 
 def _com_arrays(
-    data: xr.DataArray, along: list[str], over: list[str], sigma: float
+    data: xr.DataArray,
+    along: list[str],
+    over: list[str],
+    sigma: float,
+    min_prominence: float = 0.0,
 ) -> dict[str, xr.DataArray]:
     """``com_<dim>``, ``width_<dim>`` and ``total`` of an array: the weights are the values,
-    smoothed over the pixel dims by ``sigma`` and clipped to 1e-10, the other dims summed."""
+    smoothed over the pixel dims by ``sigma`` and clipped to 1e-10, the other dims summed;
+    ``min_prominence`` leaves out the points whose weights rise least (NaN), the rise
+    measured as :class:`~bexa.core.reductions.DimCOM` does: the pixel dims neither along
+    nor over summed, the highest weight over the rest less the lowest."""
     pixels = pixel_dims(data)
     if sigma and pixels:
         from scipy.ndimage import gaussian_filter
 
         widths = [float(sigma) if d in pixels else 0.0 for d in data.dims]
         data = data.copy(data=gaussian_filter(np.asarray(data.values, float), widths))
-    w = data.clip(min=1e-10).sum([d for d in data.dims if d not in along and d not in over])
+    clipped = data.clip(min=1e-10)
+    w = clipped.sum([d for d in data.dims if d not in along and d not in over])
     total = w.sum(along)
     out = {"total": total.transpose(*over).rename("total")}
+    keep = None
+    if min_prominence:
+        from bexa.core.reductions import prominent
+
+        summed = [d for d in pixels if d not in along and d not in over]
+        v = clipped.sum(summed) if summed else clipped
+        spread = [d for d in v.dims if d not in over]
+        keep = prominent(v.max(spread) - v.min(spread), min_prominence)
     for d in along:
         c = xr.DataArray(_coord_values(w, d), dims=(d,))
         c = c - float(c.mean())  # about the middle: the second moment keeps its precision
         mean1 = (w * c).sum(along) / total
-        width = np.sqrt(((w * c**2).sum(along) / total - mean1**2).clip(min=0))
+        width = ((w * c**2).sum(along) / total - mean1**2).clip(min=0) ** 0.5
         middle = float(_coord_values(w, d).mean())
+        if keep is not None:
+            mean1, width = mean1.where(keep), width.where(keep)
         out[f"com_{d}"] = (mean1 + middle).transpose(*over).rename(f"com_{d}")
         out[f"width_{d}"] = width.transpose(*over).rename(f"width_{d}")
     return out

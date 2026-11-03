@@ -52,6 +52,7 @@ class ViewTab:
         self._line_start: tuple[float, float] | None = None
         self._selector: Any = None
         self.sliders: dict[str, Any] = {}
+        self.hidden_rois: set[str] = set()  # the ROIs not drawn (their toggles off)
         self.title = ipw.HTML()
         self.mode = ipw.Dropdown(
             description="show",
@@ -75,7 +76,7 @@ class ViewTab:
         # image options
         self.cmap = ipw.Dropdown(
             options=CMAPS,
-            value="viridis",
+            value="auto",
             description="colours",
             layout=ipw.Layout(width="190px"),
             style={"description_width": "55px"},
@@ -182,6 +183,8 @@ class ViewTab:
 
         self.roi_list = ipw.Select(options=[], rows=4, layout=ipw.Layout(width="200px"))
         self.roi_list.observe(lambda c: self._roi_picked(c["new"]), names="value")
+        self.roi_toggles = ipw.HBox(layout=ipw.Layout(flex_flow="row wrap"))
+        self.roi_toggles.add_class("bexa-roi-toggles")
         self.roi_name = ipw.Text(
             value="roi1",
             description="name",
@@ -234,6 +237,7 @@ class ViewTab:
                         ),
                     ]
                 ),
+                self.roi_toggles,
             ]
         )
         tools.add_class("bexa-rois")
@@ -268,6 +272,7 @@ class ViewTab:
         """Show the current selection (rebuild the controls when it changed)."""
         objects = self._objects()
         self.roi_list.options = list(self.app.ws.rois)
+        self._roi_toggles()
         if not objects:
             self._key = None
             self.title.value = "<i>select an object</i>"
@@ -408,7 +413,7 @@ class ViewTab:
                 image, title = self._image(main)
                 self._shown = image
                 rois = self.app.ws.rois if self.show_rois.value else None
-                ax = draw_image(fig, image, self._image_options(), title, rois)
+                ax = draw_image(fig, image, self._image_options(), title, rois, self.hidden_rois)
                 if self.draw.value:
                     self._attach_selector(ax)
         except Exception as exc:
@@ -626,6 +631,39 @@ class ViewTab:
             f"{d}={'' if lo is None else f'{lo:g}'}:{'' if hi is None else f'{hi:g}'}"
             for d, (lo, hi) in roi.ranges.items()
         )
+
+    def _roi_toggles(self) -> None:
+        """One toggle per ROI, on while it is drawn: made again when the ROIs change."""
+        import ipywidgets as ipw
+
+        names = list(self.app.ws.rois)
+        self.hidden_rois &= set(names)  # a deleted ROI is forgotten
+        if [b.description for b in self.roi_toggles.children[1:]] == names:
+            return
+        for button in self.roi_toggles.children[1:]:  # a widget lives until closed
+            button.close()
+        buttons = []
+        for name in names:
+            shown = name not in self.hidden_rois
+            button = ipw.ToggleButton(
+                value=shown,
+                description=name,
+                icon="eye" if shown else "eye-slash",
+                tooltip="show or hide this ROI on the image",
+                layout=ipw.Layout(width="auto"),
+            )
+            button.observe(lambda c, n=name: self._roi_shown(n, c["owner"]), names="value")
+            buttons.append(button)
+        label = ipw.HTML("shown:" if names else "", layout=ipw.Layout(width="50px"))
+        self.roi_toggles.children = [label, *buttons]
+
+    def _roi_shown(self, name: str, button: Any) -> None:
+        if button.value:
+            self.hidden_rois.discard(name)
+        else:
+            self.hidden_rois.add(name)
+        button.icon = "eye" if button.value else "eye-slash"
+        self.redraw()
 
     def _set_roi(self) -> None:
         from bexa.core.roi import ROI

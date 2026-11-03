@@ -63,6 +63,7 @@ __all__ = [
     "iter_batches",
     "make_plan",
     "parse_downsample",
+    "prominent",
     "reduce",
 ]
 
@@ -672,6 +673,12 @@ class RoiIntegral(Accumulator):
         }
 
 
+def prominent(rise: Any, fraction: float) -> Any:
+    """Where a peak rises (its highest weight less its lowest) by at least ``fraction`` of
+    the strongest rise: the points :class:`MotorCOM` and :class:`DimCOM` keep."""
+    return rise >= float(fraction) * rise.max()
+
+
 @register_accumulator("motor_com")
 class MotorCOM(Accumulator):
     """Per-pixel centre of mass (and higher moments) of the rocking curve along motor axes.
@@ -694,6 +701,11 @@ class MotorCOM(Accumulator):
     moments
         1 gives ``com_<axis>``; 2 adds ``width_<axis>``; 3 adds ``skew_<axis>``;
         4 adds ``kurtosis_<axis>``. ``total`` (sum of weights) is always returned.
+    min_prominence
+        Leave out (NaN in every map but ``total``) the pixels whose peak rises above
+        their lowest weight by less than this fraction of the strongest pixel's rise:
+        the background, whose COM is noise. The rise is the highest weight of a
+        pixel's frames less the lowest; 0 keeps every pixel.
     """
 
     name = "motor_com"
@@ -706,23 +718,28 @@ class MotorCOM(Accumulator):
         weights: str = "linear",
         clip: float = 1e-10,
         moments: int = 2,
+        min_prominence: float = 0.0,
     ) -> None:
         if weights not in ("linear", "log"):
             raise ValueError("weights must be 'linear' or 'log'")
         if not 1 <= moments <= 4:
             raise ValueError("moments must be between 1 and 4")
-        super().__init__(
-            axes=list(axes) if axes else None,
-            sigma=sigma,
-            weights=weights,
-            clip=clip,
-            moments=moments,
-        )
+        params: dict[str, Any] = {
+            "axes": list(axes) if axes else None,
+            "sigma": sigma,
+            "weights": weights,
+            "clip": clip,
+            "moments": moments,
+        }
+        if min_prominence:  # only when used: the results cached before keep their keys
+            params["min_prominence"] = float(min_prominence)
+        super().__init__(**params)
         self.axes = tuple(axes) if axes else None
         self.sigma = float(sigma)
         self.weights = weights
         self.clip = clip
         self.moments = moments
+        self.min_prominence = float(min_prominence)
 
     def _allocate(self) -> None:
         self.use_axes = self.axes or self.plan.motor_dims
@@ -734,6 +751,9 @@ class MotorCOM(Accumulator):
         shape = self.plan.window.shape
         self.s0 = self._zeros(shape)
         self.sums = {a: [self._zeros(shape) for _ in range(self.moments)] for a in self.use_axes}
+        if self.min_prominence:  # every pixel's highest and lowest weight
+            self.peak = self._zeros(shape)
+            self.floor = self.xp.full(shape, self.xp.inf, dtype=self.s0.dtype)
         # motor values are taken from the middle of each axis: the moments of a batch are then
         # formed in the frames' dtype (float32 BLAS, no float64 copy of the batch) without
         # losing the width, which for an energy of 17 keV is 1e-6 of the value squared
@@ -754,6 +774,9 @@ class MotorCOM(Accumulator):
         xp = self.xp
         w = self._weights(frames)
         self.s0 += w.sum(axis=0, dtype=self.s0.dtype)
+        if self.min_prominence:
+            xp.maximum(self.peak, w.max(axis=0), out=self.peak)
+            xp.minimum(self.floor, w.min(axis=0), out=self.floor)
         for axis in self.use_axes:
             m = np.asarray(self.plan.motor_values(axis, frame_ids), dtype=np.float64)
             m = xp.asarray(m - self.origin[axis], dtype=w.dtype)
@@ -791,6 +814,12 @@ class MotorCOM(Accumulator):
                 fourth = mean4 - 4 * mean1 * mean3 + 6 * mean1**2 * mean2 - 3 * mean1**4
                 kurt = fourth / xp.clip(var**2, 1e-30, None) - 3.0
                 out[f"kurtosis_{axis}"] = self._image(kurt, f"kurtosis_{axis}", motor=axis, **attrs)
+        if self.min_prominence:
+            keep = backend.to_host(prominent(self.peak - self.floor, self.min_prominence))
+            for name, data in out.items():
+                if name != "total":
+                    data.values[~keep] = np.nan
+                    data.attrs["min_prominence"] = self.min_prominence
         return out
 
 
@@ -809,20 +838,44 @@ class DimCOM(Accumulator):
 
     Weights are the frames after Gaussian smoothing of ``sigma`` pixels, clipped to
     ``clip``; pixel coordinates are full-resolution indices (``window.coords``).
-    Results: ``total``, ``com_<dim>`` and ``width_<dim>``; a point without a frame is NaN.
+    Results: ``total``, ``com_<dim>`` and, with ``moments=2``, ``width_<dim>``; a point
+    without a frame is NaN. ``min_prominence`` leaves out (NaN but in ``total``) the
+    points whose peak rises above their lowest weight by less than this fraction of
+    the strongest point's rise; the rise is the highest weight the point's COM is taken
+    from (its frames, its pixels along) less the lowest.
     """
 
     name = "dim_com"
     live_copies = 3
 
     def __init__(
-        self, along: Sequence[str], over: Sequence[str], sigma: float = 3.0, clip: float = 1e-10
+        self,
+        along: Sequence[str],
+        over: Sequence[str],
+        sigma: float = 3.0,
+        clip: float = 1e-10,
+        moments: int = 2,
+        min_prominence: float = 0.0,
     ) -> None:
-        super().__init__(along=list(along), over=list(over), sigma=sigma, clip=clip)
+        if moments not in (1, 2):
+            raise ValueError("moments must be 1 (the COM) or 2 (and the width)")
+        params: dict[str, Any] = {
+            "along": list(along),
+            "over": list(over),
+            "sigma": sigma,
+            "clip": clip,
+        }
+        if moments != 2:  # only when used: the results cached before keep their keys
+            params["moments"] = moments
+        if min_prominence:
+            params["min_prominence"] = float(min_prominence)
+        super().__init__(**params)
         self.along = tuple(str(d) for d in along)
         self.over = tuple(str(d) for d in over)
         self.sigma = float(sigma)
         self.clip = clip
+        self.moments = moments
+        self.min_prominence = float(min_prominence)
 
     def _allocate(self) -> None:
         plan = self.plan
@@ -844,7 +897,10 @@ class DimCOM(Accumulator):
         shape += [n for d, n in zip(PIXEL_DIMS, plan.window.shape, strict=True) if d in self.over]
         self.s0 = self._zeros(shape)
         self.s1 = {d: self._zeros(shape) for d in self.along}
-        self.s2 = {d: self._zeros(shape) for d in self.along}
+        self.s2 = {d: self._zeros(shape) for d in self.along} if self.moments > 1 else {}
+        if self.min_prominence:  # every point's highest and lowest weight
+            self.peak = self._zeros(shape)
+            self.floor = self.xp.full(shape, self.xp.inf, dtype=self.s0.dtype)
 
     def _pixel_sum(self, w: Any, dim: str | None = None, power: int = 0) -> Any:
         """``w`` (times the coordinate of the pixel ``dim`` to ``power``) summed over the
@@ -855,6 +911,17 @@ class DimCOM(Accumulator):
         weighted = self.xp.tensordot(w, (self.pixels[dim] - self.origin[dim]) ** power, (axis, 0))
         rest = tuple(a if a < axis else a - 1 for a in self.summed if a != axis)
         return weighted.sum(axis=rest) if rest else weighted
+
+    def _extremes(self, w: Any) -> tuple[Any, Any]:
+        """Each frame's highest and lowest weight over the pixel dims the COM is along (the
+        other summed pixel dims summed first): ``(n, map pixels...)`` each."""
+        along = tuple(1 + PIXEL_DIMS.index(d) for d in PIXEL_DIMS if d in self.along)
+        rest = tuple(a for a in self.summed if a not in along)
+        values = w.sum(axis=rest, keepdims=True) if rest else w
+        high = values.max(axis=along, keepdims=True) if along else values
+        low = values.min(axis=along, keepdims=True) if along else values
+        gone = tuple(sorted({*rest, *along}))
+        return (high.squeeze(axis=gone), low.squeeze(axis=gone)) if gone else (high, low)
 
     def update(self, frames: Any, frame_ids: np.ndarray) -> None:
         xp = self.xp
@@ -871,15 +938,25 @@ class DimCOM(Accumulator):
 
         s0 = self._pixel_sum(w)
         fold(self.s0, s0)
+        if self.min_prominence:
+            high, low = self._extremes(w)
+            if index:
+                _scatter(xp, "maximum", self.peak, index, high)
+                _scatter(xp, "minimum", self.floor, index, low)
+            else:
+                xp.maximum(self.peak, high.max(axis=0), out=self.peak)
+                xp.minimum(self.floor, low.min(axis=0), out=self.floor)
         for d in self.along:
             if d in PIXEL_DIMS:
                 fold(self.s1[d], self._pixel_sum(w, d, 1))
-                fold(self.s2[d], self._pixel_sum(w, d, 2))
+                if self.moments > 1:
+                    fold(self.s2[d], self._pixel_sum(w, d, 2))
                 continue
             m = np.asarray(self.plan.motor_values(d, frame_ids), dtype=np.float64) - self.origin[d]
             m = xp.asarray(m).reshape((-1,) + (1,) * (s0.ndim - 1))
             fold(self.s1[d], s0 * m)
-            fold(self.s2[d], s0 * m * m)
+            if self.moments > 1:
+                fold(self.s2[d], s0 * m * m)
         self.n_frames_seen += len(frame_ids)
 
     def result(self) -> dict[str, xr.DataArray]:
@@ -900,12 +977,21 @@ class DimCOM(Accumulator):
             )
 
         out = {"total": array(total, "total")}
+        keep = None
+        if self.min_prominence:
+            keep = prominent(
+                xp.where(self.s0 > 0, self.peak - self.floor, 0.0), self.min_prominence
+            )
+            attrs["min_prominence"] = self.min_prominence
         for d in self.along:
             mean1 = self.s1[d] / total
-            width = xp.sqrt(xp.clip(self.s2[d] / total - mean1**2, 0, None))
+            if keep is not None:
+                mean1 = xp.where(keep, mean1, xp.nan)
             unit = self.plan.structure.units.get(d, "px" if d in PIXEL_DIMS else "")
             out[f"com_{d}"] = array(mean1 + self.origin[d], f"com_{d}", dim=d, units=unit)
-            out[f"width_{d}"] = array(width, f"width_{d}", dim=d, units=unit)
+            if self.moments > 1:
+                width = xp.sqrt(xp.clip(self.s2[d] / total - mean1**2, 0, None))
+                out[f"width_{d}"] = array(width, f"width_{d}", dim=d, units=unit)
         return out
 
 

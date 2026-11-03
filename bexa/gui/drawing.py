@@ -6,7 +6,7 @@ controls, and the tests call them directly.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,6 +24,7 @@ __all__ = [
 ]
 
 CMAPS = (
+    "auto",  # a COM map in COM_CMAP about its median, the rest in viridis
     "viridis",
     "magma",
     "inferno",
@@ -31,9 +32,13 @@ CMAPS = (
     "cividis",
     "turbo",
     "twilight",
+    "RdBu",
     "RdBu_r",
+    "PiYG",
     "coolwarm",
 )
+COM_CMAP = "RdBu"  # a centre-of-mass map: diverging, as in the lab's notebooks
+COM_PREFIX = "com_"  # the name of every centre-of-mass map
 MAX_SHOWN = 2048  # larger images are shown every n-th pixel (the data are not changed)
 ROI_COLOURS = ("#e53935", "#1e88e5", "#43a047", "#fb8c00", "#8e24aa", "#00acc1")
 PIXEL_ALIASES = {"yb": "y", "xb": "x", "y": "y", "x": "x"}
@@ -41,7 +46,7 @@ PIXEL_ALIASES = {"yb": "y", "xb": "x", "y": "y", "x": "x"}
 
 @dataclass
 class ImageOptions:
-    cmap: str = "viridis"
+    cmap: str = "auto"
     log: bool = False
     percentiles: tuple[float, float] = (1.0, 99.5)
     vmin: float | None = None
@@ -99,8 +104,14 @@ def draw_image(
     options: ImageOptions,
     title: str = "",
     rois: Mapping[str, Any] | None = None,
+    hidden: Collection[str] = (),
 ) -> Any:
-    """``da`` (2-D) as an image on its coordinates; ROI boxes over the dims they limit."""
+    """``da`` (2-D) as an image on its coordinates; ROI boxes over the dims they limit,
+    but for those named in ``hidden`` (the others keep their colours).
+
+    With the colours ``"auto"`` a COM map (named ``com_...``) is drawn in RdBu with its
+    limits about its median, anything else in viridis.
+    """
     ax = fig.add_subplot(111)
     shown = da
     step = max(1, max(da.shape) // MAX_SHOWN)
@@ -111,13 +122,19 @@ def draw_image(
         with np.errstate(invalid="ignore", divide="ignore"):
             values = np.log10(np.clip(values, 0, None) + 1.0)
     lo, hi = _limits(values, options)
+    com = str(da.name or "").startswith(COM_PREFIX)
+    cmap = options.cmap
+    if cmap == "auto":
+        cmap = COM_CMAP if com else "viridis"
+        if com and options.vmin is None and options.vmax is None:
+            lo, hi = _about_median(values, lo, hi)
     extent = extent_of(shown)
     dy, dx = (str(d) for d in da.dims[-2:])
     # square pixels for detector images; a map over two motors fills the axes
     aspect = "equal" if options.aspect == "equal" and dx in PIXEL_ALIASES else "auto"
     image = ax.imshow(
         values,
-        cmap=options.cmap,
+        cmap=cmap,
         vmin=lo,
         vmax=hi,
         extent=extent,
@@ -134,10 +151,20 @@ def draw_image(
             ("log10(1+I)" if options.log else str(da.name or "")) + (f" ({units})" if units else "")
         )
     if rois:
-        _draw_rois(ax, rois, dy, dx)
+        _draw_rois(ax, rois, dy, dx, hidden)
     note = f" (every {step}th pixel shown)" if step > 1 else ""
     ax.set_title(title + note, fontsize=9)
     return ax
+
+
+def _about_median(values: np.ndarray, lo: float, hi: float) -> tuple[float, float]:
+    """Limits that put the median in the middle and keep ``lo`` and ``hi`` inside."""
+    finite = values[np.isfinite(values)]
+    if finite.size == 0:
+        return lo, hi
+    middle = float(np.median(finite))
+    half = max(middle - lo, hi - middle) or 1.0
+    return middle - half, middle + half
 
 
 def _label(da: xr.DataArray, dim: str) -> str:
@@ -145,10 +172,14 @@ def _label(da: xr.DataArray, dim: str) -> str:
     return f"{dim} ({units})" if units else dim
 
 
-def _draw_rois(ax: Any, rois: Mapping[str, Any], dy: str, dx: str) -> None:
+def _draw_rois(
+    ax: Any, rois: Mapping[str, Any], dy: str, dx: str, hidden: Collection[str] = ()
+) -> None:
     from matplotlib.patches import Rectangle
 
-    for k, (name, roi) in enumerate(rois.items()):
+    for k, (name, roi) in enumerate(rois.items()):  # k: the colour, hidden ROIs counted
+        if name in hidden:
+            continue
         # binned pixel dims carry full-resolution pixel coordinates: the y/x ranges apply
         ry = roi.ranges.get(PIXEL_ALIASES.get(dy, dy))
         rx = roi.ranges.get(PIXEL_ALIASES.get(dx, dx))
@@ -168,6 +199,8 @@ def _draw_rois(ax: Any, rois: Mapping[str, Any], dy: str, dx: str) -> None:
 
 
 def draw_rgb(fig: Any, da: xr.DataArray, title: str = "") -> Any:
+    """A colour picture ``(y, x, rgb)`` on its coordinates; a bivariate picture (attrs
+    ``key_cmaps``, ``key_x``, ``key_x_range``, ...) with its key in a corner."""
     ax = fig.add_subplot(111)
     picture = np.clip(np.nan_to_num(np.asarray(da.values, dtype=float)), 0.0, 1.0)
     plane = da.isel(rgb=0) if "rgb" in da.dims else da
@@ -176,8 +209,39 @@ def draw_rgb(fig: Any, da: xr.DataArray, title: str = "") -> Any:
     if len(dims) == 2:
         ax.set_ylabel(dims[0])
         ax.set_xlabel(dims[1])
+    if "key_cmaps" in da.attrs:
+        _bivariate_key(ax, da.attrs)
     ax.set_title(title, fontsize=9)
     return ax
+
+
+def _bivariate_key(ax: Any, attrs: Mapping[str, Any]) -> None:
+    """The key of a bivariate picture: the two scales and their colours, top right."""
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+    from bexa.viz.maps import bivariate_key
+
+    (x0, x1), (y0, y1) = attrs["key_x_range"], attrs["key_y_range"]
+    inset = inset_axes(ax, width="22%", height="22%", loc="upper right", borderpad=1)
+    inset.imshow(
+        bivariate_key(tuple(attrs["key_cmaps"])),
+        extent=[x0, x1, y0, y1],
+        origin="lower",
+        aspect="auto",
+    )
+    inset.set_xlabel(str(attrs.get("key_x", "")), fontsize=7)
+    inset.set_ylabel(str(attrs.get("key_y", "")), fontsize=7)
+    inset.tick_params(labelsize=6)
+
+
+def _finite(
+    x: np.ndarray, y: np.ndarray, err: np.ndarray | None
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """The points of a curve that have a value: a line drawn through NaN stops there."""
+    keep = np.isfinite(y) & np.isfinite(x)
+    if keep.all():
+        return x, y, err
+    return x[keep], y[keep], None if err is None else err[keep]
 
 
 def draw_curves(
@@ -187,7 +251,11 @@ def draw_curves(
     fits: Sequence[tuple[str, xr.DataArray]] = (),
     title: str = "",
 ) -> Any:
-    """Curves ``[(label, data, sigma), ...]`` on one axes, with error bars and fitted curves."""
+    """Curves ``[(label, data, sigma), ...]`` on one axes, with error bars and fitted curves.
+
+    The points of a curve are joined by a line, across the points it lacks (NaN: a
+    frame not saved), which are left out.
+    """
     ax = fig.add_subplot(111)
     for label, da, sigma in curves:
         dim = str(da.dims[0])
@@ -199,8 +267,10 @@ def draw_curves(
             if sigma is None
             else np.asarray(sigma.values if hasattr(sigma, "values") else sigma, float)
         )
+        x, y, err = _finite(x, y, err)
         if options.normalize:
-            top = np.nanmax(np.abs(y)) or 1.0
+            top = np.nanmax(np.abs(y)) if y.size else 1.0
+            top = top or 1.0
             y = y / top
             err = None if err is None else err / top
         style = {"marker": "o", "ms": 3} if options.markers else {}

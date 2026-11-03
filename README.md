@@ -2454,7 +2454,7 @@ res["roi_peak"].dims                          # ('chi', 'mu')
 ```
 
 #### `MotorCOM`
-`bexa.core.reductions.MotorCOM(axes=None, sigma=3.0, weights="linear", clip=1e-10, moments=2)`
+`bexa.core.reductions.MotorCOM(axes=None, sigma=3.0, weights="linear", clip=1e-10, moments=2, min_prominence=0.0)`
 
 Per-pixel centre of mass and higher moments of the rocking curve along motor axes. With
 weight `w_f` of frame `f` at motor value `m_f`, per pixel:
@@ -2467,6 +2467,11 @@ weight `w_f` of frame `f` at motor value `m_f`, per pixel:
 - `clip`: weights below it are raised to it, so empty pixels do not divide by zero.
 - `moments`: 1 gives `com_<axis>`; 2 adds `width_<axis>`; 3 adds `skew_<axis>`; 4 adds
   `kurtosis_<axis>` (excess kurtosis). `total`, the sum of the weights, is always returned.
+- `min_prominence`: leave out (NaN in every map but `total`; the attr `min_prominence` says
+  so) the pixels whose peak rises above their lowest weight by less than this fraction of the
+  strongest pixel's rise (`prominent`): the background, whose COM is noise. The rise is a
+  pixel's highest smoothed weight over the frames less its lowest, kept as the frames come
+  (two images more, no second pass); 0 keeps every pixel and leaves the cache key as it was.
 
 The moments of a batch are formed about the middle of each motor axis, in the frames' dtype
 (float32 BLAS through `tensordot`, no float64 copy of the batch), and accumulated in float64
@@ -2482,10 +2487,12 @@ take 1.6 s on the CPU (4.9 s before the threads and the dropped copy) and 0.6 s 
 # scan: the demo chi x mu scan; window: a pixel ROI; moments of every pixel's rocking curve
 res = scan.reduce([bexa.acc.MotorCOM(axes=("chi", "mu"), sigma=3.0, moments=4)], roi=window)
 res["com_mu"].attrs["units"]                  # 'deg'
+kept = scan.reduce([bexa.acc.MotorCOM(sigma=1.0, min_prominence=0.05)])   # weak peaks left out
+kept["com_mu"].attrs["min_prominence"]        # 0.05
 ```
 
 #### `DimCOM`
-`bexa.core.reductions.DimCOM(along, over, sigma=3.0, clip=1e-10)`
+`bexa.core.reductions.DimCOM(along, over, sigma=3.0, clip=1e-10, moments=2, min_prominence=0.0)`
 
 Centre of mass and width along any of the scan's dims, as maps over others: `along` names the
 dims of the COM, motors and pixels alike, `over` the dims of the maps, and the other dims are
@@ -2495,12 +2502,33 @@ motors along and `("y", "x")` over are the maps of `MotorCOM`. With weights `w` 
 smoothed by `sigma` pixels, clipped to `clip`) and coordinates `c` (full-resolution pixel indices,
 or the motor values of each frame): `com = sum(w c) / sum(w)`, `width = sqrt(sum(w c^2) / sum(w)
 - com^2)`. One pass; each batch is summed over its pixel axes first, then folded into the kept
-grid points. Results: `total`, `com_<dim>` and `width_<dim>`; a point without a frame is NaN.
+grid points. Results: `total`, `com_<dim>` and, with `moments=2` (`1`: the COM alone, the
+second moments not summed), `width_<dim>`; a point without a frame is NaN. `min_prominence`
+leaves out (NaN but in `total`) the points whose peak rises above their lowest weight by less
+than this fraction of the strongest point's rise (`prominent`); the rise is the highest
+weight the point's COM is taken from (its frames, and its pixels along) less the lowest, a
+frame centre's the frame's brightest smoothed pixel less its faintest. The new settings enter
+the cache key only when set.
 
 ```python
 # scan: the demo chi x mu scan; every frame's centre on the detector, as chi x mu maps
 com = scan.reduce([bexa.acc.DimCOM(("y", "x"), ("chi", "mu"))])
 com["com_x"].dims, sorted(com.data_vars)       # ('chi', 'mu'), ['com_x', 'com_y', 'total', 'width_x', 'width_y']
+centres = scan.reduce([bexa.acc.DimCOM(("y", "x"), ("chi", "mu"), moments=1, min_prominence=0.3)])
+sorted(centres.data_vars), round(float(np.isnan(centres["com_x"]).mean()), 2)   # (['com_x', 'com_y', 'total'], 0.52): the frames off the peak left out
+```
+
+#### `prominent`
+`bexa.core.reductions.prominent(rise, fraction)`
+
+Where a peak rises by at least `fraction` of the strongest rise: `rise` holds, per point, the
+highest weight less the lowest (a boolean array of its shape comes back). What `MotorCOM`,
+`DimCOM` and COM Maps keep with `min_prominence`.
+
+```python
+# three points: no peak, half the strongest, the strongest
+from bexa.core.reductions import prominent
+prominent(np.array([0.0, 5.0, 10.0]), 0.3).tolist()   # [False, True, True]
 ```
 
 #### `EnergyCOM`
@@ -7564,9 +7592,9 @@ cube = bexa.load(make_legacy_cube("run42.h5"))   # pump-probe cube: frames (lase
 #### `rocking_curves`
 `bexa.viz.curves.rocking_curves(curves, fits=None, ax=None, normalize=False, xlabel=None, figsize=None)`
 
-Rocking curves as dots against the motor, one colour per curve. `curves` is a 1-D DataArray or
-`{label: DataArray}`. `fits` maps the same labels to `(x, y)` arrays, drawn as a line in the
-curve's colour (lmfit `ModelResult`s fitted with an `x=` keyword also work); for a `FitResult`
+Rocking curves as dots joined by a thin line against the motor (across the points a curve
+lacks, NaN), one colour per curve. `curves` is a 1-D DataArray or `{label: DataArray}`.
+`fits` maps the same labels to `(x, y)` arrays, drawn as a thicker line in the curve's colour (lmfit `ModelResult`s fitted with an `x=` keyword also work); for a `FitResult`
 of `bexa.analysis.fitting` pass `(x, fit.best_fit)`, as the object itself raises
 `AttributeError`. `normalize=True` scales every curve and fit to 0..1 (minimum to maximum). The
 x label comes from the coordinate unless `xlabel` is given. Returns `(fig, ax)`.
@@ -7583,8 +7611,8 @@ fig, ax = curves.rocking_curves({"peak": curve, "detector": stats["frame_sum"]},
 #### `curve`
 `bexa.viz.curves.curve(da, ax=None, label=None, figsize=None, **kwargs)`
 
-Line plot of a 1-D DataArray against its coordinate (the index when the dim has none). The
-legend label defaults to the array's name, the x label carries the coordinate's units, the y
+Line plot of a 1-D DataArray against its coordinate (the index when the dim has none); the
+line goes on across the points the array lacks (NaN). The legend label defaults to the array's name, the x label carries the coordinate's units, the y
 label is the name; other keywords go to `ax.plot`. Returns `(fig, ax)`; pass `ax` to add lines.
 
 ```python
@@ -7677,12 +7705,13 @@ im.get_clim()                                                           # (-0.05
 ```
 
 #### `bivariate`
-`bexa.viz.maps.bivariate(map_a, map_b, ax=None, cmaps=(BLUE_RED, GREEN_PURPLE), labels=None, limits=(None, None), key=True, scalebar=DEFAULT, title=None, figsize=None)`
+`bexa.viz.maps.bivariate(map_a, map_b, ax=None, cmaps=BIVARIATE_CMAPS, labels=None, limits=(None, None), key=True, scalebar=DEFAULT, title=None, figsize=None)`
 
 Two maps in one RGB image, for example the centre of mass in chi and in mu. Each map is
 normalised to 0..1 over its minimum and maximum (or the `(low, high)` pair in `limits`; NaN goes
-to the low end), sent through its colormap (blue-white-red and green-white-purple by default),
-and the two RGB images are averaged. `key=True` adds an inset (top right) with the colour of
+to the low end), sent through its colormap (a name or a matplotlib colormap: `RdBu` and `PiYG`
+by default, the notebooks' blue-red and green-purple as `BLUE_RED` and `GREEN_PURPLE`), and
+the two RGB images are averaged (`bivariate_rgb`; a point either map lacks is black). `key=True` adds an inset (top right) with the colour of
 every pair of values, its axes in the maps' units and labelled with `labels` (default: the
 DataArray names). `scalebar` as in `images.show`. Returns `(fig, ax)`.
 
@@ -7691,6 +7720,31 @@ DataArray names). `scalebar` as in `images.show`. Returns `(fig, ax)`.
 fig, ax = maps.bivariate(res["com_chi"], res["com_mu"], labels=("chi (deg)", "mu (deg)"))
 fig, ax = maps.bivariate(res["com_chi"], res["com_mu"], limits=((-0.2, 0.2), None), key=False)
 len(ax.images), len(fig.axes)                   # (1, 1)
+```
+
+#### `bivariate_rgb`
+`bexa.viz.maps.bivariate_rgb(map_a, map_b, cmaps=BIVARIATE_CMAPS, limits=(None, None))`
+
+Two maps as one RGB picture `(..., 3)`, and the `(low, high)` each was scaled by: each map
+scaled to 0..1 over its range (or `limits`), taken through its colormap (a name or a matplotlib
+colormap; `RdBu` for the first, `PiYG` for the second by default) and the two averaged, as in
+the lab's notebooks; a point either map lacks (NaN) is black. What `bivariate` draws and COM
+Maps stores for a COM along two dims.
+
+```python
+# res: the COM maps of the demo scan; the tilts in chi and mu as one picture
+rgb, chi_range, mu_range = maps.bivariate_rgb(res["com_chi"], res["com_mu"])
+rgb.shape                                        # (64, 80, 3)
+```
+
+#### `bivariate_key`
+`bexa.viz.maps.bivariate_key(cmaps=BIVARIATE_CMAPS, n=100)`
+
+The key of a bivariate picture, `(n, n, 3)`: the first map's scale along x, the second's up.
+
+```python
+# the key of RdBu and PiYG
+maps.bivariate_key().shape                       # (100, 100, 3)
 ```
 
 #### `hsv_mosaicity`
@@ -7762,8 +7816,10 @@ fig, ax, im = maps.cluster_map(labels, title="k-means on the COM maps")
 
 Constants:
 
-- `BLUE_RED`, `GREEN_PURPLE`: matplotlib colormaps blue-white-red and green-white-purple, the
-  default `cmaps` of `bivariate`.
+- `BIVARIATE_CMAPS`: `("RdBu", "PiYG")`, the default `cmaps` of `bivariate`, `bivariate_rgb`
+  and `bivariate_key`.
+- `BLUE_RED`, `GREEN_PURPLE`: matplotlib colormaps blue-white-red and green-white-purple, those
+  of the lab's notebooks.
 
 ### bexa.viz.volume: projections, slices, isosurfaces and 3-D renderings
 
@@ -9703,7 +9759,7 @@ curve.describe(), round(float(curve.sigma[12]), 1)  # ('curve mu[25] float64 +/-
 ```
 
 #### `com_maps`
-`bexa.workspace.ops.extract.com_maps(obj, axes=None, sigma=3.0, roi=None, downsample=None, over=None)`
+`bexa.workspace.ops.extract.com_maps(obj, axes=None, sigma=3.0, roi=None, downsample=None, over=None, min_prominence=0.0, widths=True, total=True, bivariate=True)`
 
 Centre-of-mass and width maps along any dims, and the total intensity. `axes` are the dims the
 COM is taken along, motors and pixels alike (default: every motor); `over` the dims of the maps
@@ -9713,12 +9769,24 @@ intensity-weighted mean motor position (`com_<axis>`) and spread (`width_<axis>`
 "x")` of an `a x b` scan gives every frame's centre on the detector (bivariate) as `a x b`
 maps; `("mu",)` over `("chi", "x")` the rocking centre per chi and detector column. A scan
 is streamed (`MotorCOM`, or `DimCOM` for other dims), a stack, map or volume reduced in memory.
-Frames are smoothed by `sigma` pixels first (0 to switch off). `ValueError` when no dim is left
-for the maps. On the Analysis tab: Extract, "COM Maps"; in code `ws.run("com_maps", ...)`.
+Frames are smoothed by `sigma` pixels first (0 to switch off). `min_prominence` leaves out (NaN)
+the points whose peak rises above its lowest value by less than this fraction of the strongest
+point's rise: the background, whose COM is noise (0 keeps every point). The rise is measured
+as `MotorCOM` and `DimCOM` measure it, in memory too: a point's highest smoothed weight over
+the frames (and the pixels along) less its lowest. `widths`
+and `total` choose those maps (no widths: their sums are not formed). A COM along two dims
+adds, with `bivariate`, the two COMs as one colour picture, `com_<a>_<b>` (kind `rgb`): the
+first through RdBu, the second through PiYG, averaged, each scaled over its 1st to 99th
+percentile (`bexa.viz.maps.bivariate_rgb`), its key in the attrs (`key_x`, `key_x_range`,
+`key_y`, `key_y_range`, `key_cmaps`), which the View draws in a corner. `ValueError` when no
+dim is left for the maps. On the Analysis tab: Extract, "COM Maps"; in code
+`ws.run("com_maps", ...)`.
 
 ```python
 # mosa: the centre-of-mass maps of both tilts
-[o.name for o in extract.com_maps(mosa, sigma=1.0)]  # ['demo_mosa_total', 'demo_mosa_com_chi', 'demo_mosa_width_chi', 'demo_mosa_com_mu', 'de...
+[o.name for o in extract.com_maps(mosa, sigma=1.0)]  # ['demo_mosa_total', 'demo_mosa_com_chi', 'demo_mosa_width_chi', 'demo_mosa_com_mu', 'demo_mosa_width_mu', 'demo_mosa_com_chi_mu']
+# the COMs alone, the weak peaks left out
+[o.name for o in extract.com_maps(mosa, sigma=1.0, widths=False, total=False, bivariate=False, min_prominence=0.05)]   # ['demo_mosa_com_chi', 'demo_mosa_com_mu']
 # every frame's centre on the detector, as chi x mu maps
 [o.dims for o in extract.com_maps(mosa, axes=["y", "x"])][:2]   # [('chi', 'mu'), ('chi', 'mu')]
 ```
@@ -11746,11 +11814,13 @@ curve = xr.DataArray(np.arange(1.0, 6.0), dims=("mu",), coords={"mu": np.linspac
 ```
 
 #### `draw_image`
-`bexa.gui.drawing.draw_image(fig, da, options, title="", rois=None)`
+`bexa.gui.drawing.draw_image(fig, da, options, title="", rois=None, hidden=())`
 
 A 2-D DataArray as an image on its coordinates (every n-th
 pixel above 2048), percentile limits unless `vmin`/`vmax` are set, the named ROIs drawn over the
-dims they limit. Returns the axes.
+dims they limit, but for those named in `hidden` (the others keep their colours). With the
+colours `"auto"` (the default) a COM map, a DataArray named `com_...`, is drawn in RdBu with
+its limits about its median (`COM_CMAP`), anything else in viridis. Returns the axes.
 
 ```python
 # the window with an ROI box, log scale
@@ -11760,8 +11830,9 @@ draw_image(Figure(), image, ImageOptions(log=True), "frame", rois={"box": bexa.R
 #### `draw_curves`
 `bexa.gui.drawing.draw_curves(fig, curves, options, fits=(), title="")`
 
-Curves `[(label, data, sigma), ...]` on one axes with error bars,
-and fitted curves `[(label, data), ...]` dashed. Returns the axes.
+Curves `[(label, data, sigma), ...]` on one axes with error bars, their points joined by a
+line across the points a curve lacks (NaN: a frame not saved, left out), and fitted curves
+`[(label, data), ...]` dashed. Returns the axes.
 
 ```python
 # two curves on a log axis
@@ -11771,7 +11842,8 @@ draw_curves(Figure(), [("a", curve, np.ones(5)), ("b", 2 * curve, None)], CurveO
 #### `draw_rgb`
 `bexa.gui.drawing.draw_rgb(fig, da, title="")`
 
-A colour picture `(y, x, rgb)` on its coordinates.
+A colour picture `(y, x, rgb)` on its coordinates; a bivariate picture of COM Maps (attrs
+`key_cmaps`, `key_x`, `key_x_range`, `key_y`, `key_y_range`) with its key in a corner.
 
 ```python
 # a grey picture
@@ -11790,7 +11862,7 @@ extent_of(image)                                # [-0.5, 29.5, 119.5, 99.5]
 ```
 
 #### `ImageOptions`
-`bexa.gui.drawing.ImageOptions(cmap="viridis", log=False, percentiles=(1.0, 99.5), vmin=None, vmax=None, colorbar=True, aspect="equal")`
+`bexa.gui.drawing.ImageOptions(cmap="auto", log=False, percentiles=(1.0, 99.5), vmin=None, vmax=None, colorbar=True, aspect="equal")`
 
 How an image is drawn: `cmap`, `log`, `percentiles`, `vmin`,
 `vmax`, `colorbar`, `aspect`.
@@ -11811,7 +11883,9 @@ How curves are drawn: `log_y`, `errors`, `markers`,
 CurveOptions()                                  # CurveOptions(log_y=False, errors=True, markers=True, normalize=False, legend=True)
 ```
 
-- `CMAPS`: the colour maps the View tab offers.
+- `CMAPS`: the colour maps the View tab offers, `"auto"` first (RdBu, PiYG among them).
+- `COM_CMAP`, `COM_PREFIX`: `"RdBu"` and `"com_"`, the colours of a COM map and the start of
+  its name.
 - `MAX_SHOWN`: the largest image side drawn in full.
 - `ROI_COLOURS`: the colours of the ROI boxes.
 - `PIXEL_ALIASES`: binned pixel dims to pixel dims.
@@ -12080,7 +12154,10 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 The tab: `pane`, `mode`, `member` (the scan of a set), `row_dim`
 and `col_dim` (a volume), `sliders` by dim, the image options (`cmap`, `log`, `percent`, `vmin`,
 `vmax`, `colorbar`, `show_rois`, `aspect`), the curve options (`log_y`, `errors`, `markers`,
-`normalize`, `fits`), the ROI tools (`roi_list`, `roi_name`, `roi_ranges`, `draw`, `line`).
+`normalize`, `fits`), the ROI tools (`roi_list`, `roi_name`, `roi_ranges`, `draw`, `line`,
+and `roi_toggles`: a toggle per ROI, on while it is drawn; `hidden_rois` names those off, and
+the `show_rois` checkbox hides them all). The colours are `"auto"` at first: COM maps in
+RdBu about their median, the rest in viridis.
 `refresh()` follows the selection: an object that grew (a scan being written) keeps its mode
 and member scan, and a slider at its last point moves to the new last point. `redraw()` draws
 again.
@@ -12132,8 +12209,8 @@ app.current                                     # 'demo_rocking_sum'
 The Fit tab: a curve (or a map, to fit each of its curves), peaks guessed, added, or placed with
 a click (ipympl), each parameter with a start value, bounds or fixed, a background with its start
 values, a fit range; Fit runs `fit_peaks` with these and writes the fitted values back into the
-rows, so a second Fit refines; the plot shows data, fit, components and residuals; the parameter
-table saves to CSV, JSON or HDF5.
+rows, so a second Fit refines; the plot shows the data (its points joined by a thin grey line),
+fit, components and residuals; the parameter table saves to CSV, JSON or HDF5.
 
 ```python
 import bexa

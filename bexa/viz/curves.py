@@ -23,11 +23,14 @@ def curve(
     figsize: tuple[float, float] | None = None,
     **kwargs: Any,
 ) -> tuple[Any, Any]:
-    """Line plot of a 1-D DataArray against its coordinate (``kwargs`` go to ``ax.plot``)."""
+    """Line plot of a 1-D DataArray against its coordinate (``kwargs`` go to ``ax.plot``); the
+    line goes across the missing points (NaN), which are left out."""
     fig, ax = new_axes(ax, style.figure_size("curve", figsize))
     dim = da.dims[0]
-    x = da.coords[dim].values if dim in da.coords else np.arange(da.size)
-    ax.plot(x, as_array(da), label=label or (str(da.name) if da.name else None), **kwargs)
+    x = np.asarray(da.coords[dim].values if dim in da.coords else np.arange(da.size))
+    y = as_array(da)
+    keep = _has_value(y)
+    ax.plot(x[keep], y[keep], label=label or (str(da.name) if da.name else None), **kwargs)
     ax.set_xlabel(dim_label(da, str(dim)))
     ax.set_ylabel(str(da.name or ""))
     if label or da.name:
@@ -158,6 +161,12 @@ def moments_vs_axis(
     return fig, axes
 
 
+def _has_value(y: np.ndarray) -> np.ndarray:
+    """The points of a curve with a value (a float NaN is a missing point)."""
+    y = np.asarray(y)
+    return np.isfinite(y) if np.issubdtype(y.dtype, np.floating) else np.ones(y.shape, bool)
+
+
 def rocking_curves(
     curves: xr.DataArray | Mapping[str, Any],
     fits: Mapping[str, Any] | None = None,
@@ -169,7 +178,9 @@ def rocking_curves(
     """Rocking curves (intensity vs motor) for one or more ROIs, with optional fits.
 
     ``curves`` is a 1-D DataArray or ``{label: DataArray}``; ``fits`` maps the
-    same labels to ``(x, y)`` arrays or fit results with ``best_fit``.
+    same labels to ``(x, y)`` arrays or fit results with ``best_fit``. The points
+    of a curve are joined by a thin line (across its missing points), a fit drawn
+    thicker in the same colour.
     """
     fig, ax = new_axes(ax, style.figure_size("rocking", figsize))
     items = {"": curves} if isinstance(curves, xr.DataArray) else dict(curves)
@@ -181,13 +192,14 @@ def rocking_curves(
         y = as_array(da).astype(float)
         if normalize and np.nanmax(y) > 0:
             y = (y - np.nanmin(y)) / (np.nanmax(y) - np.nanmin(y))
-        (line,) = ax.plot(x, y, ".", label=label or None)
+        keep = np.isfinite(y)
+        (line,) = ax.plot(x[keep], y[keep], ".-", lw=0.8, label=label or None)
         if fits and label in fits:
             fit = fits[label]
             fx, fy = (fit.userkws["x"], fit.best_fit) if hasattr(fit, "best_fit") else fit
             if normalize and np.nanmax(fy) > 0:
                 fy = (fy - np.nanmin(fy)) / (np.nanmax(fy) - np.nanmin(fy))
-            ax.plot(fx, fy, "-", color=line.get_color())
+            ax.plot(fx, fy, "-", lw=1.6, color=line.get_color())
         if xlabel is None:
             xlabel = dim_label(da, str(dim))
     ax.set_xlabel(xlabel or "motor")

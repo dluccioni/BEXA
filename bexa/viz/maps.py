@@ -29,6 +29,8 @@ __all__ = [
 
 BLUE_RED = LinearSegmentedColormap.from_list("blue_white_red", ["blue", "white", "red"])
 GREEN_PURPLE = LinearSegmentedColormap.from_list("green_white_purple", ["green", "white", "purple"])
+# the two COMs of a bivariate map: the first through RdBu, the second through PiYG
+BIVARIATE_CMAPS = ("RdBu", "PiYG")
 
 
 def _normalize(
@@ -109,11 +111,45 @@ def com_map(
     return fig, ax, im
 
 
+def _colormap(cmap: Any) -> Any:
+    import matplotlib
+
+    return matplotlib.colormaps[cmap] if isinstance(cmap, str) else cmap
+
+
+def bivariate_rgb(
+    map_a: Any,
+    map_b: Any,
+    cmaps: tuple[Any, Any] = BIVARIATE_CMAPS,
+    limits: tuple[tuple[float, float] | None, tuple[float, float] | None] = (None, None),
+) -> tuple[np.ndarray, tuple[float, float], tuple[float, float]]:
+    """Two maps as one RGB picture, and the limits each was scaled by.
+
+    Each map is scaled to [0, 1] over its range (or ``limits``), taken through its
+    colormap (a name or a matplotlib colormap), and the two RGB pictures averaged,
+    as in the lab's notebooks; a point either map lacks (NaN) is black.
+    """
+    values_a, values_b = as_array(map_a), as_array(map_b)
+    a, lim_a = _normalize(values_a, limits[0])
+    b, lim_b = _normalize(values_b, limits[1])
+    cmap_a, cmap_b = (_colormap(c) for c in cmaps)
+    rgb = 0.5 * cmap_a(a)[..., :3] + 0.5 * cmap_b(b)[..., :3]
+    rgb[~(np.isfinite(values_a) & np.isfinite(values_b))] = 0.0
+    return rgb, lim_a, lim_b
+
+
+def bivariate_key(cmaps: tuple[Any, Any] = BIVARIATE_CMAPS, n: int = 100) -> np.ndarray:
+    """The key of a bivariate picture: ``(n, n, 3)``, the first map along x, the second up."""
+    ga, gb = np.meshgrid(np.linspace(0, 1, n), np.linspace(0, 1, n))
+    cmap_a, cmap_b = (_colormap(c) for c in cmaps)
+    return 0.5 * cmap_a(ga)[..., :3] + 0.5 * cmap_b(gb)[..., :3]
+
+
 def bivariate(
     map_a: Any,
     map_b: Any,
     ax: Any = None,
-    cmaps: tuple[Any, Any] = (BLUE_RED, GREEN_PURPLE),
+    cmaps: tuple[Any, Any] = BIVARIATE_CMAPS,
     labels: tuple[str, str] | None = None,
     limits: tuple[tuple[float, float] | None, tuple[float, float] | None] = (None, None),
     key: bool = True,
@@ -124,16 +160,14 @@ def bivariate(
     """Blend two maps (for example COM in mu and in chi) into one RGB image with a key.
 
     Each map is normalised to [0, 1] (over its own range or ``limits``), mapped
-    through its colormap, and the two RGB images are averaged, as in the lab's
-    notebooks.
+    through its colormap (``RdBu`` and ``PiYG`` by default; the notebooks' blue-red and
+    green-purple are ``BLUE_RED`` and ``GREEN_PURPLE``), and the two RGB images are
+    averaged, as in the lab's notebooks (:func:`bivariate_rgb`).
     """
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     fig, ax = new_axes(ax, style.figure_size("bivariate", figsize))
-    a, lim_a = _normalize(as_array(map_a), limits[0])
-    b, lim_b = _normalize(as_array(map_b), limits[1])
-    cmap_a, cmap_b = cmaps
-    rgb = 0.5 * cmap_a(a)[..., :3] + 0.5 * cmap_b(b)[..., :3]
+    rgb, lim_a, lim_b = bivariate_rgb(map_a, map_b, cmaps, limits)
     ax.imshow(rgb)
     ax.set_xticks([])
     ax.set_yticks([])
@@ -142,9 +176,7 @@ def bivariate(
     if title:
         ax.set_title(title)
     if key:
-        n = 100
-        ga, gb = np.meshgrid(np.linspace(0, 1, n), np.linspace(0, 1, n))
-        key_rgb = 0.5 * cmap_a(ga)[..., :3] + 0.5 * cmap_b(gb)[..., :3]
+        key_rgb = bivariate_key(cmaps)
         inset = inset_axes(ax, width="25%", height="25%", loc="upper right", borderpad=1)
         inset.imshow(
             key_rgb, extent=[lim_a[0], lim_a[1], lim_b[0], lim_b[1]], origin="lower", aspect="auto"

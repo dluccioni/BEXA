@@ -350,6 +350,8 @@ class FitTab:
         grid = fig.add_gridspec(4, 1, hspace=0.05)
         ax = fig.add_subplot(grid[:3, 0])
         rest = fig.add_subplot(grid[3, 0], sharex=ax)
+        joined = np.isfinite(x) & np.isfinite(y)  # the points joined, across the missing ones
+        ax.plot(x[joined], y[joined], "-", lw=0.8, color="#9e9e9e", zorder=1)
         if sigma is not None:
             ax.errorbar(x, y, yerr=sigma, fmt="o", ms=3, lw=0.8, color="#424242", label="data")
         else:
