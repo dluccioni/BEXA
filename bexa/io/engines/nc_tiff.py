@@ -21,11 +21,19 @@ that puts the TIFFs loose beside the netCDF files or the SPEC file
 (``MapScan_102_1.tiff``: run 102, point 1) is read too. A run whose frames are
 there but whose netCDF file is not (the script writes it at the end) is a
 series of frames: running when it is the last run, aborted otherwise.
+
+The script may also keep a log of each run (``scan_info/run_<n>_log.json``):
+the names of the counters, in the order of ``det``, and where the stages
+stood. Its folder is searched for near the netCDF folder the same way; the
+names name the counters (however many the run read) and the numbers are the
+scan's positions (``nsam: [x, y, z]`` is ``nsamstageX``, ``nsamstageY``,
+``nsamstageZ`` by the layout's ``log_positions``).
 """
 
 from __future__ import annotations
 
 import fnmatch
+import json
 import os
 import re
 import threading
@@ -55,8 +63,11 @@ __all__ = [
     "RunGrid",
     "RunIndex",
     "RunLayout",
+    "RunLog",
     "find_run_folder",
+    "find_run_log",
     "first_point",
+    "read_log",
     "read_run",
     "run_folder_of",
     "run_frames",
@@ -74,7 +85,8 @@ _LISTINGS: dict[Path, tuple[int, list[tuple[str, bool]]]] = {}
 _FRAMES: dict[tuple[Path, int], tuple[int, dict[int, Path]]] = {}
 _PLACES: dict[tuple[Path, str], list[Path]] = {}
 _INDEXES: dict[tuple[Path, str], tuple[tuple[int, ...], RunIndex]] = {}
-_GRIDS: dict[tuple[Path, RunLayout], tuple[tuple[int, int], RunGrid]] = {}
+_GRIDS: dict[tuple[Path, RunLayout, tuple[str, ...]], tuple[tuple[int, int], RunGrid]] = {}
+_LOGS: dict[Path, tuple[tuple[int, int], RunLog | None]] = {}
 _LOCK = threading.Lock()
 
 
@@ -89,8 +101,12 @@ class RunLayout:
     ``run_dir`` the run number in a frames subfolder's name. The search goes
     ``search_up`` folders above where it starts and ``search_depth`` below
     each, never into ``search_skip`` (SPEC's ``images``). ``channel_dim`` is the
-    netCDF dim of the counters, named ``channel_names`` (``<dim>_<k>`` for the
-    rest); ``order_channel`` the counter that rises point by point.
+    netCDF dim of the counters, named by the run's log, else ``channel_names``
+    (``<dim>_<k>`` for the rest); ``order_channel`` the counter that rises point
+    by point. ``run_log`` names a run's log (``run_{run}_log.json``), searched for
+    ``log_search_up`` folders above the netCDF folder and ``log_search_depth`` below
+    each, and ``log_positions`` the positions a list of the log stands for (``nsam``:
+    ``nsamstageX``, ``nsamstageY``, ``nsamstageZ``).
     """
 
     run_file: str
@@ -105,12 +121,17 @@ class RunLayout:
     order_channel: int | None = None
     first_point: int | None = None
     running_seconds: float = 120.0
+    run_log: str | None = None
+    log_positions: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    log_search_up: int = 2
+    log_search_depth: int = 1
 
     @classmethod
     def of(cls, spec: FormatSpec) -> RunLayout:
         layout = spec.layout
         order = layout.get("order_channel")
         first = layout.get("first_point")
+        spread = layout.get("log_positions") or {}
         return cls(
             run_file=str(layout["run_file"]),
             frames_dirs=tuple(str(g) for g in layout.get("frames_dirs", ())),
@@ -124,6 +145,12 @@ class RunLayout:
             order_channel=None if order is None else int(order),
             first_point=None if first in (None, "auto") else int(first),
             running_seconds=float(layout.get("running_seconds", 120.0)),
+            run_log=str(layout["run_log"]) if layout.get("run_log") else None,
+            log_positions=tuple(
+                (str(key), tuple(str(n) for n in names)) for key, names in spread.items()
+            ),
+            log_search_up=int(layout.get("log_search_up", 2)),
+            log_search_depth=int(layout.get("log_search_depth", 1)),
         )
 
     @property
@@ -136,6 +163,11 @@ class RunLayout:
         """``run_<n>.nc`` with the number as the group ``run``."""
         parts = RUN_FIELD.split(self.run_file)[::2]  # split() also returns the format specs
         return re.compile("^" + r"(?P<run>\d+)".join(re.escape(p) for p in parts) + "$")
+
+    @property
+    def log_glob(self) -> str:
+        """``run_*_log.json``: every run's log (empty without ``run_log``)."""
+        return RUN_FIELD.sub("*", self.run_log) if self.run_log else ""
 
     def run_of_file(self, name: str) -> int | None:
         m = self.run_pattern.match(name)
@@ -264,17 +296,50 @@ def find_run_folder(
     return None
 
 
-def _frames_places(folder: Path, layout: RunLayout) -> list[Path]:
-    """The folders holding the runs' frames nearest the netCDF ``folder``: frames folders
-    (``python_images``) and folders with frames lying loose; kept once found."""
-    key = (Path(os.path.abspath(folder)), layout.run_file)
+def _nearest(
+    folder: Path,
+    layout: RunLayout,
+    kind: str,
+    wanted: Callable[[Path, FolderListing], bool],
+    skipped: Callable[[str], bool],
+    up: int | None = None,
+    depth: int | None = None,
+) -> list[Path]:
+    """The folders ``wanted`` nearest the netCDF ``folder`` (in it, below it, or below one
+    of the ``up`` folders above it, down to ``depth`` levels: the layout's ``search_up``
+    and ``search_depth`` by default), kept once found under ``kind``; none found is
+    searched again next time, since the first frames or logs may come."""
+    key = (Path(os.path.abspath(folder)), kind)
     with _LOCK:
         hit = _PLACES.get(key)
     if hit is not None:
         return hit
     listing = FolderListing()
+    below: Path | None = None
+    found: list[Path] = []
+    for ancestor in _ancestors(folder, layout.search_up if up is None else up):
+        found = _search(
+            ancestor,
+            layout.search_depth if depth is None else depth,
+            listing,
+            lambda place: wanted(place, listing),
+            skipped,
+            below,
+        )
+        if found:
+            break
+        below = ancestor
+    if found:
+        with _LOCK:
+            _PLACES[key] = found
+    return found
 
-    def holds_frames(place: Path) -> bool:
+
+def _frames_places(folder: Path, layout: RunLayout) -> list[Path]:
+    """The folders holding the runs' frames nearest the netCDF ``folder``: frames folders
+    (``python_images``) and folders with frames lying loose."""
+
+    def holds_frames(place: Path, listing: FolderListing) -> bool:
         if layout.is_frames_dir(place.name):
             return True
         return any(
@@ -282,19 +347,33 @@ def _frames_places(folder: Path, layout: RunLayout) -> list[Path]:
             for name, (is_dir, _) in listing.entries(place).items()
         )
 
-    below: Path | None = None
-    found: list[Path] = []
-    for ancestor in _ancestors(folder, layout.search_up):
-        found = _search(
-            ancestor, layout.search_depth, listing, holds_frames, layout.is_skipped, below
-        )
-        if found:
-            break
-        below = ancestor
-    if found:  # none found is searched again next time: the first frames may come
-        with _LOCK:
-            _PLACES[key] = found
-    return found
+    return _nearest(folder, layout, layout.run_file, holds_frames, layout.is_skipped)
+
+
+def _log_places(folder: Path, layout: RunLayout) -> list[Path]:
+    """The folders holding the runs' logs nearest the netCDF ``folder`` (``scan_info``
+    beside it, whatever its name); never a frames folder. A log lies beside its netCDF
+    folder, so the search stays near (``log_search_up``, ``log_search_depth``): another
+    sample's logs, a folder further, are never taken for this one's."""
+    if not layout.run_log:
+        return []
+    glob = layout.log_glob
+
+    def holds_logs(place: Path, listing: FolderListing) -> bool:
+        return bool(listing.glob(place, glob, folders=False))
+
+    def skipped(name: str) -> bool:
+        return layout.is_skipped(name) or layout.is_frames_dir(name)
+
+    return _nearest(
+        folder,
+        layout,
+        layout.run_log,
+        holds_logs,
+        skipped,
+        layout.log_search_up,
+        layout.log_search_depth,
+    )
 
 
 def _non_empty(folder: Path) -> bool:
@@ -350,7 +429,10 @@ def run_index(folder: str | Path, layout: RunLayout) -> RunIndex:
                     index.folders.setdefault(run, []).append(place / name)
                 continue
             run, point = layout.frame_of(name)
-            if run is not None and point is not None:
+            # a loose frame far from here belongs to the run of that name with its file here:
+            # without one, MapScan_102_1.tiff of a sample beside this one is not this folder's
+            near = place in (folder, folder.parent)
+            if run is not None and point is not None and (near or run in index.files):
                 index.loose.setdefault(run, {}).setdefault(point, place / name)
     with _LOCK:
         _INDEXES[key] = (stamps, index)
@@ -459,17 +541,20 @@ def _acquisition_order(
     return np.argsort(counter, kind="stable"), False
 
 
-def read_run(path: str | Path, layout: RunLayout) -> RunGrid:
+def read_run(path: str | Path, layout: RunLayout, names: tuple[str, ...] | None = None) -> RunGrid:
     """The grid and counters of a run's netCDF file (the one array of ``to_array()``), read
-    once per process (again when the file changes)."""
+    once per process (again when the file changes). ``names`` name the counters in order
+    (a run's log), the layout's ``channel_names`` when not given."""
     path = Path(path)
+    names = layout.channel_names if names is None else tuple(names)
     st = path.stat()
-    key, stamp = (Path(os.path.abspath(path)), layout), (st.st_mtime_ns, st.st_size)
+    key = (Path(os.path.abspath(path)), layout, names)
+    stamp = (st.st_mtime_ns, st.st_size)
     with _LOCK:
         hit = _GRIDS.get(key)
     if hit is not None and hit[0] == stamp:
         return hit[1]
-    grid = _parse_run(path, layout)
+    grid = _parse_run(path, layout, names)
     with _LOCK:
         if len(_GRIDS) >= MAX_RUNS:
             _GRIDS.pop(next(iter(_GRIDS)))
@@ -477,7 +562,7 @@ def read_run(path: str | Path, layout: RunLayout) -> RunGrid:
     return grid
 
 
-def _parse_run(path: Path, layout: RunLayout) -> RunGrid:
+def _parse_run(path: Path, layout: RunLayout, given: tuple[str, ...]) -> RunGrid:
     named = _netcdf3_array(path, layout) or _xarray_array(path, layout)
     if named is None:
         raise ValueError(f"{path.name} holds no data array")
@@ -494,16 +579,29 @@ def _parse_run(path: Path, layout: RunLayout) -> RunGrid:
     k = layout.order_channel
     counter = flat[:, k] if k is not None and k < flat.shape[1] else None
     order, snake = _acquisition_order(counter, shape)
-    given = layout.channel_names
-    channels = {
-        (given[c] if c < len(given) else f"{layout.channel_dim}_{labels[c]}"): flat[order, c]
-        for c in range(flat.shape[1])
-    }
+    names = _channel_names(given, [str(v) for v in labels], layout.channel_dim)
+    channels = {name: flat[order, c] for c, name in enumerate(names)}
     grid = {d: coords.get(d, np.arange(n)) for d, n in zip(dims, shape, strict=True)}
     return RunGrid(dims, grid, order, channels, snake)
 
 
+def _channel_names(given: tuple[str, ...], labels: list[str], dim: str) -> list[str]:
+    """A name for every counter: the one given, else ``<dim>_<label>``; a name given twice
+    gets its place appended the second time."""
+    names: list[str] = []
+    for c, label in enumerate(labels):
+        name = given[c] if c < len(given) and given[c] else f"{dim}_{label}"
+        names.append(f"{name}_{c}" if name in names else name)
+    return names
+
+
 Named = tuple[str, tuple[str, ...], np.ndarray, dict[str, np.ndarray]]
+
+
+def _native(values: Any) -> np.ndarray:
+    """A copy in the machine's byte order: netCDF-3 stores big-endian."""
+    values = np.array(values)
+    return values.astype(values.dtype.newbyteorder("=")) if values.dtype.kind in "biufc" else values
 
 
 def _netcdf3_array(path: Path, layout: RunLayout) -> Named | None:
@@ -524,8 +622,8 @@ def _netcdf3_array(path: Path, layout: RunLayout) -> Named | None:
         )
         array = variables[chosen]
         dims = tuple(str(d) for d in array.dimensions)
-        coords = {d: np.array(variables[d].data) for d in dims if d in variables}
-        return chosen, dims, np.array(array.data), coords
+        coords = {d: _native(variables[d].data) for d in dims if d in variables}
+        return chosen, dims, _native(array.data), coords
 
 
 def _xarray_array(path: Path, layout: RunLayout) -> Named | None:
@@ -547,6 +645,89 @@ def _xarray_array(path: Path, layout: RunLayout) -> Named | None:
     dims = tuple(str(d) for d in array.dims)
     coords = {d: np.asarray(array[d].values) for d in dims if d in array.coords}
     return chosen, dims, np.asarray(array.values), coords
+
+
+# ------------------------------------------------------------------ the run logs
+@dataclass(frozen=True)
+class RunLog:
+    """What a run's log says: ``names``, the counters in the order of the netCDF file's
+    ``det``; ``positions``, its numbers (a list spread over the names of the layout's
+    ``log_positions``, else ``<key>_0``, ``<key>_1``, ...); ``values``, the rest as text."""
+
+    path: Path
+    names: tuple[str, ...] = ()
+    positions: dict[str, float] = field(default_factory=dict)
+    values: dict[str, str] = field(default_factory=dict)
+
+
+def find_run_log(folder: str | Path, run: int, layout: RunLayout) -> Path | None:
+    """The log of ``run`` (``run_log``) in the log folders nearest the netCDF ``folder``."""
+    if not layout.run_log:
+        return None
+    name = layout.run_log.format(run=run)
+    for place in _log_places(Path(folder), layout):
+        if any(entry == name and not is_dir for entry, is_dir in _entries(place)):
+            return place / name
+    return None
+
+
+def read_log(path: str | Path, layout: RunLayout) -> RunLog | None:
+    """A run's log (JSON), read again when it changes; ``None`` when it cannot be read.
+
+    The first list of names in it names the counters; in its mappings a number is a
+    position, a list of numbers several (``nsam: [x, y, z]``), anything else a value.
+    """
+    path = Path(path)
+    try:
+        st = path.stat()
+    except OSError:
+        return None
+    key, stamp = Path(os.path.abspath(path)), (st.st_mtime_ns, st.st_size)
+    with _LOCK:
+        hit = _LOGS.get(key)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    try:
+        content = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        log.warning("the run log %s cannot be read: %s", path, exc)
+        found = None
+    else:
+        found = _log_of(path, content, dict(layout.log_positions))
+    with _LOCK:
+        if len(_LOGS) >= MAX_RUNS:
+            _LOGS.pop(next(iter(_LOGS)))
+        _LOGS[key] = (stamp, found)
+    return found
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _log_of(path: Path, content: Any, spread: dict[str, tuple[str, ...]]) -> RunLog:
+    names: tuple[str, ...] = ()
+    positions: dict[str, float] = {}
+    values: dict[str, str] = {}
+    for part in content if isinstance(content, list) else [content]:
+        if not names and isinstance(part, list) and part and all(isinstance(n, str) for n in part):
+            names = tuple(part)
+            continue
+        if not isinstance(part, dict):
+            continue
+        for key, value in part.items():
+            key = str(key)
+            if _is_number(value):
+                positions[key] = float(value)
+            elif isinstance(value, list) and value and all(_is_number(v) for v in value):
+                given = spread.get(key, ())
+                labels = (
+                    given if len(given) == len(value) else [f"{key}_{k}" for k in range(len(value))]
+                )
+                positions.update({label: float(v) for label, v in zip(labels, value, strict=True)})
+            else:
+                values[key] = value if isinstance(value, str) else json.dumps(value)
+    return RunLog(path, names, positions, values)
 
 
 def run_of(path: str | Path, layout: RunLayout) -> int | None:
@@ -633,7 +814,12 @@ class NcTiffSource(BaseSource):
         self.last = self.scan == runs[-1]
         self.frame_folders = list(index.folders.get(self.scan, ()))
         self.run_file = index.files.get(self.scan)
-        self.grid = read_run(self.run_file, self.layout) if self.run_file is not None else None
+        self.log_file = find_run_log(self.folder, self.scan, self.layout)
+        self.log = read_log(self.log_file, self.layout) if self.log_file is not None else None
+        names = self.log.names if self.log is not None and self.log.names else None
+        self.grid = (
+            read_run(self.run_file, self.layout, names) if self.run_file is not None else None
+        )
         points, frames = run_frames(index, self.scan, self.layout)
         if self.grid is None:  # no netCDF file yet: the frames in the order of their numbers
             self.points, self.frames = points, frames
@@ -745,7 +931,9 @@ class NcTiffSource(BaseSource):
 
     # ------------------------------------------------------------ the frames
     def files(self) -> list[Path]:
-        return ([self.run_file] if self.run_file is not None else []) + list(self.frames)
+        """The run's netCDF file and log, then its frames."""
+        own = [f for f in (self.run_file, self.log_file) if f is not None]
+        return own + list(self.frames)
 
     def _probe(self) -> None:
         if self.frames:
@@ -807,7 +995,10 @@ class NcTiffSource(BaseSource):
         return self._structure
 
     def _build_structure(self) -> Structure:
-        common: dict[str, Any] = {"energy_keV": self.energy_keV}
+        common: dict[str, Any] = {
+            "energy_keV": self.energy_keV,
+            "scalars": dict(self.log.positions) if self.log is not None else {},
+        }
         grid = self.grid
         if grid is None or not grid.dims:  # frames before the netCDF file, or one point
             channels = grid.channels if grid is not None else {}
@@ -866,7 +1057,8 @@ class NcTiffSource(BaseSource):
     def point_table(self) -> pd.DataFrame:
         """One row per point of the netCDF file in the order taken, with or without its frame:
         ``point`` (its place in that order), ``frame`` (the id ``read_frames`` reads, -1 when
-        there is none), the motor positions, then the counters (``det_0``, ...)."""
+        there is none), the motor positions, then the counters (named by the run's log, else
+        ``det_0``, ...)."""
         import pandas as pd
 
         grid = self.grid
@@ -885,6 +1077,34 @@ class NcTiffSource(BaseSource):
         """``points``: :meth:`point_table`."""
         return {"points": self.point_table()}
 
+    def file_metadata(self) -> dict[str, pd.DataFrame]:
+        """The run's netCDF file as it is (its dims, attributes and variables) and its log:
+        the counters by their place in ``det``, the positions and the other values."""
+        import pandas as pd
+
+        from bexa.io import netcdf
+
+        out: dict[str, pd.DataFrame] = {}
+        if self.run_file is not None:
+            info = netcdf.describe(self.run_file)
+            out[f"{self.run_file.name}: variables"] = info.table()
+            rows: list[tuple[str, str, Any]] = [("dim", d, n) for d, n in info.dims.items()]
+            rows += [("attribute", k, v) for k, v in info.attrs.items()]
+            out[f"{self.run_file.name}: dims and attributes"] = pd.DataFrame(
+                rows, columns=["kind", "name", "value"]
+            )
+        if self.log is not None:
+            dim = self.layout.channel_dim
+            entries: list[tuple[str, str, Any]] = [
+                ("counter", f"{dim} {k}", n) for k, n in enumerate(self.log.names)
+            ]
+            entries += [("position", k, v) for k, v in self.log.positions.items()]
+            entries += [("value", k, v) for k, v in self.log.values.items()]
+            out[f"{self.log.path.name}: the run's log"] = pd.DataFrame(
+                entries, columns=["kind", "name", "value"]
+            )
+        return out
+
     def cache_records(self) -> list[dict[str, Any]]:
         """The run's netCDF file, its first and last frames, how many there are and the times
         of its frames folders, which change when a frame is added: not a stat of every frame
@@ -893,7 +1113,7 @@ class NcTiffSource(BaseSource):
 
         own = {"folder": str(self.folder), "run": self.scan, "frames": len(self.frames)}
         ends = self.frames[:1] + self.frames[-1:] if len(self.frames) > 1 else self.frames
-        own_file = [self.run_file] if self.run_file is not None else []
+        own_file = [f for f in (self.run_file, self.log_file) if f is not None]
         folders = [{"path": str(f), "mtime_ns": _stamp(f)} for f in self.frame_folders]
         return [own, *file_records([*own_file, *ends]), *folders]
 

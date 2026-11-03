@@ -2,9 +2,13 @@
 
 Folders are listed with their sizes and what bexa recognises in them; a file
 shows its structure: an HDF5/NeXus tree with shapes, chunks, compression and
-attributes, a SPEC session's scans and columns, a TIFF's tags, an array's
-shape, a text file's first lines. Any dataset, or a slice of it, loads as an
-object; anything bexa reads as a scan opens from here.
+attributes, a netCDF file's dims and variables, a SPEC session's scans and
+columns, a TIFF's tags, an array's shape, a text file's first lines. Any
+dataset or variable, or a slice of it, loads as an object; anything bexa reads
+as a scan opens from here, and **Scan metadata** shows everything its files say
+(:func:`bexa.core.metadata.scan_metadata`): the dims, every channel recorded at
+each point, the positions, the detectors, the files and the engine's own tables.
+The objects list shows the same for a scan object.
 """
 
 from __future__ import annotations
@@ -17,6 +21,9 @@ import numpy as np
 
 from bexa.gui.figures import FigurePane
 from bexa.gui.inspectors import H5Inspector, SpecInspector, array_preview, tiff_summary
+from bexa.gui.metadata_view import MetadataView
+from bexa.gui.netcdf_inspector import NetCDFInspector
+from bexa.io.netcdf import NC_SUFFIXES
 
 __all__ = ["BrowseTab"]
 
@@ -102,6 +109,9 @@ class BrowseTab:
         self.figure_box = ipw.Box([self.pane.widget], layout=ipw.Layout(display="none"))
         self.text = ipw.HTML()
         self.body = ipw.VBox()
+        self.metadata = MetadataView()
+        self.metadata_box = ipw.VBox()  # the metadata view, when a scan's is shown
+        self._shown = 0  # counts what was shown: a job's late answer for an older one waits
         self.box = ipw.VBox(  # one column: the folder, then what is inside the entry picked
             [
                 ipw.HBox([up, self.path, go, choose]),
@@ -111,6 +121,7 @@ class BrowseTab:
                 self.body,
                 self.figure_box,
                 self.text,
+                self.metadata_box,
             ]
         )
         self.box.add_class("bexa-browse")
@@ -181,6 +192,8 @@ class BrowseTab:
         self.body.children = []
         self.text.value = ""
         self.figure_box.layout.display = "none"
+        self.metadata_box.children = []
+        self._shown += 1
 
     def _picked(self, chosen: str | None) -> None:
         if not chosen:
@@ -196,6 +209,12 @@ class BrowseTab:
             elif _is_spec(path):
                 self.inspector = SpecInspector(self, path)
                 self.body.children = [self._open_bar(path), self.inspector.box]
+            elif path.suffix.lower() in NC_SUFFIXES:
+                bar = self._open_bar(path)
+                self.inspector = NetCDFInspector(self, path)
+                self.body.children = [bar, self.inspector.box]
+                if bar.children:  # a run bexa reads: its metadata at once (a few kB)
+                    self.scan_metadata(path)
             elif path.suffix.lower() in (".tif", ".tiff"):
                 self._tiff(path)
             elif path.suffix.lower() == ".npy":
@@ -225,7 +244,51 @@ class BrowseTab:
             tooltip="put the path in the Data tab",
         )
         to_data.on_click(lambda _b: self.app.data_path(path))
-        return ipw.HBox([to_data]) if spec is not None else ipw.HBox()
+        metadata = ipw.Button(
+            description="Scan metadata",
+            icon="list",
+            tooltip="everything the files say of the scan (of the scan picked, in a session)",
+        )
+        metadata.on_click(lambda _b: self.scan_metadata(path))
+        return ipw.HBox([to_data, metadata]) if spec is not None else ipw.HBox()
+
+    # ------------------------------------------------------------------ metadata
+    def _scan_number(self) -> int | None:
+        """The scan picked in the inspector shown: a SPEC session's, or the scan group of
+        an HDF5 file's tree (``/4.1/...``); ``None`` for a file of one scan."""
+        if isinstance(self.inspector, SpecInspector):
+            return self.inspector.scans.value
+        if isinstance(self.inspector, H5Inspector) and self.inspector.selected:
+            head = self.inspector.selected.strip("/").split("/")[0].split(".")[0]
+            return int(head) if head.isdigit() else None
+        return None
+
+    def scan_metadata(self, path: str | Path) -> None:
+        """Everything the files say of the scan behind ``path``, below the file's inside
+        (the scan picked, for a file of several). Read in the background, no frame read."""
+        import bexa
+
+        path = Path(path)
+        number = self._scan_number()
+        title = path.name + (f", scan {number}" if number is not None else "")
+        self._metadata_of(title, lambda: bexa.open(path, scan=number, cache=False).metadata())
+
+    def show_scan_metadata(self, name: str, scan: Any) -> None:
+        """The metadata of the scan object ``name`` (the objects list's **Metadata**)."""
+        self._reset()
+        self.head.value = f"<b>{html.escape(name)}</b>: a scan object"
+        self._metadata_of(name if scan.name == name else f"{name} ({scan.name})", scan.metadata)
+
+    def _metadata_of(self, title: str, read: Any) -> None:
+        shown = self._shown
+        self.metadata.wait(title)
+        self.metadata_box.children = [self.metadata.box]
+
+        def done(tables: Any) -> None:
+            if shown == self._shown:  # still what the tab shows
+                self.metadata.show(tables, title)
+
+        self.app.submit(f"reading the metadata of {title}", read, done=done, quiet=True)
 
     def _folder(self, path: Path) -> None:
         import ipywidgets as ipw

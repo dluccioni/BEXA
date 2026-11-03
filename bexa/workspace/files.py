@@ -2,7 +2,8 @@
 
 :func:`load_file` reads what is not a scan (a scan is opened with
 :func:`bexa.open`): a bexa cube, one dataset of any HDF5 file (sliced while it
-is read), ``.npy``, TIFF, PNG/JPEG, CSV/text tables. :func:`export_object`
+is read), the variables of a netCDF file, ``.npy``, TIFF, PNG/JPEG, CSV/text
+tables. :func:`export_object`
 writes an object as NeXus HDF5 (values, axes, uncertainties, metadata and
 history), CSV, NPY, TIFF, PNG or text.
 """
@@ -18,6 +19,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
+from bexa.io.netcdf import NC_SUFFIXES
 from bexa.workspace.objects import DataObject
 from bexa.workspace.source import jsonable
 
@@ -82,7 +84,8 @@ def load_file(
 
     ``dataset`` (or ``file.h5::/path``) reads one dataset of an HDF5 file, cut
     by ``index`` (``"0, :, 100:200"``) while it is read, so a slice of a
-    100 GB dataset costs only the slice.
+    100 GB dataset costs only the slice. Of a netCDF file it reads one variable
+    (every data variable without), with its dims and their coordinates.
     """
     text = str(path)
     if "::" in text and dataset is None:
@@ -105,6 +108,8 @@ def load_file(
         if isinstance(loaded, xr.DataArray):
             return [DataObject(stem, loaded, meta=meta)]
         return [DataObject(f"{stem}_{var}", loaded[var], meta=meta) for var in loaded.data_vars]
+    if suffix in NC_SUFFIXES:
+        return _netcdf_variables(file, dataset, index, name, meta)
     if suffix == ".npy":
         values = np.load(file, mmap_mode="r")
         part = parse_index(index)
@@ -158,6 +163,30 @@ def _h5_dataset(
     info = {**meta, "dataset": dataset, "index": index or ""}
     info.update({f"attr_{k}": jsonable(v) for k, v in list(attrs.items())[:20]})
     return _array_object(np.asarray(values), label, info)
+
+
+def _netcdf_variables(
+    file: Path, variable: str | None, index: str | None, name: str | None, meta: dict[str, Any]
+) -> list[DataObject]:
+    from bexa.io import netcdf
+
+    info = netcdf.describe(file)
+    names = (
+        [variable.strip("/")] if variable else [v.name for v in info.variables if not v.coordinate]
+    )
+    part = parse_index(index)
+    out = []
+    for var in names:
+        values = netcdf.read_variable(file, var, part)
+        # xarray's name for an array saved alone says nothing: the file's name instead
+        anonymous = var.startswith("__xarray") and len(names) == 1
+        label = name or (_stem(file) if anonymous else f"{_stem(file)}_{var}")
+        info_meta = {**meta, "variable": var, "index": index or ""}
+        if values.ndim == 0:
+            out.append(DataObject(label, f"{var} = {values.item()!r}", kind="text", meta=info_meta))
+        else:
+            out.append(DataObject(label, values.rename(label), meta=info_meta))
+    return out
 
 
 # ------------------------------------------------------------------------------- export

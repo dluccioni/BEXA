@@ -13,11 +13,20 @@ frame was not saved (or not copied) is marked missing and keeps its row in
 :meth:`SpecTiffSource.point_table`, a scan aborted early (``#C ... Scan aborted
 after N points.``) reports the points it planned, and the file is parsed once
 per process (it grows while a session runs: ``refresh()``).
+
+Every area detector SPEC records a scan with is found, known to the spec or
+not: the scan's ``#UXML`` groups name each (``ad_file_info``, prefix
+``7idEiger1:TIFF1:``) with where its TIFF plugin wrote (``file_path``,
+``file_name``). The one whose frames are where the spec looks is the spec's
+detector; another one added to the beamline is listed by its EPICS name
+(``SpecTiffSource.detector_names``) and read from its own folder
+(:func:`area_detectors`).
 """
 
 from __future__ import annotations
 
 import fnmatch
+import html
 import os
 import re
 import threading
@@ -43,10 +52,12 @@ if TYPE_CHECKING:
 log = get_logger(__name__)
 
 __all__ = [
+    "AreaDetector",
     "SpecFile",
     "SpecScan",
     "SpecTiffSource",
     "TiffLayout",
+    "area_detectors",
     "frame_point",
     "frame_templates",
     "frames_by_scan",
@@ -64,6 +75,10 @@ TWO_SPACES = re.compile(r"\s{2,}")
 FRAME_NAME = re.compile(r"^(?P<prefix>.+)_S(?P<scan>\d+)_(?P<point>\d+)\.tiff?$")
 SCAN_FIELD = re.compile(r"\{scan(:[^{}]*)?\}")
 FRAME_LEVELS = 3  # folders above a frame searched for its SPEC file: images/<file>/S004/
+XML_GROUP = re.compile(r"<group\s+([^>]*)>")
+XML_DATASET = re.compile(r"<dataset\s+([^>]*)>(.*?)</dataset>")
+XML_ATTR = re.compile(r'([\w:]+)="([^"]*)"')
+SCAN_SUFFIX = re.compile(r"_S\d+$")  # wse2_1_1_S004: the scan's part of a frame name
 _CACHE: dict[Path, tuple[tuple[float, int], SpecFile]] = {}
 _FRAMES: dict[tuple[Path, str], tuple[int, dict[int, dict[int, Path]]]] = {}
 _CACHE_LOCK = threading.Lock()
@@ -85,6 +100,7 @@ class SpecScan:
     aborted: bool = False
     lines: tuple[int, int] = (0, 0)
     ended: bool = False  # SPEC closed it: #UXML or #R after the rows, or the abort comment
+    xml: list[dict[str, Any]] = field(default_factory=list)  # the #UXML groups, in order
 
     @property
     def n_rows(self) -> int:
@@ -250,8 +266,83 @@ def _parse(path: Path) -> SpecFile:
                     scan.aborted = scan.ended = True
             elif tag in ("R", "UXML"):
                 scan.ended = True
+                if tag == "UXML":
+                    _xml_line(scan, rest)
     close(number if scan is not None else 0)
     return session
+
+
+def _xml_line(scan: SpecScan, text: str) -> None:
+    """One ``#UXML`` line: a group opens (its attributes kept: ``name``, ``prefix``, ...) or
+    a dataset of the open group (``file_path``, ...) gives its value."""
+    text = text.strip()
+    m = XML_GROUP.match(text)
+    if m:
+        scan.xml.append({"attrs": dict(XML_ATTR.findall(m.group(1))), "datasets": {}})
+        return
+    m = XML_DATASET.match(text)
+    if m and scan.xml:
+        name = dict(XML_ATTR.findall(m.group(1))).get("name", "")
+        scan.xml[-1]["datasets"][name] = html.unescape(m.group(2))
+
+
+@dataclass(frozen=True)
+class AreaDetector:
+    """An area detector a scan's ``#UXML`` groups name: ``name``, the first part of its EPICS
+    prefix (``7idEiger1``); ``folder``, where its TIFF plugin wrote, relative to the SPEC
+    file's folder (``images/wse2_1_1/S004``); ``prefix``, the start of its frames' names
+    (``<prefix>_S<scan>_<point>.tif``); ``model``, its ``ad_detector`` description."""
+
+    name: str
+    folder: str
+    prefix: str
+    model: str = ""
+
+
+def _local_folder(session: SpecFile, written: str) -> str:
+    """Where a detector wrote (a path on the beamline's computer), relative to the SPEC
+    file's folder: below the folder of the file's ``#F`` path, else from its ``images``
+    folder on, else its last folder."""
+    from pathlib import PurePosixPath
+
+    path = PurePosixPath(written.replace("\\", "/").rstrip("/"))
+    home = PurePosixPath(session.title.replace("\\", "/")).parent if session.title else None
+    if home is not None and home.parts and path.is_relative_to(home):
+        return path.relative_to(home).as_posix() or "."
+    parts = path.parts
+    if "images" in parts:
+        return PurePosixPath(*parts[parts.index("images") :]).as_posix()
+    return parts[-1] if parts else "."
+
+
+def area_detectors(session: SpecFile, record: SpecScan) -> list[AreaDetector]:
+    """The area detectors that wrote TIFFs for a scan, from its ``#UXML`` groups: one per
+    ``ad_file_info`` group of a TIFF plugin with a file name, in the file's order."""
+    models = {
+        group["attrs"].get("prefix", "").split(":")[0]: group["datasets"].get("description", "")
+        for group in record.xml
+        if group["attrs"].get("name") == "ad_detector"
+    }
+    found: dict[str, AreaDetector] = {}
+    for group in record.xml:
+        attrs, data = group["attrs"], group["datasets"]
+        kind = (data.get("file_format", "") + data.get("file_extension", "")).lower()
+        if attrs.get("name") != "ad_file_info" or "tif" not in kind:
+            continue
+        file_name = data.get("file_name", "").strip()
+        if not file_name:
+            continue
+        name = attrs.get("prefix", "").split(":")[0] or f"detector_{len(found)}"
+        found.setdefault(
+            name,
+            AreaDetector(
+                name,
+                _local_folder(session, data.get("file_path", "")),
+                SCAN_SUFFIX.sub("", file_name),
+                models.get(name, ""),
+            ),
+        )
+    return list(found.values())
 
 
 # -------------------------------------------------------------------- the frames
@@ -527,9 +618,11 @@ class SpecTiffSource(BaseSource):
     scan
         The scan number (``#S``).
     detector
-        Name from the spec's ``detectors``; its ``shape`` is the frame shape of
-        a scan without a frame yet, and pixels at its ``invalid_value`` (the
-        EIGER's 2**32 - 1 for a dead or masked pixel) read as 0.
+        Name from the spec's ``detectors`` (its ``shape`` is the frame shape of
+        a scan without a frame yet, and pixels at its ``invalid_value``, the
+        EIGER's 2**32 - 1 for a dead or masked pixel, read as 0), or of an
+        area detector the scan's ``#UXML`` groups name (:func:`area_detectors`):
+        the one writing where the spec looks is the spec's.
     energy_keV
         Overrides the energy the spec reads from the scan's ``#U_`` block.
     motors
@@ -552,9 +645,8 @@ class SpecTiffSource(BaseSource):
         super().__init__(spec)
         self.spec_file = spec_file_of(path, str(spec.layout.get("spec_glob", "*.spec")))
         self.scan = int(scan)
-        self.detector = detector or next(iter(spec.detectors), "areadetector")
-        invalid = spec.detector_info(self.detector).get("invalid_value")
-        self._invalid = None if invalid is None else int(invalid)
+        self.default_detector = next(iter(spec.detectors), "areadetector")
+        self.detector = detector or self.default_detector
         self._energy_override = energy_keV
         self._motors = [str(m) for m in motors] if motors is not None else None
         self._structure: Structure | None = None
@@ -573,7 +665,19 @@ class SpecTiffSource(BaseSource):
         self.command: ScanCommand = parse_scan_command(
             self.record.command, motor_names=set(self.session.motor_names)
         )
-        found = scan_frames(self.spec_file, self.scan, frame_templates(self.spec.layout))
+        self.area_detectors = self._other_detectors()
+        own = self.area_detectors.get(self.detector)
+        if own is None and self.detector not in (self.default_detector, *self._aliases):
+            known = ", ".join(self.detector_names())
+            raise KeyError(f"scan {self.scan} has no detector {self.detector!r}; it has {known}")
+        info = self.spec.detector_info(self.default_detector if own is None else self.detector)
+        invalid = info.get("invalid_value")
+        self._invalid = None if invalid is None else int(invalid)
+        if own is None:
+            found = scan_frames(self.spec_file, self.scan, frame_templates(self.spec.layout))
+        else:
+            folder = self.spec_file.parent / own.folder
+            found = frames_by_scan(folder, own.prefix).get(self.scan, {})
         self.points = [p for p in sorted(found) if p < self.record.n_rows]
         self.frames = [found[p] for p in self.points]
         # while it runs, a frame is often written before SPEC writes its row
@@ -584,6 +688,30 @@ class SpecTiffSource(BaseSource):
                 self.scan,
                 len(found) - len(self.points),
             )
+
+    def _other_detectors(self) -> dict[str, AreaDetector]:
+        """The scan's area detectors (``#UXML``) but the spec's own: the one writing into a
+        folder the spec looks in, under the SPEC file's name, is the spec's (its EPICS name
+        kept in ``_aliases``)."""
+        stem = self.spec_file.stem
+        places = {
+            os.path.normpath(safe_format(t, prefix=stem, scan=self.scan))
+            for t in frame_templates(self.spec.layout)
+        }
+        others: dict[str, AreaDetector] = {}
+        aliases: list[str] = []
+        for found in area_detectors(self.session, self.record):
+            if found.prefix == stem and os.path.normpath(found.folder) in places:
+                aliases.append(found.name)
+            elif found.name != self.default_detector:
+                others[found.name] = found
+        self._aliases = tuple(aliases)
+        return others
+
+    def detector_names(self) -> list[str]:
+        """The spec's detector, then every other area detector the scan's ``#UXML`` groups
+        name, known to the spec or not (a camera added to the beamline)."""
+        return [self.default_detector, *self.area_detectors]
 
     # ----------------------------------------------------------- discovery
     @classmethod
@@ -829,6 +957,48 @@ class SpecTiffSource(BaseSource):
         if flat:
             tables["header"] = pd.DataFrame([flat])
         return tables
+
+    def file_metadata(self) -> dict[str, pd.DataFrame]:
+        """The scan as the SPEC file holds it: its command, date, columns and comments, its
+        ``#U`` header block by block and its ``#UXML`` groups (the area detectors: where
+        each wrote its frames)."""
+        import pandas as pd
+
+        record = self.record
+        facts = [
+            ("command", record.command),
+            ("date", record.date),
+            ("rows", record.n_rows),
+            ("columns", ", ".join(record.labels)),
+            ("lines in the file", f"{record.lines[0]} to {record.lines[1]}"),
+            ("aborted", record.aborted),
+            *(("comment", c) for c in record.comments),
+        ]
+        out = {
+            f"{self.spec_file.name} #S {self.scan}": pd.DataFrame(facts, columns=["field", "value"])
+        }
+        header = [
+            (block, name, value)
+            for block, values in record.header.items()
+            for name, value in values.items()
+        ]
+        if header:
+            out["#U header"] = pd.DataFrame(header, columns=["block", "field", "value"])
+        groups = [
+            (
+                group["attrs"].get("name", ""),
+                group["attrs"].get("prefix", ""),
+                name,
+                value,
+            )
+            for group in record.xml
+            for name, value in group["datasets"].items()
+        ]
+        if groups:
+            out["#UXML groups"] = pd.DataFrame(
+                groups, columns=["group", "prefix", "dataset", "value"]
+            )
+        return out
 
     def cache_records(self) -> list[dict[str, Any]]:
         """The scan's rows in the (growing) SPEC file, and the frame files."""

@@ -60,11 +60,27 @@ class ObjectsPanel:
         save_notes = ipw.Button(description="Save notes", layout=ipw.Layout(width="100px"))
         save_notes.on_click(lambda _b: self._save_notes())
         self.details = ipw.HTML(layout=ipw.Layout(width="100%"))
+        self.metadata = ipw.Button(
+            description="Full metadata",
+            icon="list",
+            tooltip="everything the scan's files say, on the Browse tab",
+            layout=ipw.Layout(width="130px", display="none"),
+        )
+        self.metadata.on_click(lambda _b: self._show_metadata())
         self.rois = ipw.HTML()
         # what is selected, its notes and the ROIs: folded away, the list kept short
         self.more = ipw.Accordion(
             children=[
-                ipw.VBox([self.details, self.notes, save_notes, ipw.HTML("<b>ROIs</b>"), self.rois])
+                ipw.VBox(
+                    [
+                        self.details,
+                        self.metadata,
+                        self.notes,
+                        save_notes,
+                        ipw.HTML("<b>ROIs</b>"),
+                        self.rois,
+                    ]
+                )
             ],
             selected_index=None,
         )
@@ -141,8 +157,10 @@ class ObjectsPanel:
         if current is None or current not in ws:
             self.details.value = "<i>nothing selected</i>"
             self.notes.value = ""
+            self.metadata.layout.display = "none"
             return
         obj = ws[current]
+        self.metadata.layout.display = "" if obj.kind == "scan" else "none"
         self.notes.value = obj.notes
         text = obj.info()
         lines = text.splitlines()
@@ -152,6 +170,16 @@ class ObjectsPanel:
             "<pre style='font-size:11px;line-height:1.25;white-space:pre-wrap;max-height:260px;"
             f"overflow:auto;margin:0'>{html.escape(chr(10).join(lines))}</pre>"
         )
+
+    def _show_metadata(self) -> None:
+        """The selected scan's full metadata, on the Browse tab."""
+        current = self.app.current
+        if current is None or current not in self.app.ws:
+            return
+        obj = self.app.ws[current]
+        if obj.kind == "scan":
+            self.app.browse.show_scan_metadata(obj.name, obj.data)
+            self.app.show_tab("Browse")
 
     def _show_rois(self) -> None:
         rois = self.app.ws.rois

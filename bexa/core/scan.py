@@ -272,6 +272,13 @@ class Scan:
             lines.append(f"  geometry: {self.geometry}")
         return "\n".join(lines)
 
+    def metadata(self) -> dict[str, Any]:
+        """Everything the files say about the scan, as tables by title, no frame read
+        (:func:`bexa.core.metadata.scan_metadata`)."""
+        from bexa.core.metadata import scan_metadata
+
+        return scan_metadata(self)
+
     def __repr__(self) -> str:
         return f"Scan({self.name!r}, dims={self.dims}, shape={self.shape})"
 

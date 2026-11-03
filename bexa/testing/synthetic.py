@@ -1450,6 +1450,8 @@ DEFAULT_PYTHON_RUNS: tuple[tuple[int, dict[str, tuple[float, float, int]], dict[
     ),
 )
 PYTHON_CHANNELS = 13  # det_0 ... det_12 of the netCDF files of 7-ID-C
+PYTHON_LOG_NAMES = tuple(f"7idc:scaler1.S{k + 1}" for k in range(PYTHON_CHANNELS))
+PYTHON_LOG_STAGES = {"nsam": (1.645, 13.475, -3.12), "obj": (4.8, -7.48, -7.744)}
 
 
 @dataclass
@@ -1464,6 +1466,7 @@ class SyntheticPythonRuns:
     frames: dict[int, list[Path]] = field(default_factory=dict)  # run -> TIFFs, in the order taken
     truth: dict[int, np.ndarray] = field(default_factory=dict)  # (*grid, 2) spot centre (y, x)
     totals: dict[int, np.ndarray] = field(default_factory=dict)  # det_0 on the grid: frame sums
+    logs: dict[int, Path] = field(default_factory=dict)  # run -> its log, with logs_dir
 
 
 def make_aps_python_runs(
@@ -1476,6 +1479,7 @@ def make_aps_python_runs(
     netcdf_dir: str = "data_nc",
     frames_dir: str = "python_images/MapScan_{run}",
     first_point: int = 1,
+    logs_dir: str | None = None,
 ) -> SyntheticPythonRuns:
     """Write the scans a Python script runs at APS 7-ID: ``run_<n>.nc`` and a TIFF per point.
 
@@ -1491,7 +1495,13 @@ def make_aps_python_runs(
     ``netcdf_dir`` and ``frames_dir`` are relative to ``root``; ``frames_dir`` has the
     field ``{run}`` (``"."``: the TIFFs loose beside the netCDF files' folder) and the
     frames are named ``MapScan_<run>_<point>.tiff``, counting from ``first_point``.
+    With ``logs_dir`` (``"scan_info"``) each run also gets its log,
+    ``run_<n>_log.json``: the names of its counters (:data:`PYTHON_LOG_NAMES`), the
+    stages' positions (:data:`PYTHON_LOG_STAGES`) and ``counttime``; the option
+    ``log=False`` leaves a run without one.
     """
+    import json
+
     import xarray as xr
 
     from bexa.core.structure import raster_order
@@ -1549,4 +1559,11 @@ def make_aps_python_runs(
         out.frames[number] = written
         out.truth[number] = truth
         out.totals[number] = grid[..., 0]
+        if logs_dir is not None and options.get("log", True):
+            logs = root / logs_dir
+            logs.mkdir(parents=True, exist_ok=True)
+            stages = {key: list(values) for key, values in PYTHON_LOG_STAGES.items()}
+            content = [list(PYTHON_LOG_NAMES), {**stages, "counttime": 1}]
+            out.logs[number] = logs / f"run_{number}_log.json"
+            out.logs[number].write_text(json.dumps(content), encoding="utf-8")
     return out

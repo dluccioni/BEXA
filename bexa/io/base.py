@@ -213,6 +213,12 @@ class BaseSource(ABC):
         name = getattr(self, "detector", None)
         return [name] if isinstance(name, str) else []
 
+    def file_metadata(self) -> dict[str, pd.DataFrame]:
+        """What the scan's files hold beyond what bexa reads of them, as tables by title:
+        a netCDF file's variables, a SPEC scan's header, an HDF5 scan's datasets. Shown
+        by :func:`bexa.core.metadata.scan_metadata`; none by default."""
+        return {}
+
     def cache_records(self) -> list[dict[str, Any]]:
         """What identifies the data for cache keys: path, size and mtime of every file,
         and the detector read when the files hold several.

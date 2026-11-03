@@ -38,11 +38,45 @@ FLAG_KEYS = ("laser_flag", "raw_laser_flag")
 AXIS_TOLERANCE = 1e-9
 
 
+def _path_template(spec: FormatSpec) -> str:
+    """Where any detector keeps its frames, its name as ``{detector}``: a spec detector's own
+    ``frames_path`` holding its name as a group (``/detector/eh1/{detector}/image/...``),
+    else the layout's when it has the field; empty when neither says."""
+    for name, info in spec.detectors.items():
+        parts = str(info.get("frames_path") or "").split("/")
+        if name in parts:
+            return "/".join("{detector}" if p == name else p for p in parts)
+    layout = str(spec.layout.get("frames_path") or "")
+    return layout if "{detector}" in layout else ""
+
+
 def _frames_path(spec: FormatSpec, detector: str) -> str:
-    """The dataset of a detector's frames in a raw file: its own ``frames_path``, else the
-    layout's (empty when neither names one)."""
-    path = spec.detectors.get(detector, {}).get("frames_path") or spec.layout.get("frames_path")
+    """The dataset of a detector's frames in a raw file: its own ``frames_path``; for a
+    detector the spec does not know, the place the spec's keep theirs (:func:`_path_template`);
+    else the layout's (empty when nothing names one)."""
+    path = spec.detectors.get(detector, {}).get("frames_path")
+    if not path and detector not in spec.detectors:
+        path = _path_template(spec)
+    path = path or spec.layout.get("frames_path")
     return safe_format(str(path), detector=detector) if path else ""
+
+
+def file_detectors(spec: FormatSpec, f: h5py.File) -> list[str]:
+    """The detectors with frames in an open raw file: the spec's, in its order, then every
+    other group holding frames at the same place (a detector added at the beamline), by name."""
+    found = [d for d in spec.detectors if _frames_path(spec, d) in f]
+    template = _path_template(spec)
+    if "{detector}" not in template:
+        return found
+    parent = template.split("{detector}")[0].rstrip("/") or "/"
+    group = f.get(parent)
+    if not isinstance(group, h5py.Group):
+        return found
+    for name in sorted(group):
+        node = f.get(safe_format(template, detector=name)) if name not in found else None
+        if isinstance(node, h5py.Dataset) and node.ndim >= 2:
+            found.append(name)
+    return found
 
 
 @dataclass
@@ -133,7 +167,8 @@ class Hdf5PointsSource(BaseSource):
         self._scan_files()
 
     def detector_names(self) -> list[str]:
-        """The spec's detectors whose frames the scan's first raw file holds, in its order."""
+        """The detectors whose frames the scan's first raw file holds: the spec's, in its
+        order, then any other with frames where they keep theirs (:func:`file_detectors`)."""
         if self._detectors is None:
             tables = sorted(self.points_dir.glob(self.point_glob), key=point_number)
             found: list[str] = []
@@ -142,7 +177,7 @@ class Hdf5PointsSource(BaseSource):
                     contextlib.suppress(OSError),
                     h5py.File(self.frames_dir / tables[0].name, "r") as f,
                 ):
-                    found = [d for d in self.spec.detectors if _frames_path(self.spec, d) in f]
+                    found = file_detectors(self.spec, f)
             self._detectors = found
         return list(self._detectors)
 

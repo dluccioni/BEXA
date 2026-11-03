@@ -35,12 +35,12 @@ lists the everyday jobs with the function that does each.
 - [The notebook GUI](#the-notebook-gui)
 - [Find a function by task](#find-a-function-by-task)
 - [Function reference](#function-reference)
-  - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.status](#bexacorestatus-the-state-of-a-scan) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.scan_table](#bexacorescan_table-the-rows-of-a-datasets-table) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
-  - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.survey](#bexaiosurvey-every-dataset-under-a-folder) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.spec_tiff](#bexaioenginesspec_tiff-aps-7-id-spec-sessions-with-a-tiff-per-point) · [bexa.io.engines.nc_tiff](#bexaioenginesnc_tiff-aps-7-id-python-scans-a-netcdf-file-per-run) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.layer](#bexaiolayer-a-scans-frames-on-a-grid-of-its-own-a-layer-a-reshape) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
+  - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.metadata](#bexacoremetadata-everything-a-scans-files-say-as-tables) · [bexa.core.status](#bexacorestatus-the-state-of-a-scan) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.scan_table](#bexacorescan_table-the-rows-of-a-datasets-table) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
+  - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.survey](#bexaiosurvey-every-dataset-under-a-folder) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.spec_tiff](#bexaioenginesspec_tiff-aps-7-id-spec-sessions-with-a-tiff-per-point) · [bexa.io.engines.nc_tiff](#bexaioenginesnc_tiff-aps-7-id-python-scans-a-netcdf-file-per-run) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.layer](#bexaiolayer-a-scans-frames-on-a-grid-of-its-own-a-layer-a-reshape) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.netcdf](#bexaionetcdf-netcdf-files-without-xarrays-backends) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
   - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis) · [bexa.analysis.curves](#bexaanalysiscurves-peak-positions-widths-smoothing-backgrounds-stitching) · [bexa.analysis.peakfit](#bexaanalysispeakfit-peaks-of-any-shape-on-a-background-bounds-and-fixed-values) · [bexa.analysis.batchfit](#bexaanalysisbatchfit-many-curves-fitted-at-once) · [bexa.analysis.imaging](#bexaanalysisimaging-gaussian-peak-maps-kam-orientation-colours-strain) · [bexa.analysis.xrd](#bexaanalysisxrd-powder-geometry-azimuthal-integration-cakes-scherrer) · [bexa.analysis.xrr](#bexaanalysisxrr-momentum-transfer-footprint-critical-angle-film-thickness)
   - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.sliders](#bexavizsliders-what-the-slider-browsers-share) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers) · [bexa.notebook.picker](#bexanotebookpicker-choosing-scans-in-a-notebook) · [bexa.notebook.listing](#bexanotebooklisting-the-scans-listed-and-a-selection-across-folders) · [bexa.notebook.selection](#bexanotebookselection-scans-chosen-in-several-dataset-folders) · [bexa.notebook.picker_state](#bexanotebookpicker_state-what-a-picker-remembers) · [bexa.notebook.picker_widgets](#bexanotebookpicker_widgets-the-widget-views-of-the-picker) · [bexa.notebook.selection_panel](#bexanotebookselection_panel-the-selected-scans-of-every-folder)
   - Pipelines: [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set) · [bexa.pipelines.xfel_cube](#bexapipelinesxfel_cube-pal-xfel-point-files-to-a-laser-onoff-cube) · [bexa.pipelines.cube_report](#bexapipelinescube_report-figures-and-gifs-of-one-cube) · [bexa.pipelines.auto_process](#bexapipelinesauto_process-the-beamtime-watcher) · [bexa.pipelines.benchmark](#bexapipelinesbenchmark-timings-and-baselines)
-  - Workspace and GUI: [bexa.workspace](#bexaworkspace-the-object-system-behind-the-gui) · [bexa.workspace.objects](#bexaworkspaceobjects-data-objects-and-scan-sets) · [bexa.workspace.workspace](#bexaworkspaceworkspace-the-workspace-its-rois-and-its-log) · [bexa.workspace.catalog](#bexaworkspacecatalog-the-operations-their-settings-and-their-help) · [bexa.workspace.ops.extract](#bexaworkspaceopsextract-scans-and-stacks-to-images-curves-maps-and-tables) · [bexa.workspace.ops.process](#bexaworkspaceopsprocess-one-object-in-a-new-one-out) · [bexa.workspace.ops.combine](#bexaworkspaceopscombine-several-objects-in) · [bexa.workspace.ops.multiscan](#bexaworkspaceopsmultiscan-many-scans-at-once) · [bexa.workspace.ops.fit](#bexaworkspaceopsfit-peaks-series-of-fits-peak-finding) · [bexa.workspace.ops.imaging](#bexaworkspaceopsimaging-per-pixel-maps-orientation-kam-strain-drift) · [bexa.workspace.ops.scattering](#bexaworkspaceopsscattering-powder-integration-cakes-reflectivity) · [bexa.workspace.ops.calculators](#bexaworkspaceopscalculators-tables-from-numbers-alone) · [bexa.workspace.ops._base](#bexaworkspaceops_base-what-the-operations-share) · [bexa.workspace.files](#bexaworkspacefiles-files-to-objects-and-objects-to-files) · [bexa.workspace.convert](#bexaworkspaceconvert-conversions-between-formats) · [bexa.workspace.jobs](#bexaworkspacejobs-background-work-with-progress-and-cancel) · [bexa.workspace.source](#bexaworkspacesource-python-source-for-logged-values) · [bexa.workspace.storage](#bexaworkspacestorage-reading-back-a-saved-workspace) · [bexa.gui](#bexagui-the-notebook-gui-package) · [bexa.gui.app](#bexaguiapp-the-notebook-gui) · [bexa.gui.figures](#bexaguifigures-figures-inside-the-gui) · [bexa.gui.forms](#bexaguiforms-the-forms-of-the-catalog) · [bexa.gui.drawing](#bexaguidrawing-objects-drawn-into-a-figure) · [bexa.gui.objects_panel](#bexaguiobjects_panel-the-objects-of-the-workspace) · [bexa.gui.data_tab](#bexaguidata_tab-opening-data) · [bexa.gui.browse_tab](#bexaguibrowse_tab-the-inside-of-folders-and-files) · [bexa.gui.inspectors](#bexaguiinspectors-hdf5-trees-spec-sessions-tiff) · [bexa.gui.view_tab](#bexaguiview_tab-drawing-the-selection) · [bexa.gui.analysis_tab](#bexaguianalysis_tab-every-operation-by-group) · [bexa.gui.fit_tab](#bexaguifit_tab-peaks-with-every-parameter-in-hand) · [bexa.gui.convert_tab](#bexaguiconvert_tab-conversions-and-exports) · [bexa.gui.log_tab](#bexaguilog_tab-commands-script-workspace-files-jobs)
+  - Workspace and GUI: [bexa.workspace](#bexaworkspace-the-object-system-behind-the-gui) · [bexa.workspace.objects](#bexaworkspaceobjects-data-objects-and-scan-sets) · [bexa.workspace.workspace](#bexaworkspaceworkspace-the-workspace-its-rois-and-its-log) · [bexa.workspace.catalog](#bexaworkspacecatalog-the-operations-their-settings-and-their-help) · [bexa.workspace.ops.extract](#bexaworkspaceopsextract-scans-and-stacks-to-images-curves-maps-and-tables) · [bexa.workspace.ops.process](#bexaworkspaceopsprocess-one-object-in-a-new-one-out) · [bexa.workspace.ops.combine](#bexaworkspaceopscombine-several-objects-in) · [bexa.workspace.ops.multiscan](#bexaworkspaceopsmultiscan-many-scans-at-once) · [bexa.workspace.ops.fit](#bexaworkspaceopsfit-peaks-series-of-fits-peak-finding) · [bexa.workspace.ops.imaging](#bexaworkspaceopsimaging-per-pixel-maps-orientation-kam-strain-drift) · [bexa.workspace.ops.scattering](#bexaworkspaceopsscattering-powder-integration-cakes-reflectivity) · [bexa.workspace.ops.calculators](#bexaworkspaceopscalculators-tables-from-numbers-alone) · [bexa.workspace.ops._base](#bexaworkspaceops_base-what-the-operations-share) · [bexa.workspace.files](#bexaworkspacefiles-files-to-objects-and-objects-to-files) · [bexa.workspace.convert](#bexaworkspaceconvert-conversions-between-formats) · [bexa.workspace.jobs](#bexaworkspacejobs-background-work-with-progress-and-cancel) · [bexa.workspace.source](#bexaworkspacesource-python-source-for-logged-values) · [bexa.workspace.storage](#bexaworkspacestorage-reading-back-a-saved-workspace) · [bexa.gui](#bexagui-the-notebook-gui-package) · [bexa.gui.app](#bexaguiapp-the-notebook-gui) · [bexa.gui.figures](#bexaguifigures-figures-inside-the-gui) · [bexa.gui.forms](#bexaguiforms-the-forms-of-the-catalog) · [bexa.gui.drawing](#bexaguidrawing-objects-drawn-into-a-figure) · [bexa.gui.objects_panel](#bexaguiobjects_panel-the-objects-of-the-workspace) · [bexa.gui.data_tab](#bexaguidata_tab-opening-data) · [bexa.gui.browse_tab](#bexaguibrowse_tab-the-inside-of-folders-and-files) · [bexa.gui.inspectors](#bexaguiinspectors-hdf5-trees-spec-sessions-tiff) · [bexa.gui.metadata_view](#bexaguimetadata_view-a-scans-metadata-on-screen) · [bexa.gui.netcdf_inspector](#bexaguinetcdf_inspector-the-inside-of-a-netcdf-file) · [bexa.gui.view_tab](#bexaguiview_tab-drawing-the-selection) · [bexa.gui.analysis_tab](#bexaguianalysis_tab-every-operation-by-group) · [bexa.gui.fit_tab](#bexaguifit_tab-peaks-with-every-parameter-in-hand) · [bexa.gui.convert_tab](#bexaguiconvert_tab-conversions-and-exports) · [bexa.gui.log_tab](#bexaguilog_tab-commands-script-workspace-files-jobs)
   - Synthetic data: [bexa.testing.demo](#bexatestingdemo-bexademo-synthetic-data-in-one-call) · [bexa.testing.synthetic](#bexatestingsynthetic-small-valid-files-for-every-layout-with-the-planted-truth)
   - Geometry and crystallography: [bexa.geometry.conventions](#bexageometryconventions-named-lab-frames-and-motor-stacks) · [bexa.geometry.detector](#bexageometrydetector-detector-and-beam-geometry) · [bexa.geometry.transforms](#bexageometrytransforms-pixels-to-angles-to-q-to-hkl) · [bexa.crystal.lattice](#bexacrystallattice-cells-d-spacings-and-reflections) · [bexa.crystal.cif](#bexacrystalcif-cell-and-space-group-from-cif-files) · [bexa.crystal.diffractometer](#bexacrystaldiffractometer-four-circle-motor-solutions) · [bexa.crystal.zone_axis](#bexacrystalzone_axis-the-zone-axis-from-one-reflection) · [bexa.crystal.omega_search](#bexacrystalomega_search-omega-where-two-peaks-share-a-mu-window) · [bexa.crystal.sample_frame](#bexacrystalsample_frame-sample-to-grain-matrix)
   - Units and optics: [bexa.core.units](#bexacoreunits-physical-constants-and-unit-conversions) · [bexa.optics.conversions](#bexaopticsconversions-energy-wavelength-and-monochromator-angles) · [bexa.optics.attenuation](#bexaopticsattenuation-transmission-and-attenuation-lengths) · [bexa.optics.nist](#bexaopticsnist-nist-mass-attenuation-tables) · [bexa.optics.bragg_magnifier](#bexaopticsbragg_magnifier-asymmetric-bragg-magnifier)
@@ -1082,6 +1082,19 @@ and the geometry. `bexa info PATH` and `bexa scan info` print the same.
 print(scan.info())               # ... "  status: complete" ...
 ```
 
+#### `Scan.metadata`
+`bexa.core.scan.Scan.metadata()`
+
+Everything the files say about the scan, as pandas tables by title, no frame read
+(`bexa.core.metadata.scan_metadata`): the scan, its dims, every channel recorded at each
+point, the scalars, the detectors, the tables, the files, then the engine's own tables (a
+netCDF file's variables and a run's log, a SPEC scan's header and `#UXML` groups).
+
+```python
+# scan: the demo chi x mu scan; the titles of its tables
+list(scan.metadata())[:3]        # ['scan', 'dims', 'per point']
+```
+
 #### `Scan.sum`
 `bexa.core.scan.Scan.sum(roi=None, downsample=None, **kwargs)`
 
@@ -1411,6 +1424,47 @@ scan7.recipe                     # {'path': '...WS2G_100_DFXM', 'scan': 7, 'form
 again = bexa.open(**scan7.recipe, cache=False)   # the same scan, no sniffing
 bexa.Scan(scan7.source, scan7.spec).recipe       # None: built by hand
 ```
+
+### bexa.core.metadata: everything a scan's files say, as tables
+
+What bexa makes of a scan, whatever its format, before a frame is read: the scan itself, its
+dims with their ranges and units, the channels recorded at every point (the motors, counters
+and detectors of the point table) with their ranges, the scalars (where the motors that did not
+move stood, a run's settings), the detectors the files hold, the tables beside the frames and
+the files; then what the engine finds in the files themselves (`BaseSource.file_metadata`: a
+netCDF file's variables and a run's log, a SPEC scan's header and `#UXML` groups). The Browse
+tab shows it (**Scan metadata** under a file, **Full metadata** for the object selected);
+`Scan.metadata()` is the same call.
+
+```python
+import bexa
+from bexa.core.metadata import MAX_FILES, scan_metadata
+
+scan = bexa.demo("mosa")     # chi x mu scan: dims ('chi', 'mu', 'y', 'x'), shape (6, 16, 64, 80)
+```
+
+#### `scan_metadata`
+`bexa.core.metadata.scan_metadata(scan)`
+
+A dict of pandas tables by title: `scan` (name, format, engine, scan type, title, status, dims,
+scanned motors, frames, frame, energy, detector read, files), `dims` (each dim's size, kind,
+first, last, min, max, step, NaN count and unit; the pixels as `detector pixels`), `per point`
+(every column of the source's `point_table`, else its per-frame channels: kind `index`,
+`scanned motor`, `motor` or `counter`, dtype, points, range, NaN count, mean), `scalars`,
+`detectors` (the one read with its frame shape), `tables` (`aux_tables`: rows and columns),
+`files` (the first `MAX_FILES` with their sizes, then how many more); then the engine's own
+tables. An engine table that cannot be made gives a `file metadata` table saying why.
+
+```python
+# scan: the demo chi x mu scan; the tables, its dims, the kinds of its channels
+tables = scan_metadata(scan)
+list(tables)                                     # ['scan', 'dims', 'per point', 'scalars', 'detectors', 'tables', 'files']
+tables["dims"][["dim", "size", "kind", "min", "max", "unit"]].values.tolist()[:2]   # [['chi', 6, 'motor', '-0.5', '0.5', 'deg'], ['mu', 16, 'motor', '-1', '1', 'deg']]
+tables["per point"][["channel", "kind"]].values.tolist()   # [['chi', 'scanned motor'], ['mu', 'scanned motor'], ['elapsed_time', 'counter']]
+tables["files"].name.tolist()                    # ['demo_mosa.h5', 'pco_ff_0000.h5']
+```
+
+- `MAX_FILES`: `200`, the files listed one by one.
 
 ### bexa.core.status: the state of a scan
 
@@ -3317,13 +3371,14 @@ the helpers:
 - `structure()`: the scan's `bexa.core.structure.Structure`: motor dims (slow first) and coordinates, `frame_index` (the frame id at each grid position, -1 where a partial scan has none), `per_frame` channels, `scalars`, `units`, `scan_type`, `energy_keV`, `title`. Built once, kept until `refresh()`, and the same object as `scan.structure`.
 - `scalars()`: dict of the values fixed during the scan (positioners); default `structure().scalars`.
 - `aux_tables()`: dict of extra pandas tables (the shot tables of `Hdf5PointsSource`); default `{}`.
+- `file_metadata()`: dict of tables by title of what the files hold beyond what bexa reads of them (`NcTiffSource`: the netCDF file's variables and the run's log; `SpecTiffSource`: the scan's facts, `#U` header and `#UXML` groups); shown by `bexa.core.metadata.scan_metadata`; default `{}`.
 - `energy_keV`: property, photon energy in keV or `None`; default `structure().energy_keV`.
 - `status`: property, the `bexa.core.status.ScanStatus` of the scan; the default knows the frames alone (`complete` when every grid point has one, else `aborted`), the BLISS engine reads the master entry.
 - `with_motors(motors)`: the same scan with these per-frame channels as its dims, where the layout allows (`NotImplementedError` by default; `Hdf5StackSource` implements it).
 - `chunk_frames`: property, frames per HDF5 chunk; reduction batches are multiples of it; default 1.
 - `refresh()`: re-reads the metadata of a scan still being written, returns the source (`scan.refresh()` calls it).
 - `close()`: closes the open file handles.
-- `detector_names()`: the detectors whose frames the scan's files hold (`Scan.detectors`); by default the one read, `detector`; an engine whose files may hold several lists them all (`Hdf5StackSource`, `Hdf5PointsSource`, `SpecH5Source`, `SmalldataSource`).
+- `detector_names()`: the detectors whose frames the scan's files hold (`Scan.detectors`); by default the one read, `detector`; an engine whose files may hold several lists them all, the ones its spec does not know too (`Hdf5StackSource` by the detector files' names, `Hdf5PointsSource` by the groups of a point file, `SpecH5Source` and `SmalldataSource` by the groups of the file, `SpecTiffSource` by the scan's `#UXML` groups).
 - `cache_records()`: what identifies the data in cache keys, one dict per file (`path`, `size`, `mtime` by default: `bexa.core.provenance.file_records`), then `{"path": "", "detector": ...}` when the files hold several detectors, so two detectors of one file never share a result; an engine whose files change while the data they serve does not (`Hdf5StackSource`) overrides it with records of the part it reads.
 - `frame_bytes(y=slice(None), x=slice(None), dtype=None)`: bytes of one frame cut to the window, at `dtype` (default: stored).
 - `contiguous_runs(index)`: static; yields `(start, stop)` for each run of consecutive ids of a sorted id array.
@@ -3841,7 +3896,9 @@ src = scan.source                                # an Hdf5PointsSource
 The shots of run `run`, scan `scan` under `raw_root` (the folder holding `type=measurement` and
 `type=raw`) in point order; a point without its raw file yet is skipped with a warning. `detector`
 picks a `frames_path` from the spec's `detectors` (default: the first whose frames the first
-raw file holds, `jungfrau2`, `jungfrau1`: `detector_names()`); `energy_keV` sets the energy,
+raw file holds, `jungfrau2`, `jungfrau1`: `detector_names()`), or names a detector the spec
+does not know whose frames are where the spec's keep theirs (`file_detectors`: a detector
+added at the beamline is listed and read); `energy_keV` sets the energy,
 which the files lack. It implements the `Source` members `files`, `frame_shape`,
 `n_frames`, `dtype`, `chunk_frames`, `energy_keV`, `read_frames`, `structure`, `aux_tables`,
 `refresh` and `close` (see `BaseSource`): per-frame channels `point`, `shot` and every key found in
@@ -3862,6 +3919,23 @@ Also:
 src.n_points, src.n_frames, src.read_point(2).shape        # (5, 80, (16, 24, 32))
 src.columns()["laser_flag"], src.columns()["i0"]            # ('event_info.THIRTY_HERTZ', 'qbpm:eh1:qbpm1:sum')
 src.scan_axis(), Hdf5PointsSource.list_runs(spec, work)     # ('delay', [1])
+```
+
+#### `file_detectors`
+`bexa.io.engines.hdf5_points.file_detectors(spec, f)`
+
+The detectors with frames in an open raw file: the spec's, in its order, then every other
+group holding frames (a dataset of two dims or more) at the place the spec's keep theirs (their
+`frames_path` with the name as `{detector}`: `/detector/eh1/{detector}/image/block0_values`),
+by name: a detector added at the beamline is found and read without a word in the spec.
+
+```python
+# the first raw file of the synthetic run
+import h5py
+from bexa.io.engines.hdf5_points import file_detectors
+with h5py.File(src.points[0].raw, "r") as f:
+    found = file_detectors(src.spec, f)
+found                                           # ['jungfrau2']
 ```
 
 #### `Hdf5PointsSource.from_path`
@@ -4024,6 +4098,11 @@ comment, `#R` or `#UXML` line), is running: it opens and reads as far as SPEC ha
 a warning. A scan short of its points is aborted once the next one starts. The camera is
 the EIGER2 Si 500K of 7-ID-C (512 x 1028 uint32, 75 um pixels); a pixel at the detector's
 `invalid_value`, the 2**32 - 1 the EIGER writes for a dead or masked pixel, reads as 0.
+Every area detector SPEC records a scan with is found, known to the spec or not: the scan's
+`#UXML` groups name each (`ad_file_info`, prefix `7idEiger1:TIFF1:`) with where its TIFF
+plugin wrote; the one writing where the spec looks is the spec's `areadetector`, another (a
+camera added at the beamline) is listed by its EPICS name (`Scan.detectors`, the Data tab's
+detector field) and read from its own folder (`Scan.with_detector("7idPilatus")`).
 `bexa.open(folder, scan=4)`, `bexa.open(frame.tif)` and `bexa.open_dataset(folder)` all work; a
 session has many scans of many kinds, so `bexa.open(folder)` without `scan=` says which to
 choose. A TIFF not named as the session's frames is not one of them (the spec's `file_names`):
@@ -4035,9 +4114,9 @@ import tempfile
 from pathlib import Path
 import bexa
 import numpy as np
-from bexa.io.engines.spec_tiff import (SpecTiffSource, frame_point, frame_templates, frames_by_scan,
-                                       probe_tiff, read_spec_file, read_tiffs, scan_frames,
-                                       session_frames, spec_file_of)
+from bexa.io.engines.spec_tiff import (SpecTiffSource, area_detectors, frame_point, frame_templates,
+                                       frames_by_scan, probe_tiff, read_spec_file, read_tiffs,
+                                       scan_frames, session_frames, spec_file_of)
 from bexa.io.formats import load_spec
 from bexa.testing import make_aps_session
 
@@ -4058,12 +4137,15 @@ coordinates from the data rows (motors by their `#o` mnemonic, `"Nano SY"` as `n
 labelled: `r1`, `IC_1`), the positioners of `scalars` from `#P`, the energy from the `#U_` block
 the spec names (`energy: {header: mono, field: Energy}`) and `detector` names the spec's camera
 (its `shape` is the frame shape of a scan without a frame yet, its `invalid_value` the pixel
-value read as 0). `motors` chooses other columns as dims (`Scan.with_dims`). `KeyError` for a
-scan the file does not hold. It implements the `Source` members `files`, `frame_shape`,
+value read as 0; its EPICS name, `7idEiger1`, says the same) or another area detector of the
+scan's `#UXML` groups (`area_detectors`). `motors` chooses other columns as dims
+(`Scan.with_dims`). `KeyError` for a scan the file does not hold and for a detector it was not
+recorded with. It implements the `Source` members `files`, `frame_shape`,
 `n_frames`, `dtype`, `energy_keV`, `read_frames`, `structure`, `status`, `with_motors`,
 `scalars`, `aux_tables` (`points`: `point_table()`; `header`: one row of the `#U_` state,
-`<block>_<field>` columns), `cache_records` (the scan's rows of the growing file plus the
-frames), `refresh` and `close` (see `BaseSource`). Also:
+`<block>_<field>` columns), `file_metadata`, `detector_names` (the spec's detector, then every
+other area detector of the scan's `#UXML` groups), `cache_records` (the scan's rows of the
+growing file plus the frames), `refresh` and `close` (see `BaseSource`). Also:
 
 - `point_table()`: one row per point SPEC recorded, with or without its frame: `point` (the row
   number, the `<point>` of a frame's name), `frame` (the id `read_frames` reads, -1 when the
@@ -4077,8 +4159,9 @@ frames), `refresh` and `close` (see `BaseSource`). Also:
   numbers of `root/dataset` (a folder, or the file's stem), those with a frame by default.
 - attributes: `spec_file`, `session` (the `SpecFile`), `record` (the `SpecScan`), `command` (a
   `ScanCommand`), `points` (the point numbers that have a frame), `frames` (their files), `scan`,
-  `detector`, and `dataset` (a property: the SPEC file's stem, the session's name that `Scan.name`
-  shows).
+  `detector`, `default_detector` (the spec's), `area_detectors` (the scan's other area
+  detectors by name), and `dataset` (a property: the SPEC file's stem, the session's name that
+  `Scan.name` shows).
 
 ```python
 # scan: scan 2 of the synthetic session; its grid, status and the counters per frame
@@ -4134,20 +4217,57 @@ log["started"].iloc[0], log["mono_Energy"].iloc[0]   # (Timestamp('2025-07-30 18
 ```
 
 #### `SpecScan`
-`bexa.io.engines.spec_tiff.SpecScan(number, command, date="", labels=<factory>, rows=<factory>, positions=<factory>, header=<factory>, comments=<factory>, aborted=False, lines=(0, 0), ended=False)`
+`bexa.io.engines.spec_tiff.SpecScan(number, command, date="", labels=<factory>, rows=<factory>, positions=<factory>, header=<factory>, comments=<factory>, aborted=False, lines=(0, 0), ended=False, xml=<factory>)`
 
 One scan of the file: its `number` and `command` (the `#S` line, whitespace normalised), `date`,
 the `#L` `labels` and the data `rows` (`(n_rows, n_columns)`), the `positions` (`#P`, by
 mnemonic), the `header` (`{block: {field: value}}` from the `#U_` lines), the `#C` `comments`,
 `aborted` (SPEC's "aborted" comment), the `lines` of the file it spans and `ended` (SPEC closed
-the scan: the abort comment, a `#R` or `#UXML` line; a scan without one may still be running).
-`n_rows` is the number of points recorded and `column(label)` one data column.
+the scan: the abort comment, a `#R` or `#UXML` line; a scan without one may still be running)
+and `xml`, its `#UXML` groups in order, each `{"attrs": {"name", "prefix", ...}, "datasets":
+{name: value}}` (the area detectors: `ad_detector` with its model, `ad_file_info` with where
+it wrote the frames). `n_rows` is the number of points recorded and `column(label)` one data
+column. `SpecTiffSource.file_metadata()` gives the scan's facts (command, date, rows, columns,
+lines, comments), its `#U header` block by block and its `#UXML groups` as tables.
 
 ```python
 # parsed.scans[2]: ascan phi 8.8 9.8 8 1 of the synthetic session
 record = parsed.scans[2]
 record.n_rows, record.column("Phi")[:3]          # (9, array([8.8, 8.925, 9.05]))
 record.positions["phi"], record.header["mono"]["Energy"]   # (8.8, 11.5)
+```
+
+#### `area_detectors`
+`bexa.io.engines.spec_tiff.area_detectors(session, record)`
+
+The area detectors that wrote TIFFs for a scan, from its `#UXML` groups: one `AreaDetector` per
+`ad_file_info` group of a TIFF plugin with a file name, in the file's order. An `AreaDetector`
+has `name` (the first part of its EPICS prefix, `7idEiger1`), `folder` (where its plugin wrote,
+relative to the SPEC file's folder: below the folder of the file's `#F` path, else from its
+`images` folder on, else its last folder), `prefix` (the start of its frames' names,
+`<prefix>_S<scan>_<point>.tif`) and `model` (its `ad_detector` description). `SpecTiffSource`
+lists every one but the spec's own (the one writing where the spec looks, under the SPEC file's
+name) as a detector of the scan: a camera added at the beamline is read without a word in the
+spec.
+
+```python
+# a scan recorded by a camera the spec does not know: its #UXML group, its frames
+import tifffile
+text = session.path.read_text().splitlines(keepends=True)
+text[0] = f"#F /home/beams/7IDC/user/{session.path.stem}.spec\n"   # the path at the beamline
+pilatus = ['#UXML <group name="ad_file_info" prefix="7idPilatus:TIFF1:">\n',
+           '#UXML   <dataset name="file_format">TIFF</dataset>\n',
+           '#UXML   <dataset name="file_path">/home/beams/7IDC/user/images/pil/S005/</dataset>\n',
+           '#UXML   <dataset name="file_name">pil_S005</dataset>\n', '#UXML </group>\n']
+other = work / "two_cameras"
+other.mkdir()
+(other / session.path.name).write_text("".join(text + pilatus))   # scan 5, the last, recorded by both
+(other / "images/pil/S005").mkdir(parents=True)
+tifffile.imwrite(other / "images/pil/S005/pil_S005_00000.tif", np.ones((5, 7), np.int32))
+parsed = read_spec_file(other / session.path.name)
+area_detectors(parsed, parsed.scans[5])         # [AreaDetector(name='7idPilatus', folder='images/pil/S005', prefix='pil', model='')]
+two = bexa.open(other / session.path.name, scan=5, cache=False)
+two.detectors, two.with_detector("7idPilatus").frame_shape   # (['areadetector', '7idPilatus'], (5, 7))
 ```
 
 #### `spec_file_of`
@@ -4288,9 +4408,10 @@ metadata as `run_<n>.nc`, all in one folder (`data_nc`), and the EIGER one areaD
 per point into a folder of the run under `python_images/` (`python_images/MapScan_102/`). The
 netCDF file holds one array, `xarray.load_dataset(path).to_array()`, whose dims are the motors
 scanned, slow first (`nsamstageZ x nsamstageY`, or `nsamstageY x nsamstageZ`, `objstageZ x
-objstageY`, or one motor), and `det`, the 13 counters read at every point; its coordinates are
-the motor positions. The engine takes those dims as the grid, the counters as the per-frame
-channels `det_0` ... `det_12` (`channel_names` names them) and the TIFFs, by the point numbers
+objstageY`, or one motor), and `det`, the counters read at every point (13 in 2025, as many as
+the script read); its coordinates are the motor positions. The engine takes those dims as the
+grid, the counters as the per-frame channels, named by the run's log (below), else
+`channel_names`, else `det_0` ... `det_12`, and the TIFFs, by the point numbers
 of their names (counted from 0 or 1: `first_point`), as the frames, in the order the points were
 taken: `det_12` counts the detector's frames, and when it rises along a serpentine rather than
 row by row the raster is a serpentine (`order_channel`; the runs of 2025 are all plain). Opened
@@ -4311,6 +4432,19 @@ um pixels), its `invalid_value` read as 0 as in `spec_tiff`. `bexa.open(folder, 
 `bexa.open(run_102.nc)`, `bexa.open(frame.tiff)`, `bexa.open(python_images/MapScan_102)` and
 `bexa.open_dataset(folder)` all work, and the scan picker lists the netCDF folder inside the
 SPEC session's folder (`survey_inside`) once (`survey_skip` keeps it out of `python_images`).
+A loose frame far from the netCDF folder (not in it or the folder above) belongs to it only
+when its run's file is there: the `MapScan_102_1.tiff` of a sample beside is not this one's.
+
+The script also keeps a log of each run, `scan_info/run_<n>_log.json`: the names of the
+counters in the order of `det` (`["7idd:scaler1.S2", "7idd:scaler1.S4", "power"]`) and where
+the stages stood (`{"nsam": [x, y, z], "obj": [x, y, z], "counttime": 3}`). Its folder is
+searched for near the netCDF folder as the frames' are (any folder holding `run_log` files);
+its names name the counters, however many the run read (a counter past them keeps
+`det_<k>`), and its numbers are the scan's scalars (`scan.source.scalars()`: `nsamstageX`,
+`nsamstageY`, `nsamstageZ`, `objstageX`, ... by the layout's `log_positions`; the order of
+`obj` is assumed to be `nsam`'s). A run without a log, or with one that is not JSON (a
+warning), keeps `det_0` .... The log is one of the run's `files` and of its cache records,
+and `Scan.metadata()` shows the netCDF file's variables and the log as the files hold them.
 
 ```python
 import tempfile
@@ -4341,15 +4475,17 @@ the spec), the per-frame channels its counters at the frames' points, the scan t
 added for one); a point without its frame is missing. Without its netCDF file yet a run is a
 series of frames (`frame` dim, scan type `list`). `energy_keV` is the energy (the file lacks
 it); `detector` names the spec's camera. It implements the `Source` members `files` (the
-netCDF file, then the frames), `frame_shape`, `n_frames`, `dtype`, `energy_keV`, `read_frames`,
-`structure`, `status`, `aux_tables` (`points`), `cache_records` (the folder, the run, the frame
-count, the netCDF file, the first and last frames and the times of the frames folders, not
-a stat of every frame), `refresh` and `close` (see `BaseSource`). The frames are read in
+netCDF file and the run's log, then the frames), `frame_shape`, `n_frames`, `dtype`,
+`energy_keV`, `read_frames`, `structure` (the log's positions as its `scalars`), `status`,
+`aux_tables` (`points`), `file_metadata` (the netCDF file's variables, its dims and
+attributes, the run's log), `cache_records` (the folder, the run, the frame count, the netCDF
+file and the log, the first and last frames and the times of the frames folders, not a stat
+of every frame), `refresh` and `close` (see `BaseSource`). The frames are read in
 threads without parsing them (`read_tiffs` with the first frame's `TiffLayout`). Also:
 
 - `point_table()`: one row per point of the netCDF file, in the order taken, with or without its
   frame: `point`, `frame` (the id `read_frames` reads, -1 when there is none), the motor
-  positions, then the counters.
+  positions, then the counters (by the log's names).
 - `from_path(spec, path, scan=None, **kwargs)`: classmethod, from any of the paths above; a run's
   file, frame or folder names its run, and a folder of several runs without `scan` raises
   `LookupError`.
@@ -4362,7 +4498,8 @@ threads without parsing them (`read_tiffs` with the first frame's `TiffLayout`).
   for the netCDF folder, a run's file, and a frames folder, run folder or frame with a netCDF
   folder near (a loose frame only when that folder holds its run's file).
 - attributes: `folder` (the netCDF folder; `dataset`, its name, is what `Scan.name` shows),
-  `scan`, `run_file`, `grid` (the `RunGrid`, `None` before the file), `points` (the numbers in
+  `scan`, `run_file`, `log_file` and `log` (the run's log and its `RunLog`, `None` without
+  one), `grid` (the `RunGrid`, `None` before the file), `points` (the numbers in
   the frames' names), `positions` (each frame's place in the order taken), `frames`, `last`
   (the last run of the folder), `layout`, `detector`.
 
@@ -4382,15 +4519,19 @@ NcTiffSource.list_scans(spec, runs.root, "data_nc"), bexa.list_scans(runs.images
 ```
 
 #### `RunLayout`
-`bexa.io.engines.nc_tiff.RunLayout(run_file, frames_dirs, frame_name, run_dir, search_up=3, search_depth=2, search_skip=(), channel_dim="det", channel_names=(), order_channel=None, first_point=None, running_seconds=120.0)`
+`bexa.io.engines.nc_tiff.RunLayout(run_file, frames_dirs, frame_name, run_dir, search_up=3, search_depth=2, search_skip=(), channel_dim="det", channel_names=(), order_channel=None, first_point=None, running_seconds=120.0, run_log=None, log_positions=(), log_search_up=2, log_search_depth=1)`
 
 The names of a Python-scan layout, read from a spec's `layout` with `RunLayout.of(spec)`:
 `run_file` (`run_{run}.nc`), `frames_dirs` (`python_images*`), `frame_name` (a compiled pattern
 with the groups `run` and `point`), `run_dir` (the run number in a frames subfolder's name),
 `search_up`, `search_depth`, `search_skip` (never searched: `images`), `channel_dim` (`det`),
-`channel_names`, `order_channel` (12), `first_point` (`None`: worked out) and
-`running_seconds`. Also `run_glob` and `run_pattern` (the run files as a glob and as a pattern
-with the group `run`), `run_of_file(name)`, `run_of_dir(name)`, `frame_of(name)` (`(run,
+`channel_names` (for a run without a log), `order_channel` (12), `first_point` (`None`:
+worked out), `running_seconds`, `run_log` (`run_{run}_log.json`), `log_positions` (pairs of
+a log's key and the names its list stands for), `log_search_up` and `log_search_depth` (the
+log's search: beside the netCDF folder, not a sample further). Also `run_glob`, `log_glob` and
+`run_pattern`
+(the run files and logs as globs, the run files as a pattern with the group `run`),
+`run_of_file(name)`, `run_of_dir(name)`, `frame_of(name)` (`(run,
 point)`: `None` for what the name does not say), `is_frames_dir(name)` and `is_skipped(name)`.
 
 ```python
@@ -4400,11 +4541,13 @@ layout.frame_of("MapScan_102_1.tiff"), layout.frame_of("img_0007.tif"), layout.r
 ```
 
 #### `read_run`
-`bexa.io.engines.nc_tiff.read_run(path, layout)`
+`bexa.io.engines.nc_tiff.read_run(path, layout, names=None)`
 
 The `RunGrid` of a run's netCDF file: `dims` (the motors, slow first) and `coords`, `order` (the
 flat grid position of every point in the order taken), `snake`, `channels` (the counters of
-every point in that order, `det_0` ...), and the properties `shape` and `n_points`. The array is
+every point in that order, by `names`, a run's log, else the layout's `channel_names`, else
+`det_0` ...; a name given twice gets its place appended), and the properties `shape` and
+`n_points`. The values are in the machine's byte order (netCDF-3 stores big-endian). The array is
 the dataset's variable holding `channel_dim` (else its first); the counter `order_channel`
 rising row by row gives the grid order, rising along a serpentine the serpentine, neither the
 counter's own order (with a warning). A netCDF-3 file (the files of 2025) is read by `scipy`
@@ -4418,12 +4561,62 @@ grid = read_run(runs.folder / "run_2.nc", layout)
 grid.dims, grid.shape, grid.snake, grid.order[:8].tolist()   # (('nsamstageY', 'nsamstageZ'), (3, 4), True, [0, 1, 2, 3, 7, 6, 5, 4])
 ```
 
+#### `RunLog`
+`bexa.io.engines.nc_tiff.RunLog(path, names=(), positions=<factory>, values=<factory>)`
+
+What a run's log says: `names`, the counters in the order of the netCDF file's `det` (the first
+list of names in the log); `positions`, its numbers by name, a list spread over the names of the
+layout's `log_positions` (`nsam: [x, y, z]` is `nsamstageX`, `nsamstageY`, `nsamstageZ`; a list
+of another length is numbered, `obj_0`, `obj_1`); `values`, the rest as text.
+
+```python
+# a log written by hand: two counters, the nano stages, a note
+from bexa.io.engines.nc_tiff import RunLog, find_run_log, read_log
+import json
+(work / "by_hand.json").write_text(json.dumps([["S2", "power"], {"nsam": [1, 2, 3], "note": "x"}]))
+by_hand = read_log(work / "by_hand.json", layout)
+by_hand.names, by_hand.positions, by_hand.values   # (('S2', 'power'), {'nsamstageX': 1.0, 'nsamstageY': 2.0, 'nsamstageZ': 3.0}, {'note': 'x'})
+```
+
+#### `find_run_log`
+`bexa.io.engines.nc_tiff.find_run_log(folder, run, layout)`
+
+The log of `run` (`run_log`, `run_{run}_log.json`) in the folders nearest the netCDF `folder`
+that hold logs (`scan_info` beside it, whatever its name): the folder itself, below it, or below
+one of the `log_search_up` (2) folders above it, `log_search_depth` (1) levels down, frames
+folders never entered; `None` without one or without `run_log` in the layout. A log lies
+beside its netCDF folder: a sample beside this one, a folder further, never lends its logs.
+
+```python
+# runs with their logs in scan_info beside data_nc
+logged = make_aps_python_runs(work / "logged", logs_dir="scan_info")
+path = find_run_log(logged.folder, 1, layout)
+path.relative_to(logged.root).as_posix()         # 'scan_info/run_1_log.json'
+```
+
+#### `read_log`
+`bexa.io.engines.nc_tiff.read_log(path, layout)`
+
+The `RunLog` of a log file, read once per process (again when it changes); `None`, with a
+warning, for a file that is not JSON: the run then keeps the names `det_0` ....
+
+```python
+# path: the log of run 1 of the logged runs; the counters named by it
+log = read_log(path, layout)
+log.names[:2], log.positions["nsamstageY"], log.positions["counttime"]   # (('7idc:scaler1.S1', '7idc:scaler1.S2'), 13.475, 1.0)
+named = bexa.open(logged.folder, scan=1, cache=False)
+list(named.source.point_table().columns[4:6]), named.source.scalars()["objstageZ"]   # (['7idc:scaler1.S1', '7idc:scaler1.S2'], -7.744)
+[f.name for f in named.files][:3]                # ['run_1.nc', 'run_1_log.json', 'MapScan_1_1.tiff']
+list(named.metadata())[7:]                       # ['run_1.nc: variables', 'run_1.nc: dims and attributes', "run_1_log.json: the run's log"]
+```
+
 #### `run_index`
 `bexa.io.engines.nc_tiff.run_index(folder, layout)`
 
 The `RunIndex` of a netCDF folder: `files` (run to netCDF file), `folders` (run to its frames
 folders, by the number in their names), `loose` (run to `{point: frame}` of the frames lying
-loose), `runs()` (every run with a file or frames) and `has_frames(run)`. No frames folder is
+loose: in the netCDF folder or the one above, or of a run whose file is here), `runs()`
+(every run with a file or frames) and `has_frames(run)`. No frames folder is
 listed: the frames of a run are listed when it opens, each folder again only when it changed.
 The frames' places are found once per process (searched again while none are found), and
 the index is kept until one of the folders it read changes: the runs of a dataset open with
@@ -5069,6 +5262,69 @@ to `max_depth`, a `.npy`'s shape, dtype and size in GB (header only), or the fil
 print(describe(made.dataset_dir))                # format: esrf_id03_bliss_2026 (engine hdf5_stack), ...
 describe(made.master, max_depth=1).splitlines()[0]  # 'path: C:\\Users\\sport\\AppData\\Local\\Temp\\claude\\x--Dressel...'
 ```
+
+### bexa.io.netcdf: netCDF files without xarray's backends
+
+A netCDF file looked into and read with what bexa has anyway: netCDF-3 (classic and 64-bit
+offset, the files of the APS 7-ID Python scans) by scipy, netCDF-4 (an HDF5 file) by h5py
+through its dimension scales; no `netCDF4` or `h5netcdf` needed. The Browse tab shows a file
+with `describe`, a variable loads as an object with `read_variable` (`ws.open_file`,
+`bexa.workspace.files.load_file`).
+
+```python
+import tempfile
+from pathlib import Path
+import numpy as np
+import xarray as xr
+from bexa.io import netcdf
+
+work = Path(tempfile.mkdtemp())                  # a scratch folder
+counts = xr.DataArray(np.arange(12.0).reshape(4, 3), dims=("nsamstageY", "det"), coords={"nsamstageY": [0.1, 0.2, 0.3, 0.4], "det": [0, 1, 2]})
+counts.to_netcdf(work / "run_1.nc", engine="scipy")   # a run's file as the beamline writes it
+```
+
+#### `describe`
+`bexa.io.netcdf.describe(path)`
+
+The file's dims, global attributes and variables, no value read: an `NcFile` with `path`,
+`kind` (`netCDF-3` or `netCDF-4`), `dims` (name to length), `attrs` and `variables`, each an
+`NcVariable` (`name`, `dims`, `shape`, `dtype` in the machine's order, `attrs`, `coordinate`:
+the variable of its one dim). `NcFile.variable(name)` finds one (`KeyError`), `NcFile.table()`
+lists them (variable, role, dims, shape, dtype, attributes). `ValueError` for a file that is
+not netCDF.
+
+```python
+# the run's file: its dims and variables
+info = netcdf.describe(work / "run_1.nc")
+info.kind, info.dims                             # ('netCDF-3', {'nsamstageY': 4, 'det': 3})
+info.table()[["variable", "role", "dims"]].values.tolist()[0]   # ['__xarray_dataarray_variable__', 'data', 'nsamstageY[4] x det[3]']
+```
+
+#### `read_variable`
+`bexa.io.netcdf.read_variable(path, name, index=None)`
+
+The variable `name` as an `xarray.DataArray` with its dims and the coordinate variables of
+those dims, cut by `index` (a tuple: `(slice(1, 3), 2)`) while it is read, in the machine's
+byte order; a float variable's `_FillValue` points are NaN.
+
+```python
+# the third counter at the middle two points
+cut = netcdf.read_variable(work / "run_1.nc", "__xarray_dataarray_variable__", (slice(1, 3), 2))
+cut.dims, cut.values.tolist(), cut.nsamstageY.values.tolist()   # (('nsamstageY',), [5.0, 8.0], [0.2, 0.3])
+```
+
+#### `netcdf_kind`
+`bexa.io.netcdf.netcdf_kind(path)`
+
+`"netCDF-3"`, `"netCDF-4"` (any HDF5 file) or `None`, from the file's first bytes.
+
+```python
+# the run's file
+netcdf.netcdf_kind(work / "run_1.nc")           # 'netCDF-3'
+```
+
+- `NC_SUFFIXES`: `(".nc", ".cdf", ".netcdf", ".nc4")`, the files Browse and `load_file` read as netCDF.
+- `PURE_DIM`: the name netCDF-4 gives a dim stored without values of its own.
 
 ### bexa.io.cube: bexa files, `bexa.save` and `bexa.load`
 
@@ -11274,7 +11530,10 @@ curve = DataObject("c", xr.DataArray([1.0, 4.0, 9.0], dims=("mu",), coords={"mu"
 
 The objects in a file that is not a scan: a bexa cube (one object per
 variable), one HDF5 dataset (`dataset=` or `file.h5::/path`, cut by `index` while it is read),
-npy, TIFF (a multi-page file is a stack along `frame`), PNG/JPEG, CSV or text tables, JSON.
+a netCDF file's variables (`dataset=` one of them, else every data variable, with its dims and
+coordinates; xarray's `__xarray_dataarray_variable__` is named after the file; through
+`bexa.io.netcdf`), npy, TIFF (a multi-page file is a stack along `frame`), PNG/JPEG, CSV or text
+tables, JSON.
 
 ```python
 # a curve written as NeXus, then one slice of its data read back
@@ -12062,8 +12321,9 @@ CurveOptions()                                  # CurveOptions(log_y=False, erro
 
 The top of the left panel: every object (raw scans first, then results in the order made),
 filtered by kind or name; rename, duplicate, delete (with a confirmation); under **Details**
-(folded away) what the selected object is (its metadata, parents and history), its notes and
-the named ROIs.
+(folded away) what the selected object is (its metadata, parents and history), **Full
+metadata** for a scan (everything its files say, on the Browse tab), its notes and the named
+ROIs.
 
 ```python
 import bexa
@@ -12077,8 +12337,9 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 `bexa.gui.objects_panel.ObjectsPanel(app)`
 
 The panel of an `App`: `listing` (a `SelectMultiple`
-of the objects), `filter`, `search`, `details`, `notes`, `rois`, `more` (the **Details**
-`Accordion`), `box`. `refresh()` lists the
+of the objects), `filter`, `search`, `details`, `metadata` (the **Full metadata** button,
+shown for a scan), `notes`, `rois`, `more` (the **Details** `Accordion`), `box`. `refresh()`
+lists the
 objects again, `select(names)` selects from code.
 
 ```python
@@ -12158,8 +12419,12 @@ app.data.datasets == [folder], app.data.picker.selectable   # (True, [1, 2, 3, 4
 The Browse tab: folders with sizes and what bexa recognises in them; an HDF5/NeXus file as a
 tree (groups open on a click; a dataset's shape, dtype, chunks, filters, compression ratio,
 attributes and a preview of one slice at a time, read from the file as the sliders move);
-a SPEC session's scans, headers and columns; TIFF tags; arrays; text. Any dataset or slice
-loads as an object, and the Convert tab takes it from here.
+a netCDF file's dims, attributes and variables (`NetCDFInspector`); a SPEC session's scans,
+headers and columns; TIFF tags; arrays; text. Any dataset, variable or slice loads as an
+object, and the Convert tab takes it from here. **Scan metadata**, beside **Open with the Data
+tab** for a file bexa reads as a scan, shows everything its files say below the file's inside
+(`MetadataView`; the scan picked, for a SPEC session or an HDF5 file of several); a run's
+netCDF file shows it at once.
 
 ```python
 import bexa
@@ -12174,7 +12439,10 @@ master = next(rock.data.files[0].parent.glob("*.h5"))  # the scan's master file
 `bexa.gui.browse_tab.BrowseTab(app, root=None)`
 
 The tab: `path`, `listing` (the folder), `head`, `body`,
-`pane` (the preview figure), `inspector` (the `H5Inspector` or `SpecInspector` of the file shown).
+`pane` (the preview figure), `inspector` (the `H5Inspector`, `SpecInspector` or `NetCDFInspector`
+of the file shown), `metadata` (the `MetadataView`). `scan_metadata(path)` shows the metadata
+of the scan behind `path` (read in the background), `show_scan_metadata(name, scan)` that of
+a scan object (the objects list's **Full metadata**).
 `go(folder)` lists a folder (a file: its folder, the file selected); **...** chooses a file in
 the system's dialog and goes to it (on a local kernel); **Use this folder** makes
 the folder listed the one to work in (`DataTab.use_folder`), scans or not; `show_figure()`,
@@ -12298,6 +12566,91 @@ picture.shape, pages                            # ((24, 32), 1)
 
 - `MAX_LINES`: the most tree lines listed at once.
 - `PREVIEW_PIXELS`: an image preview is cut to about this many pixels a side.
+
+### bexa.gui.metadata_view: a scan's metadata on screen
+
+The tables of `bexa.core.metadata.scan_metadata` folded by title (`scan`, `dims` and `per point`
+unfolded) and searched at once: a name or value typed in `find` keeps the rows that hold it in
+every table, unfolded, and leaves out the tables without one.
+
+```python
+import bexa
+from bexa.gui.metadata_view import MAX_ROWS, MetadataView, tables_html
+
+scan = bexa.demo("rocking")                      # a synthetic mu scan
+tables = scan.metadata()                         # its tables
+```
+
+#### `MetadataView`
+`bexa.gui.metadata_view.MetadataView()`
+
+`head` (the title and how many tables and rows), `find`, `body` and `box`. `show(tables, title)`
+shows the tables, `wait(title)` says they are being read.
+
+```python
+# the demo scan's metadata, then only what holds "mu"
+view = MetadataView()
+view.show(tables, "demo_rocking")
+view.head.value                                  # '<b>demo_rocking</b>: everything its files say, 7 tables, 34 rows'
+view.find.value = "mu"
+view.body.value.count("<details open")           # 3
+```
+
+#### `tables_html`
+`bexa.gui.metadata_view.tables_html(tables, needle="")`
+
+The tables as foldable HTML sections (`<details>`), each with its row count and its first
+`MAX_ROWS` rows; with `needle`, only the rows holding it (a table whose title or a column's
+name holds it in full).
+
+```python
+# the demo scan's tables searched for its motor
+tables_html(tables, "mu").count("<details")     # 3
+```
+
+- `MAX_ROWS`: `400`, the rows of one table shown at once.
+- `OPEN`: the tables shown unfolded.
+
+### bexa.gui.netcdf_inspector: the inside of a netCDF file
+
+What the Browse tab shows of a netCDF file: its kind, dims and global attributes, its
+variables (dims with their lengths, dtype, coordinates marked); a variable picked shows its
+attributes and a picture of its values (a curve against its coordinate; one curve per value of
+a short last dim, the counters of an APS run; an image otherwise; the first plane of a variable
+of more than `MAX_VALUES` values) and loads as an object, cut by `index`. A run bexa reads as a
+scan also shows its full metadata below (the counters by their names in the run's log).
+
+```python
+import tempfile
+from pathlib import Path
+from bexa.gui import App
+from bexa.gui.netcdf_inspector import NetCDFInspector
+from bexa.testing import make_aps_python_runs
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+runs = make_aps_python_runs(Path(tempfile.mkdtemp()) / "exp", logs_dir="scan_info")  # APS runs with their logs
+```
+
+#### `NetCDFInspector`
+`bexa.gui.netcdf_inspector.NetCDFInspector(tab, path)`
+
+`info` (the file's `NcFile`), `summary`, `variables` (a `Select`; the first data variable shown
+at once), `details`, `index` and **Load as object**; `close()` does nothing (no file is kept
+open).
+
+```python
+# Browse on a run's file: its variables, and its metadata below
+app.browse.go(runs.folder / "run_1.nc")
+inspector = app.browse.inspector
+type(inspector).__name__, inspector.variables.value   # ('NetCDFInspector', '__xarray_dataarray_variable__')
+app.browse.metadata.head.value                   # '<b>run_1.nc</b>: everything its files say, 10 tables, 84 rows'
+inspector.index.value = ":, :, 0"                # the frames' totals, det 0
+inspector._load()
+app.ws.names()                                   # ['run_1']
+```
+
+- `MAX_VALUES`: `4_000_000`, the values read for a picture.
+- `FEW_CURVES`: `16`, a last dim this short is drawn as curves.
 
 ### bexa.gui.view_tab: drawing the selection
 
@@ -13611,7 +13964,7 @@ session.coords[2]["phi"][:3], session.truth[2][4]   # (array([8.8, 8.925, 9.05])
 ```
 
 #### `make_aps_python_runs`
-`bexa.testing.synthetic.make_aps_python_runs(root, runs=DEFAULT_PYTHON_RUNS, frame_shape=(24, 32), seed=0, netcdf_dir="data_nc", frames_dir="python_images/MapScan_{run}", first_point=1)`
+`bexa.testing.synthetic.make_aps_python_runs(root, runs=DEFAULT_PYTHON_RUNS, frame_shape=(24, 32), seed=0, netcdf_dir="data_nc", frames_dir="python_images/MapScan_{run}", first_point=1, logs_dir=None)`
 
 Write the scans a Python script runs at APS 7-ID: `<root>/<netcdf_dir>/run_<n>.nc` and one TIFF per
 point, `<frames_dir>/MapScan_<n>_<point>.tiff` counting from `first_point` (`frames_dir` with the
@@ -13623,7 +13976,9 @@ only: the file is not written yet) and `frames=False` (the file alone). Each net
 one array with the motors and `det` (13 counters) as dims, as the beamline's: `det_0` is the
 frame's total, `det_12` counts the frames over the session. Each frame holds a Gaussian spot
 whose centre moves with the motors. The default runs: a raster, a serpentine, a line, a raster
-stopped early and a run without its file yet.
+stopped early and a run without its file yet. With `logs_dir` (`"scan_info"`) each run also
+gets its log, `run_<n>_log.json`: the counters' names (`PYTHON_LOG_NAMES`), the stages'
+positions (`PYTHON_LOG_STAGES`) and `counttime`; the option `log=False` leaves a run without.
 
 ```python
 # work: a scratch folder; the default runs, and a copy with the TIFFs loose
@@ -13634,12 +13989,12 @@ bexa.open(loose.folder, scan=2, cache=False).n_frames     # 12
 ```
 
 #### `SyntheticPythonRuns`
-`bexa.testing.synthetic.SyntheticPythonRuns(root, folder, images, frame_shape, runs=<factory>, frames=<factory>, truth=<factory>, totals=<factory>)`
+`bexa.testing.synthetic.SyntheticPythonRuns(root, folder, images, frame_shape, runs=<factory>, frames=<factory>, truth=<factory>, totals=<factory>, logs=<factory>)`
 
 What `make_aps_python_runs` wrote: `folder` (the netCDF files'), `images` (the frames folder, or
 the folder of the loose frames), per run the motor coordinates (`runs`), the `frames` written
-in the order taken, the `truth` (the spot centre `(y, x)` on the grid) and the `totals` (`det_0`
-on the grid).
+in the order taken, the `truth` (the spot centre `(y, x)` on the grid), the `totals` (`det_0`
+on the grid) and the `logs` written.
 
 ```python
 # runs: the default synthetic runs; the planted truth of run 1

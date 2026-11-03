@@ -1,7 +1,9 @@
 # APS 7-ID-C (summer 2025): the scans run from the beamline's Python scripts, not from SPEC.
 # The script saves each run's metadata as run_<n>.nc (netCDF): one array whose dims are the
-# motors scanned, slow first, and det, the 13 counters read at every point, with the motor
-# positions as coordinates (xarray.load_dataset(path).to_array()). The EIGER saves one
+# motors scanned, slow first, and det, the counters read at every point (13, or as many as
+# the script read), with the motor positions as coordinates
+# (xarray.load_dataset(path).to_array()); its log, scan_info/run_<n>_log.json, names the
+# counters in order and says where the stages stood. The EIGER saves one
 # areaDetector TIFF per point into a folder per run, python_images/<run folder>/; the netCDF
 # folder and python_images usually sit beside the SPEC file, sometimes deeper: both are
 # searched for. A copy may put the TIFFs loose (MapScan_102_1.tiff: run 102, point 1).
@@ -22,7 +24,14 @@ layout:
   search_skip: ["images"]             # never searched: SPEC's frames, images/<file>/S<scan>/
   survey_skip: ["python_images*"]     # never a dataset of their own: their runs are listed once
   channel_dim: det                    # the dim of the counters in the netCDF array
-  channel_names: []                   # the counters in order; unnamed ones are det_0, det_1, ...
+  channel_names: []                   # the counters in order when a run has no log; else det_0, det_1, ...
+  run_log: "run_{run}_log.json"       # a run's log: [[counter names], {stage: position, ...}],
+                                      # in a folder near the netCDF one (scan_info)
+  log_search_up: 2                    # folders above the netCDF folder searched for it ...
+  log_search_depth: 1                 # ... and levels below each: beside it, not a sample further
+  log_positions:                      # the positions a list of the log stands for
+    nsam: [nsamstageX, nsamstageY, nsamstageZ]
+    obj: [objstageX, objstageY, objstageZ]      # the order of nsam's, assumed
   order_channel: 12                   # det 12 counts the detector's frames: the order of the points
   first_point: auto                   # the number of a run's first frame: 0, 1, or auto
   running_seconds: 120                # the last run is running while a frame came this recently
