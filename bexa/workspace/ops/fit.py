@@ -103,8 +103,12 @@ def fit_series(
 
     Gives a table with one row per curve and, for every peak, its centre,
     width, height and area as objects over the other dims (a curve for a
-    map). Each fit starts from the previous good one with ``warm_start``.
+    map). The curves are fitted all at once
+    (:func:`bexa.analysis.batchfit.fit_batch`); with ``warm_start`` a curve
+    fitted badly is fitted again from the last one before it fitted well.
     """
+    from bexa.analysis.batchfit import fit_batch
+
     require(obj, ("map", "volume", "stack", "image"), "Fit Series")
     da = obj.array
     along = along or str(da.dims[-1])
@@ -117,28 +121,27 @@ def fit_series(
     if obj.sigma is not None:
         sigmas = np.asarray(obj.sigma.transpose(*others, along).values, float).reshape(rows.shape)
     x = obj.coord(along).astype(float)
-    fits = peakfit.fit_series(
+    fits = fit_batch(
         x,
         rows,
         peak_spec(shape, centers, peaks),
         background,
         sigmas,
-        warm_start,
         x_range=x_range,
         n_peaks=int(n_peaks),
         shape=shape,
+        warm_start=warm_start,
     )
     index = pd.MultiIndex.from_product([obj.coord(d) for d in others], names=others)
-    table = peakfit.series_table(fits)
+    table = fits.table()
     for level, name in enumerate(others):
         table.insert(level, name, index.get_level_values(level))
     table = table.drop(columns=["index"])
     out = [new(obj, table, f"fits_{along}", kind="table", meta={"fit_along": along})]
     shape_others = tuple(da.sizes[d] for d in others)
     coords = {d: ordered.coords[d] for d in others if d in ordered.coords}
-    first = next((f for f in fits if f is not None), None)
-    if first is not None:
-        for k in range(1, len(first.shapes) + 1):
+    if len(fits):
+        for k in range(1, len(fits.shapes) + 1):
             for quantity in ("center", "fwhm", "amplitude", "area"):
                 column = f"p{k}_{quantity}"
                 if column not in table:
@@ -168,7 +171,34 @@ def fit_many(
     x_range: Sequence[float | None] | None = None,
     use_sigma: bool = True,
 ) -> DataObject:
-    """Fit the same model to several curves: one table, a row per curve."""
+    """Fit the same model to several curves: one table, a row per curve. Curves of as many
+    points each are fitted all at once (:func:`bexa.analysis.batchfit.fit_batch`)."""
+    from bexa.analysis.batchfit import fit_batch
+
+    data = [curve_xy(obj) for obj in objects]
+    lengths = {d[1].size for d in data}
+    if len(objects) > 1 and len(lengths) == 1 and lengths.pop() >= 3:
+        sigmas = None
+        if use_sigma and all(d[3] is not None for d in data):
+            sigmas = np.stack([d[3] for d in data])
+        try:
+            fits = fit_batch(
+                np.stack([d[1] for d in data]),
+                np.stack([d[2] for d in data]),
+                peak_spec(shape, centers, None),
+                background,
+                sigmas,
+                x_range=x_range,
+                n_peaks=int(n_peaks),
+                shape=shape,
+                warm_start=False,
+            )
+        except ValueError:  # no curve to fit: the loop below says why for each
+            fits = None
+        if fits is not None:
+            table = fits.table().drop(columns=["index"])
+            table.insert(0, "object", [o.name for o in objects])
+            return new(objects[0], table, "fits", kind="table", parents=[o.name for o in objects])
     rows = []
     for obj in objects:
         _, x, y, sigma = curve_xy(obj)

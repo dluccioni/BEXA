@@ -1141,7 +1141,7 @@ OPS: list[Op] = [
             P("background", "Background", "choice", "linear", BACKGROUNDS),
             P("centers", "Centres", "numbers", optional=True),
             P("x_range", "Fit range", "range", optional=True),
-            P("warm_start", "Start from the previous fit", "bool", True),
+            P("warm_start", "Refit bad fits from a good one", "bool", True),
             P("peaks", "Peaks", "spec", optional=True, help="Set on the Fit tab"),
         ],
         "Fit the curve at every point of a map along one dim.",

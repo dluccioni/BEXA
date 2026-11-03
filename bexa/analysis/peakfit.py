@@ -28,7 +28,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from bexa._log import progress
 from bexa.core.backend import to_host
 
 __all__ = [
@@ -559,39 +558,22 @@ def fit_series(
 ) -> list[PeakFit | None]:
     """:func:`fit_peaks` for every row of ``curves`` (one curve per row, all on ``x``).
 
-    With ``warm_start`` each fit starts from the previous good one (``r2`` at
-    least 0.5), which follows a peak that moves slowly along the series. A
-    curve that cannot be fitted gives ``None``.
+    The curves are fitted all at once (:func:`bexa.analysis.batchfit.fit_batch`:
+    the same models, start values, bounds and errors). With ``warm_start`` a
+    curve fitted badly (``r2`` under 0.5) is fitted again from the last one
+    before it fitted well, which follows a peak that moves slowly along the
+    series. A curve that cannot be fitted gives ``None``.
     """
+    from bexa.analysis.batchfit import fit_batch
+
     rows = np.atleast_2d(np.asarray(to_host(curves), dtype=float))
     errs = None if sigmas is None else np.atleast_2d(np.asarray(to_host(sigmas), dtype=float))
-    spec: dict[str, Any] = {
-        "peaks": peaks,
-        "background_params": kwargs.pop("background_params", None),
-    }
-    fits: list[PeakFit | None] = []
-    for i in progress(range(rows.shape[0]), total=rows.shape[0], desc="fits", enabled=False):
-        try:
-            fit = fit_peaks(
-                x,
-                rows[i],
-                spec["peaks"],
-                background,
-                None if errs is None else errs[i],
-                background_params=spec["background_params"],
-                **kwargs,
-            )
-        except (ValueError, RuntimeError, np.linalg.LinAlgError):
-            fits.append(None)
-            continue
-        fits.append(fit)
-        if warm_start and fit.success and fit.r2 >= 0.5:
-            following = fit.spec()
-            spec = {
-                "peaks": following["peaks"],
-                "background_params": following["background_params"],
-            }
-    return fits
+    xs = np.asarray(to_host(x), dtype=float)
+    try:
+        batch = fit_batch(xs, rows, peaks, background, errs, warm_start=warm_start, **kwargs)
+    except ValueError:  # no curve with points enough to fit
+        return [None] * rows.shape[0]
+    return [batch.peak_fit(i, xs, rows[i]) for i in range(rows.shape[0])]
 
 
 def series_table(

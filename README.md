@@ -37,7 +37,7 @@ lists the everyday jobs with the function that does each.
 - [Function reference](#function-reference)
   - Opening, reducing, regions of interest: [Top-level names](#top-level-names-bexa) · [bexa.core.scan](#bexacorescan-opening-scans-and-the-scan-handle) · [bexa.core.status](#bexacorestatus-the-state-of-a-scan) · [bexa.core.dataset](#bexacoredataset-the-scans-of-one-folder-or-several) · [bexa.core.scan_table](#bexacorescan_table-the-rows-of-a-datasets-table) · [bexa.core.stacks](#bexacorestacks-statistics-brightest-condition-and-colour-limits-of-stacked-volumes) · [bexa.core.roi](#bexacoreroi-regions-of-interest) · [bexa.core.reductions (bexa.acc)](#bexacorereductions-bexaacc-accumulators-and-the-streaming-engine) · [bexa.core.accessor](#bexacoreaccessor-bexa-on-xarray-objects)
   - Reading and writing files: [bexa.io.formats](#bexaioformats-format-specs-sniffing-and-drafting) · [bexa.io.survey](#bexaiosurvey-every-dataset-under-a-folder) · [bexa.io.base](#bexaiobase-the-source-protocol-and-basesource) · [bexa.io.scan_commands](#bexaioscan_commands-scan-command-lines) · [bexa.io.h5files](#bexaioh5files-opening-hdf5-files-another-program-is-writing) · [bexa.io.engines.hdf5_stack](#bexaioengineshdf5_stack-esrf-bliss-master-and-detector-files) · [bexa.io.engines.hdf5_master](#bexaioengineshdf5_master-what-the-bliss-master-says-about-a-scan) · [bexa.io.engines.hdf5_points](#bexaioengineshdf5_points-pal-xfel-point-files-september-2025) · [bexa.io.engines.spec_h5](#bexaioenginesspec_h5-pal-xfel-spec-style-scan-files-april-2025) · [bexa.io.engines.spec_tiff](#bexaioenginesspec_tiff-aps-7-id-spec-sessions-with-a-tiff-per-point) · [bexa.io.engines.nc_tiff](#bexaioenginesnc_tiff-aps-7-id-python-scans-a-netcdf-file-per-run) · [bexa.io.engines.array_cube](#bexaioenginesarray_cube-reduced-cubes-as-sources) · [bexa.io.engines.smalldata](#bexaioenginessmalldata-lcls-smalldata-run-files) · [bexa.io.engines.extra_data](#bexaioenginesextra_data-euxfel-runs-through-extra_data) · [bexa.io.generic](#bexaiogeneric-plain-arrays-tiff-stacks-and-fileh5path) · [bexa.io.multi](#bexaiomulti-several-scans-as-one-source) · [bexa.io.layer](#bexaiolayer-a-scans-frames-on-a-grid-of-its-own-a-layer-a-reshape) · [bexa.io.inspect](#bexaioinspect-hdf5-trees-and-path-summaries) · [bexa.io.cube](#bexaiocube-bexa-files-bexasave-and-bexaload) · [bexa.io.darfix](#bexaiodarfix-the-bridge-to-darfix)
-  - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis) · [bexa.analysis.curves](#bexaanalysiscurves-peak-positions-widths-smoothing-backgrounds-stitching) · [bexa.analysis.peakfit](#bexaanalysispeakfit-peaks-of-any-shape-on-a-background-bounds-and-fixed-values) · [bexa.analysis.imaging](#bexaanalysisimaging-gaussian-peak-maps-kam-orientation-colours-strain) · [bexa.analysis.xrd](#bexaanalysisxrd-powder-geometry-azimuthal-integration-cakes-scherrer) · [bexa.analysis.xrr](#bexaanalysisxrr-momentum-transfer-footprint-critical-angle-film-thickness)
+  - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis) · [bexa.analysis.curves](#bexaanalysiscurves-peak-positions-widths-smoothing-backgrounds-stitching) · [bexa.analysis.peakfit](#bexaanalysispeakfit-peaks-of-any-shape-on-a-background-bounds-and-fixed-values) · [bexa.analysis.batchfit](#bexaanalysisbatchfit-many-curves-fitted-at-once) · [bexa.analysis.imaging](#bexaanalysisimaging-gaussian-peak-maps-kam-orientation-colours-strain) · [bexa.analysis.xrd](#bexaanalysisxrd-powder-geometry-azimuthal-integration-cakes-scherrer) · [bexa.analysis.xrr](#bexaanalysisxrr-momentum-transfer-footprint-critical-angle-film-thickness)
   - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.sliders](#bexavizsliders-what-the-slider-browsers-share) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers) · [bexa.notebook.picker](#bexanotebookpicker-choosing-scans-in-a-notebook) · [bexa.notebook.listing](#bexanotebooklisting-the-scans-listed-and-a-selection-across-folders) · [bexa.notebook.selection](#bexanotebookselection-scans-chosen-in-several-dataset-folders) · [bexa.notebook.picker_state](#bexanotebookpicker_state-what-a-picker-remembers) · [bexa.notebook.picker_widgets](#bexanotebookpicker_widgets-the-widget-views-of-the-picker) · [bexa.notebook.selection_panel](#bexanotebookselection_panel-the-selected-scans-of-every-folder)
   - Pipelines: [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set) · [bexa.pipelines.xfel_cube](#bexapipelinesxfel_cube-pal-xfel-point-files-to-a-laser-onoff-cube) · [bexa.pipelines.cube_report](#bexapipelinescube_report-figures-and-gifs-of-one-cube) · [bexa.pipelines.auto_process](#bexapipelinesauto_process-the-beamtime-watcher) · [bexa.pipelines.benchmark](#bexapipelinesbenchmark-timings-and-baselines)
   - Workspace and GUI: [bexa.workspace](#bexaworkspace-the-object-system-behind-the-gui) · [bexa.workspace.objects](#bexaworkspaceobjects-data-objects-and-scan-sets) · [bexa.workspace.workspace](#bexaworkspaceworkspace-the-workspace-its-rois-and-its-log) · [bexa.workspace.catalog](#bexaworkspacecatalog-the-operations-their-settings-and-their-help) · [bexa.workspace.ops.extract](#bexaworkspaceopsextract-scans-and-stacks-to-images-curves-maps-and-tables) · [bexa.workspace.ops.process](#bexaworkspaceopsprocess-one-object-in-a-new-one-out) · [bexa.workspace.ops.combine](#bexaworkspaceopscombine-several-objects-in) · [bexa.workspace.ops.multiscan](#bexaworkspaceopsmultiscan-many-scans-at-once) · [bexa.workspace.ops.fit](#bexaworkspaceopsfit-peaks-series-of-fits-peak-finding) · [bexa.workspace.ops.imaging](#bexaworkspaceopsimaging-per-pixel-maps-orientation-kam-strain-drift) · [bexa.workspace.ops.scattering](#bexaworkspaceopsscattering-powder-integration-cakes-reflectivity) · [bexa.workspace.ops.calculators](#bexaworkspaceopscalculators-tables-from-numbers-alone) · [bexa.workspace.ops._base](#bexaworkspaceops_base-what-the-operations-share) · [bexa.workspace.files](#bexaworkspacefiles-files-to-objects-and-objects-to-files) · [bexa.workspace.convert](#bexaworkspaceconvert-conversions-between-formats) · [bexa.workspace.jobs](#bexaworkspacejobs-background-work-with-progress-and-cancel) · [bexa.workspace.source](#bexaworkspacesource-python-source-for-logged-values) · [bexa.workspace.storage](#bexaworkspacestorage-reading-back-a-saved-workspace) · [bexa.gui](#bexagui-the-notebook-gui-package) · [bexa.gui.app](#bexaguiapp-the-notebook-gui) · [bexa.gui.figures](#bexaguifigures-figures-inside-the-gui) · [bexa.gui.forms](#bexaguiforms-the-forms-of-the-catalog) · [bexa.gui.drawing](#bexaguidrawing-objects-drawn-into-a-figure) · [bexa.gui.objects_panel](#bexaguiobjects_panel-the-objects-of-the-workspace) · [bexa.gui.data_tab](#bexaguidata_tab-opening-data) · [bexa.gui.browse_tab](#bexaguibrowse_tab-the-inside-of-folders-and-files) · [bexa.gui.inspectors](#bexaguiinspectors-hdf5-trees-spec-sessions-tiff) · [bexa.gui.view_tab](#bexaguiview_tab-drawing-the-selection) · [bexa.gui.analysis_tab](#bexaguianalysis_tab-every-operation-by-group) · [bexa.gui.fit_tab](#bexaguifit_tab-peaks-with-every-parameter-in-hand) · [bexa.gui.convert_tab](#bexaguiconvert_tab-conversions-and-exports) · [bexa.gui.log_tab](#bexaguilog_tab-commands-script-workspace-files-jobs)
@@ -750,6 +750,7 @@ The everyday jobs and the functions that do them; each name has an entry in the
 | laser on/off split and differential signal | `bexa.analysis.pump_probe.split_on_off`, `bexa.analysis.pump_probe.differential`, `OnOffSplit` |  |
 | combine runs, bin LCLS shots (cube triples or smalldata runs) | `bexa.analysis.pump_probe.combine_runs`, `bexa.analysis.pump_probe.bin_lcls`, `bexa.analysis.pump_probe.bin_events` |  |
 | fit peaks of any shape with bounds and fixed values, without lmfit | `bexa.analysis.peakfit.fit_peaks`, `bexa.analysis.peakfit.fit_series`; the Fit tab |  |
+| the same peaks fitted to thousands of curves at once (a map's rocking curves) | `bexa.analysis.batchfit.fit_batch`; Fit Series |  |
 | a curve's peak position, FWHM, background, smoothing, derivative | `bexa.analysis.curves.peak_position`, `fwhm`, `background`, `smooth`, `derivative` |  |
 | a Gaussian fitted to every pixel's rocking curve | `bexa.analysis.imaging.gaussian_peak_maps` |  |
 | KAM, orientation colours and strain from COM maps | `bexa.analysis.imaging.kam`, `orientation_rgb`, `strain_map` |  |
@@ -6771,10 +6772,11 @@ sorted(parts), bool(np.allclose(sum(parts.values()), fit.evaluate(x)))  # (['bac
 #### `fit_series`
 `bexa.analysis.peakfit.fit_series(x, curves, peaks=None, background="linear", sigmas=None, warm_start=True, **kwargs)`
 
-`fit_peaks` for every row of `curves` (all on `x`); with
-`warm_start` each fit starts from the previous good one (`r2` at least 0.5), which follows a peak
-that moves slowly along the series. A curve that cannot be fitted gives `None`. Its progress
-reaches the GUI's progress bar, and Cancel stops it.
+`fit_peaks` for every row of `curves` (all on `x`), fitted all at
+once by `bexa.analysis.batchfit.fit_batch` (the same models, start values, bounds and errors).
+With `warm_start` a curve fitted badly (`r2` under 0.5) is fitted again from the last one before
+it that fitted well, which follows a peak that moves slowly along the series. A curve that
+cannot be fitted gives `None`. Its progress reaches the GUI's progress bar, and Cancel stops it.
 
 ```python
 # twelve curves with a peak moving from -0.5 to 0.5
@@ -6796,6 +6798,89 @@ peakfit.series_table(fits, np.linspace(-0.5, 0.5, 12), "position")[["position", 
 
 - `SHAPES`: dict of shape name to its parameter names.
 - `BACKGROUNDS`: dict of background name to its parameter names.
+
+### bexa.analysis.batchfit: many curves fitted at once
+
+The peaks of `bexa.analysis.peakfit` fitted to every row of an array together. `fit_peaks` runs
+scipy's `least_squares` on one curve, a few milliseconds each and most of it Python; the rocking
+curve of every pixel of a map is a quarter of a million such fits. Here one Levenberg-Marquardt
+iteration updates every curve at once: the model and its Jacobian (forward differences, one model
+evaluation per parameter for all curves) are numpy arrays of (curves, points), each curve keeps
+its own damping (Nielsen's update), a parameter at a bound that a step would push out stays there
+for that step, and each curve stops on its own when it converges. The models, start values,
+bounds, fixed parameters, weights and errors are those of `fit_peaks`, and the fits agree with
+it to its tolerance; Fit Series and Fit Each Curve run on it, 10 to 60 times faster than curve
+by curve. Every iteration tells the GUI's progress bar how many curves have converged, and
+Cancel stops it there.
+
+```python
+import numpy as np
+from bexa.analysis import batchfit, peakfit
+
+x = np.linspace(-2, 2, 241)  # a motor axis in deg
+# rows: twelve curves of a Gaussian moving from -0.5 to 0.5 on a constant of 2
+rows = np.array([peakfit.shape_values("gaussian", x, {"center": c, "fwhm": 0.4, "amplitude": 60}) + 2 for c in np.linspace(-0.5, 0.5, 12)])
+```
+
+#### `fit_batch`
+`bexa.analysis.batchfit.fit_batch(x, curves, peaks=None, background="linear", sigmas=None, x_range=None, n_peaks=1, shape="gaussian", background_params=None, warm_start=True, max_iterations=400)`
+
+Fit the same peaks on a background to every row of `curves`. `x` is one row for all curves or
+one per curve (`(curves, points)`); NaN points and those outside `x_range` are left out curve by
+curve, and a curve with fewer usable points than free parameters is not fitted (NaN values,
+`success` False). `peaks`, `background`, `sigmas` (one row per curve), `n_peaks`, `shape` and
+`background_params` are those of `fit_peaks`; the start values of a single peak are guessed for
+every curve at once (`guess_single`), those of several peaks or a step curve by curve. A peak
+placed by hand (`peaks`) that a curve's fit does not find is fitted again from that curve's own
+guess. With `warm_start` the curves fitted badly (not converged, or `r2` under 0.5) are fitted
+again from the last curve before them that fitted well, the lower chi-square kept: what follows
+a peak through a noisy series. Returns a `BatchFit`.
+
+```python
+# rows: the moving peak; then with noise, unit uncertainties and 40 points of one curve missing
+batch = batchfit.fit_batch(x, rows, background="constant")
+batch.column("p1_center")[:4].round(2)        # array([-0.5, -0.41, -0.32, -0.23])
+noisy = rows + np.random.default_rng(1).normal(0, 1, rows.shape)
+noisy[3, 100:140] = np.nan
+again = batchfit.fit_batch(x, noisy, background="constant", sigmas=np.ones_like(noisy))
+round(again.values[3, 0], 4), round(peakfit.fit_peaks(x, noisy[3], background="constant", sigma=np.ones(x.size)).values["p1_center"], 4)  # (-0.2006, -0.2006)
+```
+
+#### `BatchFit`
+`bexa.analysis.batchfit.BatchFit(shapes, background, names, values, errors, r2, reduced_chi2, success, x0)`
+
+What `fit_batch` found: the `shapes`, the `background`, the parameter `names` (`p1_center`,
+..., `bg_c0`, ...), `values` and `errors` as arrays of (curves, parameters), `r2`,
+`reduced_chi2` and `success` per curve, and `x0`, the middle of each curve's fitted range (the
+reference of the background polynomial). `len()` is the number of curves.
+
+- `column(name)`: one parameter's values, a curve each.
+- `areas()`: each peak's area per curve, by peak number (from 1).
+- `table(coords=None, name="index")`: one row per curve with the columns of
+  `peakfit.series_table`: the coordinate, every value and its `_err`, the areas, `r2`,
+  `reduced_chi2`, `success`.
+- `peak_fit(i, x, y)`: curve `i` (its `x` and `y`) as a `peakfit.PeakFit`, `None` when it was not
+  fitted.
+
+```python
+# batch: the twelve fits of the moving peak
+batch.table().columns[:4].tolist()            # ['index', 'p1_center', 'p1_center_err', 'p1_fwhm']
+batch.areas()[1][:2].round(3)                 # array([25.547, 25.547])
+round(batch.peak_fit(0, x, rows[0]).r2, 4)    # 1.0
+```
+
+#### `guess_single`
+`bexa.analysis.batchfit.guess_single(x, y, valid)`
+
+`center`, `fwhm` and `amplitude` of one peak on every row of `y` at once, where `valid` is
+True: the highest inner local maximum (the highest point when there is none), as
+`peakfit.guess_peaks` takes, its height above the curve's lowest point and its width where the
+curve falls to half that height (at least one step of `x`).
+
+```python
+# the first two curves of the moving peak
+batchfit.guess_single(x, rows[:2], np.isfinite(rows[:2]))["center"].round(3)  # array([-0.5, -0.417])
+```
 
 ### bexa.analysis.imaging: Gaussian peak maps, KAM, orientation colours, strain
 
@@ -10622,8 +10707,10 @@ best.describe(), table.data[["center", "fwhm"]].round(4)  # ('curve mu[400] floa
 
 Fit every curve of a map (or volume) along the dim `along`.  Gives a table with one row per curve
 and, for every peak, its centre, width, height and area as objects over the other dims (a curve
-for a map). Each fit starts from the previous good one with `warm_start`. On the Analysis tab:
-Fit, "Fit Series"; in code `ws.run("fit_series", ...)`.
+for a map). The curves are fitted all at once (`bexa.analysis.batchfit.fit_batch`); with
+`warm_start` (Refit bad fits from a good one) a curve fitted badly is fitted again from the last
+one before it that fitted well. On the Analysis tab: Fit, "Fit Series"; in code
+`ws.run("fit_series", ...)`.
 
 ```python
 # a map of two copies of curve, each fitted along mu
@@ -10634,8 +10721,9 @@ fitting.fit_series(twice, along="mu")[0].data[["copy", "p1_center"]].round(4)  #
 #### `fit_many`
 `bexa.workspace.ops.fit.fit_many(objects, shape="gaussian", n_peaks=1, background="linear", centers=None, x_range=None, use_sigma=True)`
 
-Fit the same model to several curves: one table, a row per curve. On the Analysis tab: Fit, "Fit
-Each Curve"; in code `ws.run("fit_many", ...)`.
+Fit the same model to several curves: one table, a row per curve. Curves of as many points
+each are fitted all at once (`bexa.analysis.batchfit.fit_batch`). On the Analysis tab: Fit,
+"Fit Each Curve"; in code `ws.run("fit_many", ...)`.
 
 ```python
 # the same model on two curves: one table
@@ -16705,6 +16793,21 @@ with bexa._log.progress_hook(lambda done, total, desc: steps.append((done, total
     for _ in progress(range(3), total=3, desc="scans"):
         pass
 steps                                           # [(0, 3), (1, 3), (2, 3), (3, 3)]
+```
+
+#### `report`
+`bexa._log.report(done, total, desc="")`
+
+Tell the calling thread's `progress_hook` callback that `done` of `total` are done, for work
+that is not a loop over its items (`bexa.analysis.batchfit` fitting every curve at once); nothing
+happens outside a hook, and the callback raising stops the work there.
+
+```python
+# a solver's progress heard by a hook
+heard = []
+with bexa._log.progress_hook(lambda done, total, desc: heard.append((done, total, desc))):
+    bexa._log.report(5, 12, "fits")
+heard                                           # [(5, 12, 'fits')]
 ```
 
 #### `CancelledError`

@@ -194,7 +194,7 @@ class FitTab:
             description="Fit", button_style="success", icon="play", layout=ipw.Layout(width="100px")
         )
         series = ipw.Button(
-            description="Fit every curve", tooltip="a map: each of its curves, warm-started"
+            description="Fit every curve", tooltip="a map: all of its curves at once"
         )
         fit.on_click(lambda _b: self.fit())
         series.on_click(lambda _b: self.fit_series())

@@ -106,6 +106,15 @@ def progress(
     yield from tqdm(iterable, total=total, desc=desc, leave=False)
 
 
+def report(done: int, total: int | None, desc: str = "") -> None:
+    """Tell this thread's :func:`progress_hook` callback that ``done`` of ``total`` are done,
+    for work that is not a loop over its items (a solver fitting them all at once). Does
+    nothing outside a hook; the callback raising stops the work there."""
+    hook = getattr(_hooks, "callback", None)
+    if hook is not None:
+        hook(done, total, desc)
+
+
 @contextmanager
 def progress_hook(callback: ProgressCallback | None) -> Iterator[None]:
     """Report every :func:`progress` loop of this thread to ``callback(done, total, desc)``.
