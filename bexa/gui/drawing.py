@@ -14,17 +14,21 @@ import numpy as np
 import xarray as xr
 
 __all__ = [
+    "ASPECTS",
     "CMAPS",
+    "SCALES",
     "CurveOptions",
     "ImageOptions",
+    "colormap_names",
     "draw_curves",
     "draw_image",
     "draw_rgb",
     "extent_of",
 ]
 
+# the colour maps offered first (any other matplotlib colour map is taken by name)
 CMAPS = (
-    "auto",  # a COM map in COM_CMAP about its median, the rest in viridis
+    "auto",  # a COM map in COM_CMAP, the rest in viridis
     "viridis",
     "magma",
     "inferno",
@@ -32,12 +36,17 @@ CMAPS = (
     "cividis",
     "turbo",
     "twilight",
+    "bwr",
     "RdBu",
     "RdBu_r",
     "PiYG",
     "coolwarm",
 )
-COM_CMAP = "RdBu"  # a centre-of-mass map: diverging, as in the lab's notebooks
+COM_CMAP = "bwr"  # a centre-of-mass map: diverging, blue-white-red as in the lab's notebooks
+# how the values go to colours: auto is centred for a COM map, linear otherwise
+SCALES = ("auto", "linear", "log", "centred")
+# the axes of a 2-D plot: auto is to scale for a detector image, stretched otherwise
+ASPECTS = ("auto", "to scale", "not to scale")
 COM_PREFIX = "com_"  # the name of every centre-of-mass map
 MAX_SHOWN = 2048  # larger images are shown every n-th pixel (the data are not changed)
 ROI_COLOURS = ("#e53935", "#1e88e5", "#43a047", "#fb8c00", "#8e24aa", "#00acc1")
@@ -47,12 +56,13 @@ PIXEL_ALIASES = {"yb": "y", "xb": "x", "y": "y", "x": "x"}
 @dataclass
 class ImageOptions:
     cmap: str = "auto"
-    log: bool = False
+    scale: str = "auto"
     percentiles: tuple[float, float] = (1.0, 99.5)
     vmin: float | None = None
     vmax: float | None = None
     colorbar: bool = True
-    aspect: str = "equal"
+    aspect: str = "auto"
+    reverse: bool = False
 
 
 @dataclass
@@ -62,6 +72,20 @@ class CurveOptions:
     markers: bool = True
     normalize: bool = False
     legend: bool = True
+
+
+def colormap_names() -> list[str]:
+    """The colour maps the View offers: ``CMAPS`` first, then every other matplotlib one."""
+    import matplotlib
+
+    return [*CMAPS, *sorted(n for n in matplotlib.colormaps if n not in CMAPS)]
+
+
+def _aspect(choice: str, dx: str) -> str:
+    """The imshow aspect of ``ASPECTS``: to scale is one unit the same length on both axes."""
+    if choice == "auto":
+        choice = "to scale" if dx in PIXEL_ALIASES else "not to scale"
+    return "equal" if choice == "to scale" else "auto"
 
 
 def _coordinate(da: xr.DataArray, dim: str) -> np.ndarray | None:
@@ -109,29 +133,33 @@ def draw_image(
     """``da`` (2-D) as an image on its coordinates; ROI boxes over the dims they limit,
     but for those named in ``hidden`` (the others keep their colours).
 
-    With the colours ``"auto"`` a COM map (named ``com_...``) is drawn in RdBu with its
-    limits about its median, anything else in viridis.
+    ``options.cmap`` is any matplotlib colour map (``options.reverse`` reverses it);
+    ``"auto"`` draws a COM map (named ``com_...``) in bwr and anything else in viridis.
+    ``options.scale`` is linear, log (``log10(1 + I)``) or centred (limits about the
+    median), ``"auto"`` centred for a COM map and linear otherwise. ``options.aspect``
+    draws the axes to scale (one unit as long on both) or not (``ASPECTS``).
     """
     ax = fig.add_subplot(111)
     shown = da
     step = max(1, max(da.shape) // MAX_SHOWN)
     if step > 1:
         shown = da.isel({str(d): slice(None, None, step) for d in da.dims})
+    from bexa.viz.style import named_colormap
+
+    com = str(da.name or "").startswith(COM_PREFIX)
+    scale = options.scale if options.scale != "auto" else ("centred" if com else "linear")
     values = np.asarray(shown.values, dtype=float)
-    if options.log:
+    if scale == "log":
         with np.errstate(invalid="ignore", divide="ignore"):
             values = np.log10(np.clip(values, 0, None) + 1.0)
     lo, hi = _limits(values, options)
-    com = str(da.name or "").startswith(COM_PREFIX)
-    cmap = options.cmap
-    if cmap == "auto":
-        cmap = COM_CMAP if com else "viridis"
-        if com and options.vmin is None and options.vmax is None:
-            lo, hi = _about_median(values, lo, hi)
+    if scale == "centred" and options.vmin is None and options.vmax is None:
+        lo, hi = _about_median(values, lo, hi)
+    name = options.cmap if options.cmap not in ("", "auto") else None
+    cmap = named_colormap(name or (COM_CMAP if com else "viridis"), options.reverse)
     extent = extent_of(shown)
     dy, dx = (str(d) for d in da.dims[-2:])
-    # square pixels for detector images; a map over two motors fills the axes
-    aspect = "equal" if options.aspect == "equal" and dx in PIXEL_ALIASES else "auto"
+    aspect = _aspect(options.aspect, dx)
     image = ax.imshow(
         values,
         cmap=cmap,
@@ -148,7 +176,8 @@ def draw_image(
         bar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.02)
         units = da.attrs.get("units", "")
         bar.set_label(
-            ("log10(1+I)" if options.log else str(da.name or "")) + (f" ({units})" if units else "")
+            ("log10(1+I)" if scale == "log" else str(da.name or ""))
+            + (f" ({units})" if units else "")
         )
     if rois:
         _draw_rois(ax, rois, dy, dx, hidden)
@@ -198,14 +227,18 @@ def _draw_rois(
         ax.annotate(name, (lo_x, lo_y), color=colour, fontsize=8, va="bottom")
 
 
-def draw_rgb(fig: Any, da: xr.DataArray, title: str = "") -> Any:
-    """A colour picture ``(y, x, rgb)`` on its coordinates; a bivariate picture (attrs
-    ``key_cmaps``, ``key_x``, ``key_x_range``, ...) with its key in a corner."""
+def draw_rgb(
+    fig: Any, da: xr.DataArray, title: str = "", options: ImageOptions | None = None
+) -> Any:
+    """A colour picture ``(y, x, rgb)`` on its coordinates, its axes to scale or not as
+    ``options.aspect`` says; a bivariate picture (attrs ``key_cmaps``, ``key_x``,
+    ``key_x_range``, ...) with its key in a corner."""
     ax = fig.add_subplot(111)
     picture = np.clip(np.nan_to_num(np.asarray(da.values, dtype=float)), 0.0, 1.0)
     plane = da.isel(rgb=0) if "rgb" in da.dims else da
-    ax.imshow(picture, extent=extent_of(plane), interpolation="nearest")
     dims = [str(d) for d in da.dims if d != "rgb"]
+    aspect = _aspect((options or ImageOptions()).aspect, dims[-1] if dims else "x")
+    ax.imshow(picture, extent=extent_of(plane), interpolation="nearest", aspect=aspect)
     if len(dims) == 2:
         ax.set_ylabel(dims[0])
         ax.set_xlabel(dims[1])

@@ -7252,12 +7252,25 @@ style.percentiles_of((0, 500))                   # (1.0, 99.0)
 `bexa.viz.style.colormap(kind, cmap=DEFAULT)`
 
 The colormap of a plot kind: the argument, else the kind's override, else the global `cmap`
-(`diverging_cmap`, RdBu, for the `com` kind). `None` leaves `rcParams["image.cmap"]` in charge.
+(`diverging_cmap`, bwr, for the `com` kind). `None` leaves `rcParams["image.cmap"]` in charge.
 
 ```python
 # the colormap of an image, and of a COM map (the diverging one)
 style.colormap("image")                          # None
-style.colormap("com")                            # 'RdBu'
+style.colormap("com")                            # 'bwr'
+```
+
+#### `named_colormap`
+`bexa.viz.style.named_colormap(cmap, reverse=False)`
+
+The matplotlib colour map of `cmap`: any name matplotlib knows (`"bwr"`, `"magma"`, one a
+package registered), or a colour map itself; `reverse` gives it reversed. `ValueError` for a
+name matplotlib does not know, naming the close ones. The View and the bivariate pictures take
+their colour maps through it.
+
+```python
+# a name, reversed; a typo
+style.named_colormap("bwr", reverse=True).name   # 'bwr_r'
 ```
 
 #### `colorbar`
@@ -7406,7 +7419,7 @@ Constants:
 - `defaults`: the `PlotDefaults` instance that `set`, `context` and `reset` change; read it for
   the current values (`style.defaults.clim`).
 - `PlotDefaults`: the dataclass of the defaults: `clim=("p", 1, 99)`, `render_clim=("p", 5, 99.5)`,
-  `cmap=None`, `diverging_cmap="RdBu"`, `span_fraction=0.2`, `figsize=None`, `panel_size=None`,
+  `cmap=None`, `diverging_cmap="bwr"`, `span_fraction=0.2`, `figsize=None`, `panel_size=None`,
   `colorbar=True`, `colorbar_fraction=0.046`, `colorbar_pad=0.04`, `scalebar=True`,
   `title_size=9`, `kinds={}` (the per-kind overrides).
 - `GLOBAL_OPTIONS`: the names of those fields but `kinds`.
@@ -7453,7 +7466,7 @@ function. A numpy array with three or more dims gets the dims `axis0, ..., y, x`
 
 ```python
 # res: the COM maps of the demo scan; the figure that fits each object
-fig, ax, im = auto.plot(res["com_mu"])                          # com_map: RdBu around the mean
+fig, ax, im = auto.plot(res["com_mu"])                          # com_map: bwr around the mean
 fig, ax, im = bexa.plot(res["sum"], log=True, title="summed")   # images.show
 fig, axes = res.bexa.plot()                                     # grid: one panel per 2-D map
 fig, axes = prev.bexa.plot(kind="tiles", axis="mu", n=8, per_row=4)
@@ -7704,7 +7717,7 @@ fig, ax = curves.linearity(det.values.ravel(), cube["signal"].values.ravel(), la
 
 ### bexa.viz.maps: centre-of-mass, bivariate, HSV and vector-field maps
 
-The per-pixel maps of the lab's notebooks: the RdBu centre-of-mass map, the bivariate blend with
+The per-pixel maps of the lab's notebooks: the bwr centre-of-mass map, the bivariate blend with
 its key, the darfix-style HSV image, quiver plots and cluster labels.
 
 ```python
@@ -7722,14 +7735,14 @@ A centre-of-mass map with colour limits `center +/- span / 2`, so tilts around a
 as red and blue. `center` is `"mean"`, `"median"` or a value in the map's units; `span`
 defaults to `span_fraction` (a fifth) of the map's range (`style.set(com={"span": 0.1})` sets it
 for every COM map); `clim` (a `resolve_clim` spec) replaces centre and span. `cmap` defaults
-to the style's `diverging_cmap` (RdBu). The colourbar is labelled with the
+to the style's `diverging_cmap` (bwr). The colourbar is labelled with the
 name and `attrs["units"]` (`com_mu (deg)`), the title defaults to the name, ticks are removed and
 `scalebar` works as in `images.show`. For width maps use `center="median", cmap="viridis"`, as
 `bexa.plot` does for `width_*`. Returns `(fig, ax, im)`.
 
 ```python
 # res: the COM maps of the demo scan; the COM in mu, then a width map
-fig, ax, im = maps.com_map(res["com_mu"])                               # RdBu around the mean
+fig, ax, im = maps.com_map(res["com_mu"])                               # bwr around the mean
 fig, ax, im = maps.com_map(res["width_mu"], center="median", cmap="viridis")
 fig, ax, im = maps.com_map(res["com_chi"], center=0.0, span=0.1, scalebar=235, title="COM chi")
 im.get_clim()                                                           # (-0.05, 0.05)
@@ -7740,7 +7753,7 @@ im.get_clim()                                                           # (-0.05
 
 Two maps in one RGB image, for example the centre of mass in chi and in mu. Each map is
 normalised to 0..1 over its minimum and maximum (or the `(low, high)` pair in `limits`; NaN goes
-to the low end), sent through its colormap (a name or a matplotlib colormap: `RdBu` and `PiYG`
+to the low end), sent through its colormap (a name or a matplotlib colormap: `bwr` and `PiYG`
 by default, the notebooks' blue-red and green-purple as `BLUE_RED` and `GREEN_PURPLE`), and
 the two RGB images are averaged (`bivariate_rgb`; a point either map lacks is black). `key=True` adds an inset (top right) with the colour of
 every pair of values, its axes in the maps' units and labelled with `labels` (default: the
@@ -7758,7 +7771,7 @@ len(ax.images), len(fig.axes)                   # (1, 1)
 
 Two maps as one RGB picture `(..., 3)`, and the `(low, high)` each was scaled by: each map
 scaled to 0..1 over its range (or `limits`), taken through its colormap (a name or a matplotlib
-colormap; `RdBu` for the first, `PiYG` for the second by default) and the two averaged, as in
+colormap; `bwr` for the first, `PiYG` for the second by default) and the two averaged, as in
 the lab's notebooks; a point either map lacks (NaN) is black. What `bivariate` draws and COM
 Maps stores for a COM along two dims.
 
@@ -7774,7 +7787,7 @@ rgb.shape                                        # (64, 80, 3)
 The key of a bivariate picture, `(n, n, 3)`: the first map's scale along x, the second's up.
 
 ```python
-# the key of RdBu and PiYG
+# the key of bwr and PiYG
 maps.bivariate_key().shape                       # (100, 100, 3)
 ```
 
@@ -7847,7 +7860,7 @@ fig, ax, im = maps.cluster_map(labels, title="k-means on the COM maps")
 
 Constants:
 
-- `BIVARIATE_CMAPS`: `("RdBu", "PiYG")`, the default `cmaps` of `bivariate`, `bivariate_rgb`
+- `BIVARIATE_CMAPS`: `("bwr", "PiYG")`, the default `cmaps` of `bivariate`, `bivariate_rgb`
   and `bivariate_key`.
 - `BLUE_RED`, `GREEN_PURPLE`: matplotlib colormaps blue-white-red and green-white-purple, those
   of the lab's notebooks.
@@ -9790,12 +9803,13 @@ curve.describe(), round(float(curve.sigma[12]), 1)  # ('curve mu[25] float64 +/-
 ```
 
 #### `com_maps`
-`bexa.workspace.ops.extract.com_maps(obj, axes=None, sigma=3.0, roi=None, downsample=None, over=None, min_prominence=0.0, widths=True, total=True, bivariate=True)`
+`bexa.workspace.ops.extract.com_maps(obj, axes=None, sigma=3.0, roi=None, downsample=None, over=None, min_prominence=0.0, widths=True, total=True, coms="auto", picture_cmaps="bwr, PiYG", picture_percentiles=(1.0, 99.0))`
 
 Centre-of-mass and width maps along any dims, and the total intensity. `axes` are the dims the
 COM is taken along, motors and pixels alike (default: every motor); `over` the dims of the maps
-(default: the pixels for a COM along motors, the other motors summed; else every dim not in
-`axes`); the other dims are summed. The defaults are the DFXM maps: for every pixel the
+(default: along two dims, the last two of the other dims, so the picture is one image, the
+rest summed; else the pixels for a COM along motors, the other motors summed; else every dim
+not in `axes`); the other dims are summed. The defaults are the DFXM maps: for every pixel the
 intensity-weighted mean motor position (`com_<axis>`) and spread (`width_<axis>`). `("y",
 "x")` of an `a x b` scan gives every frame's centre on the detector (bivariate) as `a x b`
 maps; `("mu",)` over `("chi", "x")` the rocking centre per chi and detector column. A scan
@@ -9805,22 +9819,32 @@ the points whose peak rises above its lowest value by less than this fraction of
 point's rise: the background, whose COM is noise (0 keeps every point). The rise is measured
 as `MotorCOM` and `DimCOM` measure it, in memory too: a point's highest smoothed weight over
 the frames (and the pixels along) less its lowest. `widths`
-and `total` choose those maps (no widths: their sums are not formed). A COM along two dims
-adds, with `bivariate`, the two COMs as one colour picture, `com_<a>_<b>` (kind `rgb`): the
-first through RdBu, the second through PiYG, averaged, each scaled over its 1st to 99th
-percentile (`bexa.viz.maps.bivariate_rgb`), its key in the attrs (`key_x`, `key_x_range`,
-`key_y`, `key_y_range`, `key_cmaps`), which the View draws in a corner. `ValueError` when no
-dim is left for the maps. On the Analysis tab: Extract, "COM Maps"; in code
+and `total` choose those maps (no widths: their sums are not formed). `coms` says how the
+COMs come out (`COMS_AS`): `"maps"`, a map each; `"picture"`, along two dims, the two as one
+colour picture `com_<a>_<b>` (kind `rgb`): the first through the first of `picture_cmaps`
+(`"bwr, PiYG"`: any two matplotlib colour maps, `ValueError` naming the close names for one
+it does not know), the second through the second, averaged, each scaled between the
+`picture_percentiles` (`bexa.viz.maps.bivariate_rgb`), its key in the attrs (`key_x`,
+`key_x_range`, `key_y`, `key_y_range`, `key_cmaps`), which the View draws in a corner;
+`"both"`; `"auto"`, the default: the picture along two dims (the two COM maps then stay
+out), a map each otherwise. A picture needs maps over two dims; with fewer the maps come out.
+`ValueError` when no dim is left for the maps. On the Analysis tab: Extract, "COM Maps"; in code
 `ws.run("com_maps", ...)`.
 
 ```python
 # mosa: the centre-of-mass maps of both tilts
-[o.name for o in extract.com_maps(mosa, sigma=1.0)]  # ['demo_mosa_total', 'demo_mosa_com_chi', 'demo_mosa_width_chi', 'demo_mosa_com_mu', 'demo_mosa_width_mu', 'demo_mosa_com_chi_mu']
-# the COMs alone, the weak peaks left out
-[o.name for o in extract.com_maps(mosa, sigma=1.0, widths=False, total=False, bivariate=False, min_prominence=0.05)]   # ['demo_mosa_com_chi', 'demo_mosa_com_mu']
+[o.name for o in extract.com_maps(mosa, sigma=1.0)]  # ['demo_mosa_total', 'demo_mosa_width_chi', 'demo_mosa_width_mu', 'demo_mosa_com_chi_mu']: the two COMs in one picture
+# a map for each COM, the weak peaks left out
+[o.name for o in extract.com_maps(mosa, sigma=1.0, widths=False, total=False, coms="maps", min_prominence=0.05)]   # ['demo_mosa_com_chi', 'demo_mosa_com_mu']
+# the picture in other colours, scaled between the 5th and 95th percentiles
+extract.com_maps(mosa, coms="picture", picture_cmaps="viridis, plasma", picture_percentiles=(5, 95))[-1].array.attrs["key_cmaps"]   # ['viridis', 'plasma']
 # every frame's centre on the detector, as chi x mu maps
 [o.dims for o in extract.com_maps(mosa, axes=["y", "x"])][:2]   # [('chi', 'mu'), ('chi', 'mu')]
 ```
+
+Constants:
+
+- `COMS_AS`: `("auto", "picture", "maps", "both")`, how `com_maps` gives its COMs.
 
 #### `frame_stats`
 `bexa.workspace.ops.extract.frame_stats(obj, roi=None)`
@@ -10657,7 +10681,7 @@ ws = Workspace("readme", cache=False)  # an empty workspace
 peak = ws.set_roi("peak", y=(16, 48), x=(20, 60))  # an ROI in full-detector pixels
 (mosa,) = ws.demo("mosa")  # a chi x mu scan
 (stack,) = ws.run("read_volume", mosa)  # its frames (chi, mu, y, x) in memory
-maps = ws.run("com_maps", mosa, sigma=1.0)  # total, com and width of chi and mu
+maps = ws.run("com_maps", mosa, sigma=1.0, coms="both")  # total, com and width of chi and mu, the picture
 com_chi, com_mu = (next(o for o in maps if o.name.endswith(f"com_{m}")) for m in ("chi", "mu"))
 from bexa.workspace.ops import imaging
 ```
@@ -11838,7 +11862,8 @@ import numpy as np
 import xarray as xr
 from matplotlib.figure import Figure
 import bexa
-from bexa.gui.drawing import CurveOptions, ImageOptions, draw_curves, draw_image, draw_rgb, extent_of
+from bexa.gui.drawing import (CurveOptions, ImageOptions, colormap_names, draw_curves, draw_image,
+                               draw_rgb, extent_of)
 
 image = xr.DataArray(np.random.default_rng(0).random((20, 30)), dims=("y", "x"), coords={"y": np.arange(100, 120), "x": np.arange(30)})  # a window of a frame
 curve = xr.DataArray(np.arange(1.0, 6.0), dims=("mu",), coords={"mu": np.linspace(0, 1, 5)})  # a curve
@@ -11849,13 +11874,20 @@ curve = xr.DataArray(np.arange(1.0, 6.0), dims=("mu",), coords={"mu": np.linspac
 
 A 2-D DataArray as an image on its coordinates (every n-th
 pixel above 2048), percentile limits unless `vmin`/`vmax` are set, the named ROIs drawn over the
-dims they limit, but for those named in `hidden` (the others keep their colours). With the
-colours `"auto"` (the default) a COM map, a DataArray named `com_...`, is drawn in RdBu with
-its limits about its median (`COM_CMAP`), anything else in viridis. Returns the axes.
+dims they limit, but for those named in `hidden` (the others keep their colours).
+`options.cmap` is any matplotlib colour map (`bexa.viz.style.named_colormap`; `reverse`
+reverses it); `"auto"`, the default, draws a COM map, a DataArray named `com_...`, in bwr
+(`COM_CMAP`) and anything else in viridis. `options.scale` (`SCALES`) maps the values to the
+colours linearly, as `log10(1 + I)` or centred (the limits about the median); `"auto"` is
+centred for a COM map and linear otherwise. `options.aspect` (`ASPECTS`) draws the axes to
+scale (a unit as long on both) or not (the image fills the axes); `"auto"` is to scale for a
+detector image (pixel dims) and not for others. Returns the axes.
 
 ```python
 # the window with an ROI box, log scale
-draw_image(Figure(), image, ImageOptions(log=True), "frame", rois={"box": bexa.ROI(y=(105, 110), x=(5, 15))}).get_title()  # 'frame'
+draw_image(Figure(), image, ImageOptions(scale="log"), "frame", rois={"box": bexa.ROI(y=(105, 110), x=(5, 15))}).get_title()  # 'frame'
+# a reversed colour map, the axes stretched
+draw_image(Figure(), image, ImageOptions(cmap="magma", reverse=True, aspect="not to scale")).images[0].get_cmap().name   # 'magma_r'
 ```
 
 #### `draw_curves`
@@ -11871,9 +11903,10 @@ draw_curves(Figure(), [("a", curve, np.ones(5)), ("b", 2 * curve, None)], CurveO
 ```
 
 #### `draw_rgb`
-`bexa.gui.drawing.draw_rgb(fig, da, title="")`
+`bexa.gui.drawing.draw_rgb(fig, da, title="", options=None)`
 
-A colour picture `(y, x, rgb)` on its coordinates; a bivariate picture of COM Maps (attrs
+A colour picture `(y, x, rgb)` on its coordinates, its axes to scale or not as
+`options.aspect` says (an `ImageOptions`; none: `"auto"`); a bivariate picture of COM Maps (attrs
 `key_cmaps`, `key_x`, `key_x_range`, `key_y`, `key_y_range`) with its key in a corner.
 
 ```python
@@ -11892,11 +11925,24 @@ plain indices).
 extent_of(image)                                # [-0.5, 29.5, 119.5, 99.5]
 ```
 
-#### `ImageOptions`
-`bexa.gui.drawing.ImageOptions(cmap="auto", log=False, percentiles=(1.0, 99.5), vmin=None, vmax=None, colorbar=True, aspect="equal")`
+#### `colormap_names`
+`bexa.gui.drawing.colormap_names()`
 
-How an image is drawn: `cmap`, `log`, `percentiles`, `vmin`,
-`vmax`, `colorbar`, `aspect`.
+The colour maps the View's **colours** field offers: `CMAPS` first (`"auto"`, viridis, magma,
+bwr, RdBu, PiYG, ...), then every other matplotlib colour map by name. The field takes any of
+them typed too.
+
+```python
+# the first ones, and how many in all
+colormap_names()[:3], len(colormap_names()) > 100   # (['auto', 'viridis', 'magma'], True)
+```
+
+#### `ImageOptions`
+`bexa.gui.drawing.ImageOptions(cmap="auto", scale="auto", percentiles=(1.0, 99.5), vmin=None, vmax=None, colorbar=True, aspect="auto", reverse=False)`
+
+How an image is drawn: `cmap` (any matplotlib colour map, or `"auto"`), `scale` (`SCALES`),
+`percentiles`, `vmin`, `vmax`, `colorbar`, `aspect` (`ASPECTS`), `reverse` (the colour map
+reversed). See `draw_image`.
 
 ```python
 # the defaults
@@ -11914,9 +11960,12 @@ How curves are drawn: `log_y`, `errors`, `markers`,
 CurveOptions()                                  # CurveOptions(log_y=False, errors=True, markers=True, normalize=False, legend=True)
 ```
 
-- `CMAPS`: the colour maps the View tab offers, `"auto"` first (RdBu, PiYG among them).
-- `COM_CMAP`, `COM_PREFIX`: `"RdBu"` and `"com_"`, the colours of a COM map and the start of
+- `CMAPS`: the colour maps the View tab offers first, `"auto"` first (bwr, RdBu, PiYG among
+  them); any other matplotlib colour map is taken by name (`colormap_names`).
+- `COM_CMAP`, `COM_PREFIX`: `"bwr"` and `"com_"`, the colours of a COM map and the start of
   its name.
+- `SCALES`: `("auto", "linear", "log", "centred")`, how the values go to the colours.
+- `ASPECTS`: `("auto", "to scale", "not to scale")`, the axes of a 2-D plot.
 - `MAX_SHOWN`: the largest image side drawn in full.
 - `ROI_COLOURS`: the colours of the ROI boxes.
 - `PIXEL_ALIASES`: binned pixel dims to pixel dims.
@@ -12183,12 +12232,15 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 `bexa.gui.view_tab.ViewTab(app)`
 
 The tab: `pane`, `mode`, `member` (the scan of a set), `row_dim`
-and `col_dim` (a volume), `sliders` by dim, the image options (`cmap`, `log`, `percent`, `vmin`,
-`vmax`, `colorbar`, `show_rois`, `aspect`), the curve options (`log_y`, `errors`, `markers`,
+and `col_dim` (a volume), `sliders` by dim, the image options (`cmap`: a combo box offering
+`colormap_names()` and taking any matplotlib colour map typed, `reverse`, `scale`, `percent`,
+`vmin`, `vmax`, `colorbar`, `show_rois`, `aspect`: the axes to scale or not, for a colour
+picture too), the curve options (`log_y`, `errors`, `markers`,
 `normalize`, `fits`), the ROI tools (`roi_list`, `roi_name`, `roi_ranges`, `draw`, `line`,
 and `roi_toggles`: a toggle per ROI, on while it is drawn; `hidden_rois` names those off, and
-the `show_rois` checkbox hides them all). The colours are `"auto"` at first: COM maps in
-RdBu about their median, the rest in viridis.
+the `show_rois` checkbox hides them all). The colours, the scale and the axes are `"auto"` at
+first: COM maps in bwr about their median, the rest in viridis, linear; detector images to
+scale, other maps stretched.
 `refresh()` follows the selection: an object that grew (a scan being written) keeps its mode
 and member scan, and a slider at its last point moves to the new last point. `redraw()` draws
 again.

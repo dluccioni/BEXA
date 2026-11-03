@@ -21,7 +21,16 @@ import numpy as np
 import xarray as xr
 
 from bexa._log import get_logger
-from bexa.gui.drawing import CMAPS, CurveOptions, ImageOptions, draw_curves, draw_image, draw_rgb
+from bexa.gui.drawing import (
+    ASPECTS,
+    SCALES,
+    CurveOptions,
+    ImageOptions,
+    colormap_names,
+    draw_curves,
+    draw_image,
+    draw_rgb,
+)
 from bexa.gui.figures import FigurePane
 from bexa.gui.forms import set_tooltip
 from bexa.workspace.objects import DataObject, has_pixel_dims
@@ -74,15 +83,25 @@ class ViewTab:
             widget.observe(lambda _c: self._controls_changed(), names="value")
         self.slider_box = ipw.VBox()
         # image options
-        self.cmap = ipw.Dropdown(
-            options=CMAPS,
+        self.cmap = ipw.Combobox(  # the usual maps offered, any matplotlib name typed
+            options=colormap_names(),
             value="auto",
+            placeholder="auto",
+            ensure_option=False,
+            continuous_update=False,
             description="colours",
             layout=ipw.Layout(width="190px"),
             style={"description_width": "55px"},
         )
-        self.log = ipw.Checkbox(
-            value=False, description="log", indent=False, layout=ipw.Layout(width="60px")
+        self.reverse = ipw.Checkbox(
+            value=False, description="reversed", indent=False, layout=ipw.Layout(width="90px")
+        )
+        self.scale = ipw.Dropdown(
+            options=SCALES,
+            value="auto",
+            description="scale",
+            layout=ipw.Layout(width="150px"),
+            style={"description_width": "40px"},
         )
         self.percent = ipw.FloatRangeSlider(
             value=(1.0, 99.5),
@@ -102,12 +121,17 @@ class ViewTab:
             value=True, description="ROIs", indent=False, layout=ipw.Layout(width="70px")
         )
         self.aspect = ipw.Dropdown(
-            options=("equal", "auto"), value="equal", layout=ipw.Layout(width="80px")
+            options=ASPECTS,
+            value="auto",
+            description="axes",
+            layout=ipw.Layout(width="160px"),
+            style={"description_width": "35px"},
         )
         self.image_options = ipw.HBox(
             [
                 self.cmap,
-                self.log,
+                self.reverse,
+                self.scale,
                 self.percent,
                 self.vmin,
                 self.vmax,
@@ -141,7 +165,8 @@ class ViewTab:
         )
         for widget in (
             self.cmap,
-            self.log,
+            self.reverse,
+            self.scale,
             self.percent,
             self.colorbar,
             self.show_rois,
@@ -406,8 +431,8 @@ class ViewTab:
                 self._visible(False, True)
                 self._curves(fig, objects)
             elif main.kind == "rgb":
-                self._visible(False, False)
-                draw_rgb(fig, main.array, main.name)
+                self._visible(True, False)  # its axes to scale or not
+                draw_rgb(fig, main.array, main.name, self._image_options())
             else:
                 self._visible(True, False)
                 image, title = self._image(main)
@@ -444,13 +469,14 @@ class ViewTab:
                 return None
 
         return ImageOptions(
-            self.cmap.value,
-            self.log.value,
-            tuple(self.percent.value),  # type: ignore[arg-type]
-            number(self.vmin.value),
-            number(self.vmax.value),
-            self.colorbar.value,
-            self.aspect.value,
+            cmap=self.cmap.value.strip() or "auto",
+            scale=self.scale.value,
+            percentiles=tuple(self.percent.value),  # type: ignore[arg-type]
+            vmin=number(self.vmin.value),
+            vmax=number(self.vmax.value),
+            colorbar=self.colorbar.value,
+            aspect=self.aspect.value,
+            reverse=self.reverse.value,
         )
 
     def _image(self, main: DataObject) -> tuple[xr.DataArray, str]:

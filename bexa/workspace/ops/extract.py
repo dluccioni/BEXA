@@ -239,23 +239,29 @@ def com_maps(
     min_prominence: float = 0.0,
     widths: bool = True,
     total: bool = True,
-    bivariate: bool = True,
+    coms: str = "auto",
+    picture_cmaps: str | Sequence[str] = "bwr, PiYG",
+    picture_percentiles: Sequence[float] = (1.0, 99.0),
 ) -> list[DataObject]:
     """Centre-of-mass and width maps along any dims, and the total intensity.
 
     ``axes`` are the dims the COM is taken along, motors and pixels alike
-    (default: every motor); ``over`` the dims of the maps (default: the pixels for
-    a COM along motors, the other motors summed: the DFXM maps; else every dim not
-    in ``axes``). ``("y", "x")`` of an ``a x b`` scan gives every frame's centre on
+    (default: every motor); ``over`` the dims of the maps (default: along two dims,
+    the last two dims of the others, the rest summed; else the pixels for a COM
+    along motors, the other motors summed: the DFXM maps; else every dim not in
+    ``axes``). ``("y", "x")`` of an ``a x b`` scan gives every frame's centre on
     the detector as ``a x b`` maps. Results: ``com_<dim>`` (the intensity-weighted
     mean coordinate), ``width_<dim>`` (its spread) and ``total``. Frames are
     smoothed by ``sigma`` pixels first (0 to switch off). ``min_prominence`` leaves
     out (NaN) the points whose peak rises above its lowest value by less than this
     fraction of the strongest point's rise: the background, whose COM is noise (0
     keeps every point). ``widths`` and ``total`` choose those maps (no widths: they
-    are not computed). Along two dims, ``bivariate`` adds the two COMs as one picture,
-    ``com_<a>_<b>``: the first through RdBu, the second through PiYG, averaged
-    (:func:`bexa.viz.maps.bivariate_rgb`), each scaled over its 1st to 99th percentile.
+    are not computed). ``coms`` says how the COMs come out: ``"maps"``, one map each;
+    ``"picture"``, along two dims, the two as one picture ``com_<a>_<b>`` (the first
+    through the first of ``picture_cmaps``, the second through the second, averaged,
+    each scaled over ``picture_percentiles``: :func:`bexa.viz.maps.bivariate_rgb`);
+    ``"both"``; ``"auto"`` (the default), the picture along two dims and the maps
+    otherwise. A picture needs maps over two dims; with fewer, the maps come out.
     """
     require(obj, ("scan", *ANY), "COM Maps")
     along, over = _com_dims(obj, axes, over)
@@ -278,8 +284,15 @@ def com_maps(
         made = _com_stack(obj, along, sigma, roi, min_prominence, widths)
     if not total:
         made = [o for o in made if o.meta.get("quantity") != "total"]
-    if bivariate and len(along) == 2:
-        made.append(_bivariate(obj, made, along))
+    if coms not in COMS_AS:
+        raise ValueError(f"coms is one of {COMS_AS}, not {coms!r}")
+    picture = len(along) == 2 and len(over) == 2 and coms != "maps"
+    if not picture:
+        return made
+    made.append(_bivariate(obj, made, along, picture_cmaps, picture_percentiles))
+    if coms in ("auto", "picture"):  # the two COMs in the picture alone
+        made = [o for o in made if o.meta.get("quantity") not in {f"com_{d}" for d in along}]
+        made[-1].parents = [obj.name]
     return made
 
 
@@ -328,18 +341,27 @@ def _com_stack(
     return out
 
 
-def _bivariate(obj: DataObject, made: list[DataObject], along: list[str]) -> DataObject:
+def _bivariate(
+    obj: DataObject,
+    made: list[DataObject],
+    along: list[str],
+    cmaps: str | Sequence[str],
+    percentiles: Sequence[float],
+) -> DataObject:
     """The two COM maps of ``made`` as one RGB picture, its key in the attrs."""
-    from bexa.viz.maps import BIVARIATE_CMAPS, bivariate_rgb
+    from bexa.viz.maps import bivariate_rgb
 
+    names = [c.strip() for c in cmaps.split(",")] if isinstance(cmaps, str) else list(cmaps)
+    if len(names) != 2 or len(percentiles) != 2:
+        raise ValueError("give two picture colour maps and two percentiles (from, to)")
     by_name = {o.meta.get("quantity"): o for o in made}
     first, second = (by_name[f"com_{d}"].array for d in along)
     limits = []
     for values in (first.values, second.values):
         finite = values[np.isfinite(values)]
-        lo, hi = np.percentile(finite, (1, 99)) if finite.size else (0.0, 1.0)
+        lo, hi = np.percentile(finite, sorted(percentiles)) if finite.size else (0.0, 1.0)
         limits.append((float(lo), float(hi)))
-    rgb, lim_a, lim_b = bivariate_rgb(first, second, BIVARIATE_CMAPS, (limits[0], limits[1]))
+    rgb, lim_a, lim_b = bivariate_rgb(first, second, (names[0], names[1]), (limits[0], limits[1]))
     dims = tuple(str(d) for d in first.dims)
     name = f"com_{along[0]}_{along[1]}"
     key = {
@@ -347,7 +369,7 @@ def _bivariate(obj: DataObject, made: list[DataObject], along: list[str]) -> Dat
         "key_x_range": list(lim_a),
         "key_y": str(second.name),
         "key_y_range": list(lim_b),
-        "key_cmaps": list(BIVARIATE_CMAPS),
+        "key_cmaps": names,
     }
     picture = xr.DataArray(
         rgb,
@@ -360,6 +382,9 @@ def _bivariate(obj: DataObject, made: list[DataObject], along: list[str]) -> Dat
     return new(obj, picture, name, kind="rgb", parents=parents, meta={"quantity": name})
 
 
+COMS_AS = ("auto", "picture", "maps", "both")  # how COM Maps gives its COMs
+
+
 def _com_dims(
     obj: DataObject, axes: Sequence[str] | None, over: Sequence[str] | None
 ) -> tuple[list[str], list[str]]:
@@ -370,6 +395,8 @@ def _com_dims(
     along = [str(d) for d in axes] if axes else motors
     if over:
         over = [str(d) for d in over]
+    elif len(along) == 2 and len(dims) > 3:  # one picture over two dims, the rest summed
+        over = [d for d in dims if d not in along][-2:]
     elif pixels and all(d in motors for d in along):  # the DFXM maps: the other motors summed
         over = pixels
     else:

@@ -1,6 +1,6 @@
 """Maps of per-pixel quantities: centre of mass, bivariate blends, HSV, vector fields.
 
-These reproduce the figures the lab drew in every notebook: the RdBu COM map
+These reproduce the figures the lab drew in every notebook: the bwr COM map
 with limits ``centre +/- span/2``, the blue/red plus green/purple bivariate
 blend with its inset key, the HSV mosaicity image, and quiver plots with a
 colour wheel.
@@ -29,8 +29,8 @@ __all__ = [
 
 BLUE_RED = LinearSegmentedColormap.from_list("blue_white_red", ["blue", "white", "red"])
 GREEN_PURPLE = LinearSegmentedColormap.from_list("green_white_purple", ["green", "white", "purple"])
-# the two COMs of a bivariate map: the first through RdBu, the second through PiYG
-BIVARIATE_CMAPS = ("RdBu", "PiYG")
+# the two COMs of a bivariate map: the first through bwr, the second through PiYG
+BIVARIATE_CMAPS = ("bwr", "PiYG")
 
 
 def _normalize(
@@ -76,7 +76,7 @@ def com_map(
         (the notebooks used a fifth of the motor range). ``style.set(com={"span": 0.1})``
         sets it for every COM map.
     cmap
-        Default the style's ``diverging_cmap`` (``"RdBu"``).
+        Default the style's ``diverging_cmap`` (``"bwr"``).
     clim
         Explicit limits instead of centre and span: ``(vmin, vmax)``, ``("p", lo, hi)``
         or ``"p2-98"``.
@@ -112,9 +112,7 @@ def com_map(
 
 
 def _colormap(cmap: Any) -> Any:
-    import matplotlib
-
-    return matplotlib.colormaps[cmap] if isinstance(cmap, str) else cmap
+    return style.named_colormap(cmap)
 
 
 def bivariate_rgb(
@@ -160,7 +158,7 @@ def bivariate(
     """Blend two maps (for example COM in mu and in chi) into one RGB image with a key.
 
     Each map is normalised to [0, 1] (over its own range or ``limits``), mapped
-    through its colormap (``RdBu`` and ``PiYG`` by default; the notebooks' blue-red and
+    through its colormap (``bwr`` and ``PiYG`` by default; the notebooks' blue-red and
     green-purple are ``BLUE_RED`` and ``GREEN_PURPLE``), and the two RGB images are
     averaged, as in the lab's notebooks (:func:`bivariate_rgb`).
     """

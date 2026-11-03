@@ -42,6 +42,7 @@ __all__ = [
     "figure_size",
     "limits",
     "local_option",
+    "named_colormap",
     "new_axes",
     "option",
     "percentile_limits",
@@ -116,7 +117,7 @@ class PlotDefaults:
     clim: Any = ("p", 1, 99)  # colour limits of every image; stacks take its percentiles
     render_clim: Any = ("p", 5, 99.5)  # plotly volume renderings
     cmap: str | None = None  # None: the theme's rcParams["image.cmap"]
-    diverging_cmap: str = "RdBu"  # centre-of-mass maps
+    diverging_cmap: str = "bwr"  # centre-of-mass maps
     span_fraction: float = 0.2  # a COM map's colour scale: a fifth of the map's range
     figsize: tuple[float, float] | None = None  # single-panel figures; None: the function's own
     panel_size: tuple[float, float] | None = (
@@ -362,6 +363,24 @@ def colormap(kind: str, cmap: Any = DEFAULT) -> Any:
     """
     global_name = "diverging_cmap" if kind == "com" else "cmap"
     return option(kind, "cmap", cmap, global_name=global_name)
+
+
+def named_colormap(cmap: Any, reverse: bool = False) -> Any:
+    """The matplotlib colour map of ``cmap`` (any name matplotlib knows, ``"RdBu"``,
+    ``"cmr.rainforest"`` once registered, or a colour map), reversed with ``reverse``;
+    ``ValueError`` naming the close names for one it does not know."""
+    import difflib
+
+    import matplotlib
+
+    if isinstance(cmap, str):
+        try:
+            cmap = matplotlib.colormaps[cmap]
+        except KeyError:
+            close = difflib.get_close_matches(cmap, list(matplotlib.colormaps), n=3)
+            hint = f"; close: {', '.join(close)}" if close else ""
+            raise ValueError(f"no colour map {cmap!r}{hint}") from None
+    return cmap.reversed() if reverse else cmap
 
 
 def colorbar(
