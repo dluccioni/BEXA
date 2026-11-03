@@ -67,6 +67,13 @@ class ObjectsPanel:
             layout=ipw.Layout(width="130px", display="none"),
         )
         self.metadata.on_click(lambda _b: self._show_metadata())
+        self.names = ipw.Button(
+            description="Names and offsets",
+            icon="edit",
+            tooltip="aliases, offsets and scales for the scan's motors, counters, detectors",
+            layout=ipw.Layout(width="150px", display="none"),
+        )
+        self.names.on_click(lambda _b: self._show_metadata(names=True))
         self.rois = ipw.HTML()
         # what is selected, its notes and the ROIs: folded away, the list kept short
         self.more = ipw.Accordion(
@@ -74,7 +81,7 @@ class ObjectsPanel:
                 ipw.VBox(
                     [
                         self.details,
-                        self.metadata,
+                        ipw.HBox([self.metadata, self.names]),
                         self.notes,
                         save_notes,
                         ipw.HTML("<b>ROIs</b>"),
@@ -157,10 +164,11 @@ class ObjectsPanel:
         if current is None or current not in ws:
             self.details.value = "<i>nothing selected</i>"
             self.notes.value = ""
-            self.metadata.layout.display = "none"
+            self.metadata.layout.display = self.names.layout.display = "none"
             return
         obj = ws[current]
-        self.metadata.layout.display = "" if obj.kind == "scan" else "none"
+        shown = "" if obj.kind == "scan" else "none"
+        self.metadata.layout.display = self.names.layout.display = shown
         self.notes.value = obj.notes
         text = obj.info()
         lines = text.splitlines()
@@ -171,15 +179,17 @@ class ObjectsPanel:
             f"overflow:auto;margin:0'>{html.escape(chr(10).join(lines))}</pre>"
         )
 
-    def _show_metadata(self) -> None:
-        """The selected scan's full metadata, on the Browse tab."""
+    def _show_metadata(self, names: bool = False) -> None:
+        """The selected scan's full metadata on the Browse tab; its **Names and offsets**
+        unfolded with ``names``. **Details** folds, so the tab has the column."""
         current = self.app.current
         if current is None or current not in self.app.ws:
             return
         obj = self.app.ws[current]
         if obj.kind == "scan":
-            self.app.browse.show_scan_metadata(obj.name, obj.data)
+            self.app.browse.show_scan_metadata(obj.name, obj.data, names=names)
             self.app.show_tab("Browse")
+            self.more.selected_index = None
 
     def _show_rois(self) -> None:
         rois = self.app.ws.rois

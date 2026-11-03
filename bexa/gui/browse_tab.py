@@ -8,7 +8,9 @@ dataset or variable, or a slice of it, loads as an object; anything bexa reads
 as a scan opens from here, and **Scan metadata** shows everything its files say
 (:func:`bexa.core.metadata.scan_metadata`): the dims, every channel recorded at
 each point, the positions, the detectors, the files and the engine's own tables.
-The objects list shows the same for a scan object.
+The objects list shows the same for a scan object, with its **Names and offsets**
+(:class:`bexa.gui.names_editor.NamesEditor`): an alias, an offset and a scale for each
+motor, counter, position and detector.
 """
 
 from __future__ import annotations
@@ -22,6 +24,7 @@ import numpy as np
 from bexa.gui.figures import FigurePane
 from bexa.gui.inspectors import H5Inspector, SpecInspector, array_preview, tiff_summary
 from bexa.gui.metadata_view import MetadataView
+from bexa.gui.names_editor import NamesEditor
 from bexa.gui.netcdf_inspector import NetCDFInspector
 from bexa.io.netcdf import NC_SUFFIXES
 
@@ -110,6 +113,9 @@ class BrowseTab:
         self.text = ipw.HTML()
         self.body = ipw.VBox()
         self.metadata = MetadataView()
+        self.names = NamesEditor(app)
+        self.names_fold = ipw.Accordion(children=[self.names.box], selected_index=None)
+        self.names_fold.set_title(0, "Names and offsets")
         self.metadata_box = ipw.VBox()  # the metadata view, when a scan's is shown
         self._shown = 0  # counts what was shown: a job's late answer for an older one waits
         self.box = ipw.VBox(  # one column: the folder, then what is inside the entry picked
@@ -273,10 +279,14 @@ class BrowseTab:
         title = path.name + (f", scan {number}" if number is not None else "")
         self._metadata_of(title, lambda: bexa.open(path, scan=number, cache=False).metadata())
 
-    def show_scan_metadata(self, name: str, scan: Any) -> None:
-        """The metadata of the scan object ``name`` (the objects list's **Metadata**)."""
+    def show_scan_metadata(self, name: str, scan: Any, names: bool = False) -> None:
+        """The metadata of the scan object ``name`` (the objects list's **Full metadata**),
+        under its **Names and offsets**, unfolded with ``names``."""
         self._reset()
         self.head.value = f"<b>{html.escape(name)}</b>: a scan object"
+        self.names.show(name)
+        self.names_fold.selected_index = 0 if names else None
+        self.body.children = [self.names_fold]
         self._metadata_of(name if scan.name == name else f"{name} ({scan.name})", scan.metadata)
 
     def _metadata_of(self, title: str, read: Any) -> None:

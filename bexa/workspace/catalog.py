@@ -1079,6 +1079,28 @@ OPS: list[Op] = [
         "Read a scan with another of the detectors its files hold (a second camera).",
     ),
     _o(
+        "rename",
+        "Names and Offsets",
+        "Multi-scan",
+        multiscan.rename,
+        [Input("obj", ("scan", "scanset"), "Scan or scan set")],
+        [
+            P(
+                "names",
+                "Names",
+                "text",
+                "",
+                optional=True,
+                help="file name=yours, ...: nsamstageY=y",
+            ),
+            P("offsets", "Offsets", "text", "", optional=True, help="name=offset, ...: added"),
+            P("scales", "Scales", "text", "", optional=True, help="name=factor, ...: times it"),
+        ],
+        "Give a scan's motors, counters, positions and detectors names of your own, and offsets "
+        "and scales on their values (the Names and offsets editor of the objects list writes "
+        "them for you).",
+    ),
+    _o(
         "reshape",
         "Reshape Frames",
         "Multi-scan",

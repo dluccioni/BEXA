@@ -22,6 +22,7 @@ from bexa.workspace.ops._base import new, require
 __all__ = [
     "STACK_QUANTITIES",
     "layers",
+    "rename",
     "reshape",
     "same_grid",
     "scan_table",
@@ -171,6 +172,59 @@ def use_detector(obj: DataObject, detector: str) -> DataObject:
         made = ScanSet(scans, list(obj.data.labels))
         return DataObject(f"{obj.name}_{detector}", made, meta=dict(obj.meta), parents=[obj.name])
     return new(obj, obj.data.with_detector(detector), detector)
+
+
+def pairs(text: str | Mapping[str, Any] | None, number: bool = False) -> dict[str, Any]:
+    """``"nsamstageY=y_sample, power=P"`` (or a mapping) as a dict, its values numbers with
+    ``number``; ``ValueError`` saying which part is not ``name=value``."""
+    if isinstance(text, Mapping):
+        items = [(str(k), v) for k, v in text.items()]
+    else:
+        items = []
+        for part in (text or "").split(","):
+            if not part.strip():
+                continue
+            key, sep, value = part.partition("=")
+            if not sep or not key.strip() or not value.strip():
+                raise ValueError(f"{part.strip()!r}: write name=value")
+            items.append((key.strip(), value.strip()))
+    out: dict[str, Any] = {}
+    for key, value in items:
+        if not number:
+            out[key] = str(value)
+            continue
+        try:
+            out[key] = float(value)
+        except (TypeError, ValueError):
+            raise ValueError(f"{key}: {value!r} is not a number") from None
+    return out
+
+
+def rename(
+    obj: DataObject,
+    names: str | Mapping[str, str] = "",
+    offsets: str | Mapping[str, float] = "",
+    scales: str | Mapping[str, float] = "",
+) -> DataObject:
+    """A scan (every scan of a set) with names of its own for its motors, counters, positions
+    and detectors, and offsets and scales on their values.
+
+    ``names`` ``"nsamstageY=y_sample, 7idd:scaler1.S2=I0"``, ``offsets``
+    ``"nsamstageY=-13.475"`` (added) and ``scales`` ``"power=1000"`` (the values times it,
+    before the offset), all by the names the files give; they replace those the scan
+    had (:meth:`bexa.core.scan.Scan.renamed` of :meth:`~bexa.core.scan.Scan.unnamed`).
+    Every map, curve and table made of the result has its names; the frames are read
+    as before.
+    """
+    require(obj, ("scan", "scanset"), "Names and Offsets")
+    given = (pairs(names), pairs(offsets, number=True), pairs(scales, number=True))
+    if not any(given):
+        raise ValueError("give a name, an offset or a scale")
+    if obj.kind == "scanset":
+        scans = [scan.unnamed().renamed(*given) for scan in obj.data.scans]
+        made = ScanSet(scans, list(obj.data.labels))
+        return DataObject(f"{obj.name}_named", made, meta=dict(obj.meta), parents=[obj.name])
+    return new(obj, obj.data.unnamed().renamed(*given), "named")
 
 
 def reshape(

@@ -274,7 +274,7 @@ class Workspace:
 
         options.setdefault("cache", self.cache)
         t0 = time.perf_counter()
-        opened = bexa.open(path, scan=scan, **options)
+        opened = self.named(bexa.open(path, scan=scan, **options))
         label = name or _scan_name(opened)
         obj = self._insert(DataObject(label, opened, meta=_scan_meta(opened)))
         logged = {k: v for k, v in options.items() if not (k == "cache" and v is self.cache)}
@@ -308,7 +308,8 @@ class Workspace:
         if not ids:
             raise ValueError(f"no scan of {dataset.name} matches {scans!r}")
         opened = [
-            dataset.scan(i) for i in progress(ids, total=len(ids), desc="opening", enabled=False)
+            self.named(dataset.scan(i))
+            for i in progress(ids, total=len(ids), desc="opening", enabled=False)
         ]
         if as_set:
             made = [
@@ -335,7 +336,7 @@ class Workspace:
         """A scan set from the recipes of its scans (``bexa.open(**recipe)`` each)."""
         import bexa
 
-        scans = [bexa.open(**{"cache": self.cache, **dict(r)}) for r in recipes]
+        scans = [self.named(bexa.open(**{"cache": self.cache, **dict(r)})) for r in recipes]
         obj = self._insert(DataObject(name, ScanSet(scans, labels)))
         self.record(
             call_text(
@@ -357,7 +358,7 @@ class Workspace:
         labels: Sequence[str] | None = None,
     ) -> list[DataObject]:
         """Scans opened elsewhere (the scan picker) as objects, logged by their recipes."""
-        scans = list(scans)
+        scans = [self.named(s) for s in scans]
         if not scans:
             raise ValueError("no scans selected")
         recipes = [s.recipe for s in scans]
@@ -381,6 +382,55 @@ class Workspace:
             )
             made.append(obj)
         return made
+
+    # ------------------------------------------------------------- names
+    def set_names(
+        self,
+        names: Mapping[str, str] | None = None,
+        offsets: Mapping[str, float] | None = None,
+        scales: Mapping[str, float] | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """Names, offsets and scales for every scan opened from now on: a scan with any of
+        these names (as its files give them) opens renamed (:meth:`named`). Kept in
+        ``settings["names"]``, so they are saved with the workspace; none clears them."""
+        given = {
+            "names": {str(k): str(v) for k, v in (names or {}).items() if str(v)},
+            "offsets": {str(k): float(v) for k, v in (offsets or {}).items()},
+            "scales": {str(k): float(v) for k, v in (scales or {}).items()},
+        }
+        if any(given.values()):
+            self.settings["names"] = given
+        else:
+            self.settings.pop("names", None)
+        self.record(
+            call_text(
+                "ws.set_names",
+                names=given["names"] or None,
+                offsets=given["offsets"] or None,
+                scales=given["scales"] or None,
+            )
+        )
+        return given
+
+    def named(self, scan: Any) -> Any:
+        """``scan`` renamed by the names the workspace keeps (:meth:`set_names`), those it has;
+        a scan renamed already, or without any of them, as it is. Names that clash with the
+        scan's own are left out, with a warning."""
+        from bexa.io.layer import RenamedSource
+
+        kept = self.settings.get("names")
+        if not kept or isinstance(scan.source, RenamedSource):
+            return scan
+        s = scan.structure
+        known = set(s.coords) | set(s.per_frame) | set(s.scalars) | set(scan.detectors)
+        step = {k: {n: v for n, v in kept.get(k, {}).items() if n in known} for k in kept}
+        if not any(step.values()):
+            return scan
+        try:
+            return scan.renamed(step.get("names"), step.get("offsets"), step.get("scales"))
+        except ValueError as exc:
+            log.warning("%s keeps the names its files give: %s", scan.name, exc)
+            return scan
 
     def open_file(
         self,

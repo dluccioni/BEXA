@@ -8,7 +8,7 @@ metadata; frames are touched when ``read``, ``preview`` or ``reduce`` is called.
 from __future__ import annotations
 
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -171,6 +171,8 @@ class Scan:
             raise ValueError(f"{self.name} has no detector {detector!r}; its detectors: {known}")
         if self.recipe is None:
             raise ValueError(f"{self.name} was not opened from its files: it reads one detector")
+        for step in reversed(list(self.recipe.get("names") or [])):  # an alias: its own name
+            detector = {v: k for k, v in step.get("names", {}).items()}.get(detector, detector)
         return open(
             **{**self.recipe, "detector": detector},
             crystal=self.crystal,
@@ -228,6 +230,58 @@ class Scan:
             step = [str(dim), [list(s) for s in steps], bool(snake)]
             made.recipe = {**self.recipe, "reshape": [*earlier, step]}
         return made
+
+    def renamed(
+        self,
+        names: Mapping[str, str] | None = None,
+        offsets: Mapping[str, float] | None = None,
+        scales: Mapping[str, float] | None = None,
+    ) -> Scan:
+        """The scan with names of its own and its values moved.
+
+        ``names`` maps a motor, counter, position or detector to its alias;
+        ``offsets`` and ``scales``, by the names before, make a value ``scale * value +
+        offset``: ``renamed({"nsamstageY": "y_sample"}, {"nsamstageY": -13.475})`` gives
+        the dim ``y_sample`` about the line's centre, and every map made of the scan
+        has it. The frames are read through this scan; the names go into the recipe,
+        so a worker reopens them, and into the cache keys. ``ValueError`` for an
+        alias that is another name of the scan.
+        """
+        from bexa.io.layer import RenamedSource
+
+        source = RenamedSource(self.source, names, offsets, scales)
+        source.structure()  # a clash of names is said now, not at the first read
+        made = self._around(source)
+        if self.recipe is not None:
+            earlier = list(self.recipe.get("names") or [])
+            made.recipe = {**self.recipe, "names": [*earlier, source.record()]}
+        return made
+
+    def unnamed(self) -> Scan:
+        """The scan as its files name it: every :meth:`renamed` of the last steps undone
+        (itself when it was not renamed)."""
+        from bexa.io.layer import RenamedSource
+
+        scan = self
+        while isinstance(scan.source, RenamedSource):
+            before = scan._around(scan.source.parent)
+            if scan.recipe is not None:
+                steps = list(scan.recipe.get("names") or [])[:-1]
+                recipe = {k: v for k, v in scan.recipe.items() if k != "names"}
+                before.recipe = {**recipe, "names": steps} if steps else recipe
+            scan = before
+        return scan
+
+    @property
+    def names(self) -> dict[str, dict[str, Any]]:
+        """The names, offsets and scales the scan was last given (:meth:`renamed`), by the names
+        before: ``{"names": {...}, "offsets": {...}, "scales": {...}}``, empty ones for a scan
+        named as its files name it."""
+        from bexa.io.layer import RenamedSource
+
+        if isinstance(self.source, RenamedSource):
+            return {k: dict(v) for k, v in self.source.record().items()}
+        return {"names": {}, "offsets": {}, "scales": {}}
 
     def _around(self, source: Source) -> Scan:
         """A scan with this one's spec, geometry, crystal, cache and ROI, reading ``source``."""
@@ -621,6 +675,7 @@ def open(
     motors: Sequence[str] | None = None,
     layer: tuple[str, int] | Sequence[tuple[str, int]] | None = None,
     reshape: Sequence[Any] | None = None,
+    names: Sequence[Mapping[str, Any]] | Mapping[str, Any] | None = None,
     **kwargs: Any,
 ) -> Scan:
     """Open a scan from a path, or from a beamtime profile and a sample name.
@@ -660,6 +715,10 @@ def open(
     reshape
         A list of ``[dim, axes, snake]``: the scan reshaped (see :meth:`Scan.reshaped`)
         before any layer is taken; the recipe of a reshaped scan says so.
+    names
+        ``{"names": {...}, "offsets": {...}, "scales": {...}}``, or a list of them: the
+        scan renamed (see :meth:`Scan.renamed`) after its reshapes and layers; the
+        recipe of a renamed scan says so.
     """
     if motors is not None:
         kwargs["motors"] = [str(m) for m in motors]
@@ -678,7 +737,7 @@ def open(
             cache=None if cache is True else cache,
             **kwargs,
         )
-        return _layered(profiled, layer, reshape)
+        return _layered(profiled, layer, reshape, names)
     if format is None and "::" in str(path):  # file.h5::/dataset shortcut
         format = "generic_stack"
     spec = _resolve_spec(Path(str(path).split("::")[0]), format, overrides)
@@ -712,20 +771,22 @@ def open(
         "overrides": overrides,
         **kwargs,
     }
-    return _layered(opened, layer, reshape)
+    return _layered(opened, layer, reshape, names)
 
 
-def _layered(scan: Scan, layer: Any, reshape: Any = None) -> Scan:
+def _layered(scan: Scan, layer: Any, reshape: Any = None, names: Any = None) -> Scan:
     """``scan`` reshaped as ``reshape`` says (a list of ``[dim, axes, snake]``), then its layer
-    when ``layer`` names one: ``(dim, index)`` or a list of them. A layer may be of a dim a
-    reshape made, so the reshapes come first."""
+    when ``layer`` names one: ``(dim, index)`` or a list of them, then renamed as ``names``
+    says (one mapping of ``names``, ``offsets``, ``scales`` or a list of them). A layer may
+    be of a dim a reshape made, and the names are those of the scan so made."""
     for dim, axes, snake in reshape or ():
         scan = scan.reshaped(str(dim), [tuple(a) for a in axes], bool(snake))
-    if layer is None:
-        return scan
-    steps = [layer] if len(layer) == 2 and isinstance(layer[0], str) else list(layer)
-    for dim, index in steps:
-        scan = scan.layer(str(dim), int(index))
+    if layer is not None:
+        steps = [layer] if len(layer) == 2 and isinstance(layer[0], str) else list(layer)
+        for dim, index in steps:
+            scan = scan.layer(str(dim), int(index))
+    for step in [names] if isinstance(names, Mapping) else list(names or ()):
+        scan = scan.renamed(step.get("names"), step.get("offsets"), step.get("scales"))
     return scan
 
 

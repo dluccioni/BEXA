@@ -40,7 +40,7 @@ lists the everyday jobs with the function that does each.
   - Analysis: [bexa.analysis.preprocess](#bexaanalysispreprocess-darks-hot-pixels-normalisation-cropping-binning) · [bexa.analysis.rocking](#bexaanalysisrocking-per-pixel-rocking-curve-statistics) · [bexa.analysis.peaks](#bexaanalysispeaks-the-peak-on-the-detector-frame-by-frame) · [bexa.analysis.fitting](#bexaanalysisfitting-rocking-curve-and-edge-fits) · [bexa.analysis.registration](#bexaanalysisregistration-shifts-alignment-stitching-and-mosaics) · [bexa.analysis.projections](#bexaanalysisprojections-projections-integrated-maps-and-rlp-point-clouds) · [bexa.analysis.segmentation](#bexaanalysissegmentation-regions-from-maps) · [bexa.analysis.fields](#bexaanalysisfields-vector-fields-boundaries-and-strain-integration) · [bexa.analysis.pump_probe](#bexaanalysispump_probe-laser-onoff-analysis) · [bexa.analysis.curves](#bexaanalysiscurves-peak-positions-widths-smoothing-backgrounds-stitching) · [bexa.analysis.peakfit](#bexaanalysispeakfit-peaks-of-any-shape-on-a-background-bounds-and-fixed-values) · [bexa.analysis.batchfit](#bexaanalysisbatchfit-many-curves-fitted-at-once) · [bexa.analysis.imaging](#bexaanalysisimaging-gaussian-peak-maps-kam-orientation-colours-strain) · [bexa.analysis.xrd](#bexaanalysisxrd-powder-geometry-azimuthal-integration-cakes-scherrer) · [bexa.analysis.xrr](#bexaanalysisxrr-momentum-transfer-footprint-critical-angle-film-thickness)
   - Plots and notebooks: [bexa.viz.style](#bexavizstyle-plot-conventions-themes-and-colour-limits) · [bexa.viz.auto](#bexavizauto-one-call-picks-the-figure) · [bexa.viz.images](#bexavizimages-single-images-tiles-roi-boxes-and-scalebars) · [bexa.viz.curves](#bexavizcurves-rocking-curves-pump-probe-panels-and-moments) · [bexa.viz.maps](#bexavizmaps-centre-of-mass-bivariate-hsv-and-vector-field-maps) · [bexa.viz.volume](#bexavizvolume-projections-slices-isosurfaces-and-3-d-renderings) · [bexa.viz.interactive](#bexavizinteractive-sliders-and-roi-pickers) · [bexa.viz.sliders](#bexavizsliders-what-the-slider-browsers-share) · [bexa.viz.animation](#bexavizanimation-gif-and-mp4-of-a-stack) · [bexa.viz.napari_app](#bexaviznapari_app-napari-viewers-and-the-apps-behind-them) · [bexa.notebook](#bexanotebook-jupyter-and-vs-code-helpers) · [bexa.notebook.picker](#bexanotebookpicker-choosing-scans-in-a-notebook) · [bexa.notebook.listing](#bexanotebooklisting-the-scans-listed-and-a-selection-across-folders) · [bexa.notebook.selection](#bexanotebookselection-scans-chosen-in-several-dataset-folders) · [bexa.notebook.picker_state](#bexanotebookpicker_state-what-a-picker-remembers) · [bexa.notebook.picker_widgets](#bexanotebookpicker_widgets-the-widget-views-of-the-picker) · [bexa.notebook.selection_panel](#bexanotebookselection_panel-the-selected-scans-of-every-folder)
   - Pipelines: [bexa.pipelines.dfxm_report](#bexapipelinesdfxm_report-the-standard-dfxm-figure-set) · [bexa.pipelines.xfel_cube](#bexapipelinesxfel_cube-pal-xfel-point-files-to-a-laser-onoff-cube) · [bexa.pipelines.cube_report](#bexapipelinescube_report-figures-and-gifs-of-one-cube) · [bexa.pipelines.auto_process](#bexapipelinesauto_process-the-beamtime-watcher) · [bexa.pipelines.benchmark](#bexapipelinesbenchmark-timings-and-baselines)
-  - Workspace and GUI: [bexa.workspace](#bexaworkspace-the-object-system-behind-the-gui) · [bexa.workspace.objects](#bexaworkspaceobjects-data-objects-and-scan-sets) · [bexa.workspace.workspace](#bexaworkspaceworkspace-the-workspace-its-rois-and-its-log) · [bexa.workspace.catalog](#bexaworkspacecatalog-the-operations-their-settings-and-their-help) · [bexa.workspace.ops.extract](#bexaworkspaceopsextract-scans-and-stacks-to-images-curves-maps-and-tables) · [bexa.workspace.ops.process](#bexaworkspaceopsprocess-one-object-in-a-new-one-out) · [bexa.workspace.ops.combine](#bexaworkspaceopscombine-several-objects-in) · [bexa.workspace.ops.multiscan](#bexaworkspaceopsmultiscan-many-scans-at-once) · [bexa.workspace.ops.fit](#bexaworkspaceopsfit-peaks-series-of-fits-peak-finding) · [bexa.workspace.ops.imaging](#bexaworkspaceopsimaging-per-pixel-maps-orientation-kam-strain-drift) · [bexa.workspace.ops.scattering](#bexaworkspaceopsscattering-powder-integration-cakes-reflectivity) · [bexa.workspace.ops.calculators](#bexaworkspaceopscalculators-tables-from-numbers-alone) · [bexa.workspace.ops._base](#bexaworkspaceops_base-what-the-operations-share) · [bexa.workspace.files](#bexaworkspacefiles-files-to-objects-and-objects-to-files) · [bexa.workspace.convert](#bexaworkspaceconvert-conversions-between-formats) · [bexa.workspace.jobs](#bexaworkspacejobs-background-work-with-progress-and-cancel) · [bexa.workspace.source](#bexaworkspacesource-python-source-for-logged-values) · [bexa.workspace.storage](#bexaworkspacestorage-reading-back-a-saved-workspace) · [bexa.gui](#bexagui-the-notebook-gui-package) · [bexa.gui.app](#bexaguiapp-the-notebook-gui) · [bexa.gui.figures](#bexaguifigures-figures-inside-the-gui) · [bexa.gui.forms](#bexaguiforms-the-forms-of-the-catalog) · [bexa.gui.drawing](#bexaguidrawing-objects-drawn-into-a-figure) · [bexa.gui.objects_panel](#bexaguiobjects_panel-the-objects-of-the-workspace) · [bexa.gui.data_tab](#bexaguidata_tab-opening-data) · [bexa.gui.browse_tab](#bexaguibrowse_tab-the-inside-of-folders-and-files) · [bexa.gui.inspectors](#bexaguiinspectors-hdf5-trees-spec-sessions-tiff) · [bexa.gui.metadata_view](#bexaguimetadata_view-a-scans-metadata-on-screen) · [bexa.gui.netcdf_inspector](#bexaguinetcdf_inspector-the-inside-of-a-netcdf-file) · [bexa.gui.view_tab](#bexaguiview_tab-drawing-the-selection) · [bexa.gui.analysis_tab](#bexaguianalysis_tab-every-operation-by-group) · [bexa.gui.fit_tab](#bexaguifit_tab-peaks-with-every-parameter-in-hand) · [bexa.gui.convert_tab](#bexaguiconvert_tab-conversions-and-exports) · [bexa.gui.log_tab](#bexaguilog_tab-commands-script-workspace-files-jobs)
+  - Workspace and GUI: [bexa.workspace](#bexaworkspace-the-object-system-behind-the-gui) · [bexa.workspace.objects](#bexaworkspaceobjects-data-objects-and-scan-sets) · [bexa.workspace.workspace](#bexaworkspaceworkspace-the-workspace-its-rois-and-its-log) · [bexa.workspace.catalog](#bexaworkspacecatalog-the-operations-their-settings-and-their-help) · [bexa.workspace.ops.extract](#bexaworkspaceopsextract-scans-and-stacks-to-images-curves-maps-and-tables) · [bexa.workspace.ops.process](#bexaworkspaceopsprocess-one-object-in-a-new-one-out) · [bexa.workspace.ops.combine](#bexaworkspaceopscombine-several-objects-in) · [bexa.workspace.ops.multiscan](#bexaworkspaceopsmultiscan-many-scans-at-once) · [bexa.workspace.ops.fit](#bexaworkspaceopsfit-peaks-series-of-fits-peak-finding) · [bexa.workspace.ops.imaging](#bexaworkspaceopsimaging-per-pixel-maps-orientation-kam-strain-drift) · [bexa.workspace.ops.scattering](#bexaworkspaceopsscattering-powder-integration-cakes-reflectivity) · [bexa.workspace.ops.calculators](#bexaworkspaceopscalculators-tables-from-numbers-alone) · [bexa.workspace.ops._base](#bexaworkspaceops_base-what-the-operations-share) · [bexa.workspace.files](#bexaworkspacefiles-files-to-objects-and-objects-to-files) · [bexa.workspace.convert](#bexaworkspaceconvert-conversions-between-formats) · [bexa.workspace.jobs](#bexaworkspacejobs-background-work-with-progress-and-cancel) · [bexa.workspace.source](#bexaworkspacesource-python-source-for-logged-values) · [bexa.workspace.storage](#bexaworkspacestorage-reading-back-a-saved-workspace) · [bexa.gui](#bexagui-the-notebook-gui-package) · [bexa.gui.app](#bexaguiapp-the-notebook-gui) · [bexa.gui.figures](#bexaguifigures-figures-inside-the-gui) · [bexa.gui.forms](#bexaguiforms-the-forms-of-the-catalog) · [bexa.gui.drawing](#bexaguidrawing-objects-drawn-into-a-figure) · [bexa.gui.objects_panel](#bexaguiobjects_panel-the-objects-of-the-workspace) · [bexa.gui.data_tab](#bexaguidata_tab-opening-data) · [bexa.gui.browse_tab](#bexaguibrowse_tab-the-inside-of-folders-and-files) · [bexa.gui.inspectors](#bexaguiinspectors-hdf5-trees-spec-sessions-tiff) · [bexa.gui.metadata_view](#bexaguimetadata_view-a-scans-metadata-on-screen) · [bexa.gui.netcdf_inspector](#bexaguinetcdf_inspector-the-inside-of-a-netcdf-file) · [bexa.gui.names_editor](#bexaguinames_editor-a-scans-names-and-offsets-edited) · [bexa.gui.view_tab](#bexaguiview_tab-drawing-the-selection) · [bexa.gui.analysis_tab](#bexaguianalysis_tab-every-operation-by-group) · [bexa.gui.fit_tab](#bexaguifit_tab-peaks-with-every-parameter-in-hand) · [bexa.gui.convert_tab](#bexaguiconvert_tab-conversions-and-exports) · [bexa.gui.log_tab](#bexaguilog_tab-commands-script-workspace-files-jobs)
   - Synthetic data: [bexa.testing.demo](#bexatestingdemo-bexademo-synthetic-data-in-one-call) · [bexa.testing.synthetic](#bexatestingsynthetic-small-valid-files-for-every-layout-with-the-planted-truth)
   - Geometry and crystallography: [bexa.geometry.conventions](#bexageometryconventions-named-lab-frames-and-motor-stacks) · [bexa.geometry.detector](#bexageometrydetector-detector-and-beam-geometry) · [bexa.geometry.transforms](#bexageometrytransforms-pixels-to-angles-to-q-to-hkl) · [bexa.crystal.lattice](#bexacrystallattice-cells-d-spacings-and-reflections) · [bexa.crystal.cif](#bexacrystalcif-cell-and-space-group-from-cif-files) · [bexa.crystal.diffractometer](#bexacrystaldiffractometer-four-circle-motor-solutions) · [bexa.crystal.zone_axis](#bexacrystalzone_axis-the-zone-axis-from-one-reflection) · [bexa.crystal.omega_search](#bexacrystalomega_search-omega-where-two-peaks-share-a-mu-window) · [bexa.crystal.sample_frame](#bexacrystalsample_frame-sample-to-grain-matrix)
   - Units and optics: [bexa.core.units](#bexacoreunits-physical-constants-and-unit-conversions) · [bexa.optics.conversions](#bexaopticsconversions-energy-wavelength-and-monochromator-angles) · [bexa.optics.attenuation](#bexaopticsattenuation-transmission-and-attenuation-lengths) · [bexa.optics.nist](#bexaopticsnist-nist-mass-attenuation-tables) · [bexa.optics.bragg_magnifier](#bexaopticsbragg_magnifier-asymmetric-bragg-magnifier)
@@ -914,7 +914,7 @@ folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"  #
 ```
 
 #### `open`
-`bexa.core.scan.open(path=None, *, profile=None, sample=None, dataset=None, format=None, scan=None, detector=None, overrides=None, energy_keV=None, geometry=None, crystal=None, cache=True, cache_reductions=None, motors=None, layer=None, reshape=None, **kwargs)`
+`bexa.core.scan.open(path=None, *, profile=None, sample=None, dataset=None, format=None, scan=None, detector=None, overrides=None, energy_keV=None, geometry=None, crystal=None, cache=True, cache_reductions=None, motors=None, layer=None, reshape=None, names=None, **kwargs)`
 
 Open a measurement and return a `Scan` (top-level name `bexa.open`). `path` is a dataset
 folder, its master file, a `scanNNNN` folder, a PAL-XFEL run folder, a cube file, a scan package
@@ -937,6 +937,8 @@ through `open_profile`.
 - `cache`: `True` (a cache in the folder of `bexa.config.paths.cache_root`, or the profile's),
   a folder path (a cache there), a `Cache`, or `False`. Previews are cached by default;
   `cache_reductions=True` caches the results of `reduce` and of the verbs as well.
+- `names`: `{"names": {...}, "offsets": {...}, "scales": {...}}` or a list of them: the scan
+  renamed (`Scan.renamed`) after its reshapes and layers; the recipe of a renamed scan says so.
 - `motors`: per-frame channels to use as the dims instead of the ones the scan declares
   (`["ccmth", "chi", "mu"]` for the monochromator angle in degrees instead of the energy; see
   `Scan.with_dims`); layouts with a master file only.
@@ -1388,6 +1390,41 @@ from bexa.testing import make_aps_session
 loop = bexa.open(make_aps_session(tempfile.mkdtemp(), scans=[(1, "loopscan 12 1 0.1", {})]).root, scan=1, cache=False)
 grid = loop.reshaped("frame", [("a", 0.0, 0.2, 3), ("b", 1.0, 1.3, 4)], snake=True)
 grid.dims, grid.structure.frame_index[1].tolist()   # (('a', 'b', 'y', 'x'), [7, 6, 5, 4])
+```
+
+#### `Scan.renamed`
+`bexa.core.scan.Scan.renamed(names=None, offsets=None, scales=None)`
+
+The scan with names of its own and its values moved: `names` maps a motor, counter, position
+or detector to its alias (`{"nsamstageY": "y_sample", "7idd:scaler1.S2": "I0"}`); `offsets`
+and `scales`, by the names before, make a value `scale * value + offset` (a motor read against
+another zero, a counter in other units, a sign turned). Every reduction, map, curve and table
+made of it has its names and values (`com_omega`, a curve along `y_sample`); the detector
+pixels `y` and `x` keep theirs. The frames are read through this scan
+(`bexa.io.layer.RenamedSource`); the names go into the recipe (`names`, a list of the steps,
+which `bexa.open` applies after any reshape and layer, so a worker and a saved workspace
+reopen them) and into the cache keys. `ValueError` for an alias that is another name of the
+scan. `with_detector` takes a detector's alias.
+
+```python
+# scan: the demo chi x mu scan; mu as omega 10 degrees on, samz as z
+named = scan.renamed({"mu": "omega", "samz": "z"}, {"mu": 10.0})
+named.dims, named.coords["omega"][:2].round(4).tolist()   # (('chi', 'omega', 'y', 'x'), [9.0, 9.1333])
+named.recipe["names"]                           # [{'names': {'mu': 'omega', 'samz': 'z'}, 'offsets': {'mu': 10.0}, 'scales': {}}]
+bexa.open(**named.recipe, cache=False).dims     # ('chi', 'omega', 'y', 'x')
+```
+
+#### `Scan.unnamed`
+`bexa.core.scan.Scan.unnamed()`
+
+The scan as its files name it: every `renamed` of the last steps undone (itself when it was
+not renamed). `Scan.names` is the property giving the names, offsets and scales of its last
+renaming, `{"names": {...}, "offsets": {...}, "scales": {...}}`, empty ones for a scan named as
+its files name it.
+
+```python
+# named: the renamed demo scan; the files' names back, and what it was given
+named.unnamed().dims, named.names["offsets"]     # (('chi', 'mu', 'y', 'x'), {'mu': 10.0})
 ```
 
 #### `Scan.close`
@@ -5155,11 +5192,14 @@ The reverse of `MultiScanSource`: the frames of one scan at one point of a motor
 scan of their own. A z-scan (`uz x chi x mu`) holds a mosaicity scan at every height; its layer
 at one `uz` point has the grid `chi x mu` and `uz` as a fixed positioner, so the layers of one
 scan stack like the scans of a z-stack. `Scan.layer` and `Scan.layers` build them. A frame
-series taken as a raster is that raster reshaped (`Scan.reshaped`).
+series taken as a raster is that raster reshaped (`Scan.reshaped`), and a scan whose motors,
+counters and detectors take names of your own, with offsets and scales, is the scan renamed
+(`Scan.renamed`, `RenamedSource`).
 
 ```python
 import bexa
-from bexa.io.layer import LayerSource, ReshapedSource
+import numpy as np
+from bexa.io.layer import LayerSource, RenamedSource, ReshapedSource
 
 scan = bexa.demo("mosa")                 # synthetic chi x mu scan, 6 x 16 frames of 64 x 80 pixels
 ```
@@ -5189,9 +5229,10 @@ src.structure().motor_dims, src.cache_records()[-1]   # (('mu',), {'path': '', '
 `bexa.io.layer.GridSource(parent)`
 
 The frames of the source `parent`, read through it, on a grid of its own: the base of
-`LayerSource` and `ReshapedSource`. A subclass gives `regrid(whole)` (the new structure, from
-the parent's) and `record()` (what its cache records add to the parent's). `files`,
-`frame_shape`, `n_frames`, `dtype`, `chunk_frames`, `status` and `aux_tables()` are the
+`LayerSource`, `ReshapedSource` and `RenamedSource`. A subclass gives `regrid(whole)` (the new
+structure, from the parent's) and `record()` (what its cache records add to the parent's).
+`files`, `frame_shape`, `n_frames`, `dtype`, `chunk_frames`, `status`, `aux_tables()` and
+`file_metadata()` are the
 parent's; `read_frames` reads through it with the frame ids unchanged; `refresh()` re-reads the
 parent and makes the grid again; `close()` closes the parent's files. The parent's scan number,
 dataset name and detector (`LABELS`) label it, and `detector_names()` is the parent's.
@@ -5208,6 +5249,26 @@ row. What `Scan.reshaped` reads; `cache_records()` ends with the reshape (`resha
 # scan: the demo chi x mu scan; its 16 mu points as a 4 x 4 raster
 src = ReshapedSource(scan.source, "mu", [("a", 0, 3, 4), ("b", 0, 3, 4)])
 src.structure().motor_dims, src.cache_records()[-1]["into"][0]   # (('chi', 'a', 'b'), ['a', 0.0, 3.0, 4])
+```
+
+#### `RenamedSource`
+`bexa.io.layer.RenamedSource(parent, names=None, offsets=None, scales=None)`
+
+The scan of `parent` with names of its own and its values moved, its frames the parent's: what
+`Scan.renamed` reads. `names` maps a motor, channel, position or detector to its alias;
+`offsets` and `scales`, by the parent's names, make a value `scale * value + offset`, on the
+coordinates, the per-frame channels, the scalars, `point_table()` and `aux_tables()`; the
+units follow the names, and `detector_names()` and `detector` give the aliases. An alias,
+offset or scale that changes nothing is dropped; renaming `y` or `x`, or an alias that is
+another name of the scan, raises `ValueError`. `alias(name)` is a name's alias (itself
+without one), `moved(name, values)` its values moved; `cache_records()` ends with `names`,
+`offsets` and `scales`, and `file_metadata()` is the parent's, as for every `GridSource`.
+
+```python
+# scan: the demo chi x mu scan; mu as omega 10 degrees on, chi turned
+src = RenamedSource(scan.source, {"mu": "omega"}, {"mu": 10.0}, {"chi": -1.0})
+src.structure().motor_dims, src.alias("mu"), src.moved("mu", np.array([0.0, 1.0])).tolist()   # (('chi', 'omega'), 'omega', [10.0, 11.0])
+src.cache_records()[-1]                          # {'path': '', 'names': {'mu': 'omega'}, 'offsets': {'mu': 10.0}, 'scales': {'chi': -1.0}}
 ```
 
 ### bexa.io.inspect: HDF5 trees and path summaries
@@ -9703,6 +9764,8 @@ without an entry of their own:
   gets its new points; finished scans are left alone, and objects made from a scan keep what
   they were made from (run the operation again). Emits `changed` for each object that grew
   and returns their names; not logged, since a script reads the files as they are.
+- `set_names(names=None, offsets=None, scales=None)`: names, offsets and scales for every scan opened from now on (`open_scan`, `open_scans`, `open_scan_set`, `add_scans`): a scan with any of these names, as its files give them, opens renamed (`Scan.renamed`); kept in `settings["names"]`, so saved with the workspace, and logged; none clears them. Returns what it keeps.
+- `named(scan)`: `scan` renamed by the names the workspace keeps, those it has; a scan renamed already, or without any of them, as it is; names that clash with the scan's own are left out with a warning.
 - `remove_roi(name)`: forget a named ROI.
 - `roi(name)`: a named ROI (`ValueError` naming those defined).
 - `demo(kind="mosa")`: synthetic data from `bexa.demo` as a scan, or a scan set for the z-stack and alignment demos.
@@ -9945,6 +10008,9 @@ lists them all; each function is documented under its module (`bexa.workspace.op
 | Multi-scan | Scan Table | `scan_table` | scanset | - |
 | Multi-scan | Subset | `subset` | scanset | `indices` |
 | Multi-scan | Split into Layers | `layers` | scan | `dim` |
+| Multi-scan | Use Detector | `use_detector` | scan/scanset | `detector` |
+| Multi-scan | Names and Offsets | `rename` | scan/scanset | `names`, `offsets`, `scales` |
+| Multi-scan | Reshape Frames | `reshape` | scan or any object | `dim`, `a_name`, `a_range`, `a_points`, `b_name`, `b_range`, `b_points`, `snake` |
 | Fit | Fit Peaks | `fit_peaks` | curve | `shape`, `n_peaks`, `background`, `centers`, `x_range`, `use_sigma`, `components` |
 | Fit | Fit Series | `fit_series` | map/volume/stack/image | `along`, `shape`, `n_peaks`, `background`, `centers`, `x_range`, `warm_start` |
 | Fit | Fit Each Curve | `fit_many` | curve (several) | `shape`, `n_peaks`, `background`, `centers`, `x_range`, `use_sigma` |
@@ -10871,6 +10937,26 @@ run_file = make_lcls_smalldata(tempfile.mkdtemp()).path
 lcls = ws.open_scan(run_file)
 (epix,) = ws.run("use_detector", lcls.name, detector="epix_5")
 lcls.describe(), epix.data.detector              # ('scan events frame[40] x y[10] x x[8], jungfrau1M', 'epix_5')
+```
+
+#### `rename`
+`bexa.workspace.ops.multiscan.rename(obj, names="", offsets="", scales="")`
+
+A scan (every scan of a set) with names of its own for its motors, counters, positions and
+detectors, and offsets and scales on their values: `names` `"nsamstageY=y_sample,
+7idd:scaler1.S2=I0"`, `offsets` `"nsamstageY=-13.475"` (added) and `scales` `"power=1000"` (the
+values times it, before the offset), all by the names the files give (a mapping works too).
+They replace those the scan had (`Scan.renamed` of `Scan.unnamed`); the result is named
+`<object>_named`. `ValueError` when none is given. On the Analysis tab: Multi-scan, "Names and
+Offsets"; the objects list's **Names and offsets** fills it in for you; in code
+`ws.run("rename", ...)`. `pairs(text, number=False)` reads the text of its fields:
+`"mu=omega, chi=tilt"` as a dict, numbers with `number` (`ValueError` naming a part that is not
+`name=value`, or not a number).
+
+```python
+# the mosa demo with motors named as on the diffractometer, omega 10 degrees on
+multiscan.rename(mosa, "mu=omega, chi=tilt", "mu=10").describe()   # 'scan fscan2d tilt[6] x omega[16] x y[64] x x[80]'
+multiscan.pairs("mu=omega, chi=tilt"), multiscan.pairs("mu=10", number=True)   # ({'mu': 'omega', 'chi': 'tilt'}, {'mu': 10.0})
 ```
 
 #### `reshape`
@@ -12322,8 +12408,9 @@ CurveOptions()                                  # CurveOptions(log_y=False, erro
 The top of the left panel: every object (raw scans first, then results in the order made),
 filtered by kind or name; rename, duplicate, delete (with a confirmation); under **Details**
 (folded away) what the selected object is (its metadata, parents and history), **Full
-metadata** for a scan (everything its files say, on the Browse tab), its notes and the named
-ROIs.
+metadata** for a scan (everything its files say, on the Browse tab) and **Names and offsets**
+(aliases, offsets and scales for its motors, counters and detectors: `bexa.gui.names_editor`),
+its notes and the named ROIs.
 
 ```python
 import bexa
@@ -12337,8 +12424,9 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 `bexa.gui.objects_panel.ObjectsPanel(app)`
 
 The panel of an `App`: `listing` (a `SelectMultiple`
-of the objects), `filter`, `search`, `details`, `metadata` (the **Full metadata** button,
-shown for a scan), `notes`, `rois`, `more` (the **Details** `Accordion`), `box`. `refresh()`
+of the objects), `filter`, `search`, `details`, `metadata` and `names` (the **Full metadata**
+and **Names and offsets** buttons, shown for a scan), `notes`, `rois`, `more` (the **Details**
+`Accordion`), `box`. `refresh()`
 lists the
 objects again, `select(names)` selects from code.
 
@@ -12440,9 +12528,11 @@ master = next(rock.data.files[0].parent.glob("*.h5"))  # the scan's master file
 
 The tab: `path`, `listing` (the folder), `head`, `body`,
 `pane` (the preview figure), `inspector` (the `H5Inspector`, `SpecInspector` or `NetCDFInspector`
-of the file shown), `metadata` (the `MetadataView`). `scan_metadata(path)` shows the metadata
-of the scan behind `path` (read in the background), `show_scan_metadata(name, scan)` that of
-a scan object (the objects list's **Full metadata**).
+of the file shown), `metadata` (the `MetadataView`), `names` (the `NamesEditor`) and
+`names_fold` (its **Names and offsets** `Accordion`). `scan_metadata(path)` shows the
+metadata of the scan behind `path` (read in the background), `show_scan_metadata(name, scan,
+names=False)` that of a scan object under its names and offsets, unfolded with `names` (the
+objects list's **Full metadata** and **Names and offsets**).
 `go(folder)` lists a folder (a file: its folder, the file selected); **...** chooses a file in
 the system's dialog and goes to it (on a local kernel); **Use this folder** makes
 the folder listed the one to work in (`DataTab.use_folder`), scans or not; `show_figure()`,
@@ -12651,6 +12741,59 @@ app.ws.names()                                   # ['run_1']
 
 - `MAX_VALUES`: `4_000_000`, the values read for a picture.
 - `FEW_CURVES`: `16`, a last dim this short is drawn as curves.
+
+### bexa.gui.names_editor: a scan's names and offsets, edited
+
+What the objects list's **Names and offsets** opens on the Browse tab, above the scan's full
+metadata: a row per motor, counter and detector (positions too with **positions too**, or found
+by name), each with the name its files give, an **alias**, an **offset** and a **scale** (a
+value becomes `scale x value + offset`; a detector takes an alias only). **Apply** makes the
+scan renamed (`ws.run("rename", ...)`, a new object `<scan>_named`); **Remember for scans
+opened later** also keeps them in the workspace (`ws.set_names`), merged with the names kept
+for other scans; **Clear** empties the rows. A renamed scan shows its files' names with its
+aliases filled in, so editing it again replaces them.
+
+```python
+from bexa.gui import App
+from bexa.gui.names_editor import NamesEditor, mapping_text
+
+app = App(background=False, figures="static", cache=False)  # the GUI without a kernel: jobs run at once, figures are pictures
+(rock,) = app.ws.demo("rocking")  # a synthetic mu scan in its workspace
+```
+
+#### `NamesEditor`
+`bexa.gui.names_editor.NamesEditor(app)`
+
+`head`, `find`, `positions`, `grid` (the rows), `remember`, `note`, `box`; `rows` (each
+`(kind, name, unit)`) and `values` (each name's `[alias, offset, scale]` as typed).
+`show(name)` edits the scan object `name` (its own names, else those the workspace keeps),
+`given()` returns the aliases, offsets and scales that change something, and `apply()` makes
+the renamed scan (and keeps the names with **Remember**).
+
+```python
+# the rocking scan's names; mu as omega 10 degrees on, applied
+app.set_selection([rock.name])
+app.objects.names.click()                       # the Browse tab, Names and offsets unfolded
+editor = app.browse.names
+[r for r in editor.rows if r[0] != "position"]  # [('motor', 'mu', 'deg'), ('counter', 'elapsed_time', ''), ('detector', 'pco_ff', '')]
+editor.values["mu"] = ["omega", 10.0, 1.0]
+editor.given()                                  # ({'mu': 'omega'}, {'mu': 10.0}, {})
+editor.apply()
+app.ws["demo_rocking_named"].dims               # ('omega', 'y', 'x')
+```
+
+#### `mapping_text`
+`bexa.gui.names_editor.mapping_text(values)`
+
+`{"a": "b", "c": 1.5}` as `"a=b, c=1.5"`, the text the operation's fields take.
+
+```python
+# the aliases as the operation's text
+mapping_text({"mu": "omega", "chi": 1.5})        # 'mu=omega, chi=1.5'
+```
+
+- `MAX_ROWS`: `200`, the rows shown at once.
+- `COLUMNS`: the widths of the grid's columns.
 
 ### bexa.gui.view_tab: drawing the selection
 
