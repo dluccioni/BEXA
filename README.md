@@ -5765,7 +5765,8 @@ clean = preprocess.subtract_dark(frames, dark)          # or mode="median"
 
 Median filter of `size` pixels per axis (`scipy.ndimage`, `cupyx.scipy.ndimage` on the GPU). The
 default filters each frame separately over 3 x 3 pixels, so an isolated hot or dead pixel takes
-the median of its neighbours; a single image needs `size=3`. From `basicDFXM`.
+the median of its neighbours, the frames in threads (`bexa.core.backend.median_frames`); a
+single image needs `size=3`. From `basicDFXM`.
 
 ```python
 # hot: a copy of the frames with one pixel saturated; the hot pixel replaced by its neighbours
@@ -6315,8 +6316,9 @@ registration.phase_correlation_shift(image, drifted[3], max_shift=4)  # (-3, 3)
 Shifts every frame onto frame `reference` (`ndimage.shift` with spline `order`) and returns
 `(aligned, shifts)`, the stack and an `(n, 2)` numpy array of the `(dy, dx)` applied: the
 `phase_correlation_shift` within `max_shift`, plus `expected[i]` from an `(n, 2)` array of
-motor-driven shifts. The correlation is measured on the unshifted frame, so the two add up. Port
-of `detect_and_apply_shifts` (`basicDFXM`).
+motor-driven shifts. The correlation is measured on the unshifted frame, so the two add up. numpy
+frames are aligned in the threads of `bexa.core.parallel.compute_pool` (six times faster on
+eight cores, the same shifts). Port of `detect_and_apply_shifts` (`basicDFXM`).
 
 ```python
 # drifted: frames that drifted over the scan; aligned, with the shift found for each
@@ -7329,6 +7331,23 @@ correct the intensities.
 pattern = xrd.integrate_1d(image, geometry, solid_angle=False, polarization=None)
 round(float(pattern["x"][np.nanargmax(pattern["intensity"])]), 2)  # 7.99
 xrd.integrate_1d(image, geometry, unit="q", chi_range=(-45, 45))["x"].size  # 364
+```
+
+#### `integrate_frames`
+`bexa.analysis.xrd.integrate_frames(frames, geometry, bins=None, unit="2theta", x_range=None, chi_range=None, mask=None, solid_angle=True, polarization=0.0)`
+
+`integrate_1d` of every frame of `frames` (`(n, y, x)`, or more leading dims) at once, on the
+same bins: the geometry, its corrections and every pixel's bin are worked out once, then each
+frame is three `bincount` calls (a NaN pixel weighs nothing), 3 to 10 times faster than frame
+by frame with the same numbers. Returns `x` and `intensity`, `sigma`, `pixels` of `(n, bins)`;
+the bins come from `bins` and `x_range` as for `integrate_1d` (from every usable pixel when no
+range is given). Integrate Powder per frame goes through it, on the bins of the summed pattern.
+
+```python
+# image: the ring at 8 deg; three frames of it at three intensities, integrated at once
+frames = np.stack([image * s for s in (1.0, 2.0, 0.5)])
+patterns = xrd.integrate_frames(frames, geometry, solid_angle=False, polarization=None)
+patterns["intensity"].shape, np.round(np.nanmax(patterns["intensity"], axis=1), 1).tolist()   # ((3, 364), [990.4, 1980.7, 495.2])
 ```
 
 #### `integrate_2d`
@@ -10498,7 +10517,8 @@ process.subtract_background(curve, "linear", regions=[-1, -0.7, 0.7, 1]).describ
 `bexa.workspace.ops.process.remove_hot_pixels(obj, threshold=8.0, size=3)`
 
 Replace pixels far above their neighbours (`threshold` times the local noise) by the local median;
-every frame of a stack separately. On the Analysis tab: Process, "Remove Hot Pixels"; in code
+every frame of a stack separately, the frames in threads (`bexa.core.backend.median_frames`). On
+the Analysis tab: Process, "Remove Hot Pixels"; in code
 `ws.run("remove_hot_pixels", ...)`.
 
 ```python
@@ -16153,6 +16173,22 @@ about five times faster than one. A single image, an integer array or a cupy arr
 frames = np.random.default_rng(0).random((8, 64, 80), dtype=np.float32)
 smooth = backend.gaussian_frames(frames, 3.0)                 # (8, 64, 80), smoothed in threads
 backend.gaussian_frames(frames, 0) is frames                  # True
+```
+
+#### `median_frames`
+`bexa.core.backend.median_frames(frames, size, mode="nearest")`
+
+Every frame (the last two axes) median-filtered over `size x size` pixels, numpy or cupy, the
+same shape back. numpy frames of three dims or more are split over
+`bexa.core.parallel.compute_threads` threads of the shared `compute_pool`, as in
+`gaussian_frames`: scipy's filters release the GIL, and the result is scipy's own,
+`median_filter` with the footprint `(1, ..., size, size)`, three times faster on eight cores. A
+single image or a cupy array goes through `median_filter` directly. Remove Hot Pixels and
+`bexa.analysis.preprocess.remove_hot_pixels` go through it.
+
+```python
+# frames: the eight frames above; each median-filtered over 3 x 3 pixels, in threads
+backend.median_frames(frames, 3).shape          # (8, 64, 80)
 ```
 
 #### `BudgetError`

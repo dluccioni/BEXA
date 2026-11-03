@@ -30,6 +30,25 @@ OPERATORS = ("+", "-", "*", "/")
 INTERP_METHODS = ("linear", "nearest", "cubic")
 
 
+def _is_plain_curve(b: xr.DataArray) -> bool:
+    """A curve of numbers along one numeric dim, no other coordinate: what np.interp moves."""
+    if b.ndim != 1 or set(b.coords) != {b.dims[0]}:
+        return False
+    return b.dtype.kind in "iuf" and np.asarray(b.coords[b.dims[0]]).dtype.kind in "iuf"
+
+
+def _interp_curve(b: xr.DataArray, target: xr.DataArray) -> xr.DataArray:
+    """``b`` linearly interpolated at ``target``, NaN outside its range: ``b.interp`` without
+    its overhead (a few milliseconds a curve, most of the time of stacking sixty)."""
+    dim = b.dims[0]
+    x = np.asarray(b.coords[dim].values, dtype=float)
+    y = np.asarray(b.values, dtype=float)
+    order = np.argsort(x, kind="stable")
+    at = np.asarray(target.values, dtype=float)
+    values = np.interp(at, x[order], y[order], left=np.nan, right=np.nan)
+    return xr.DataArray(values, dims=(dim,), coords={dim: target}, name=b.name, attrs=b.attrs)
+
+
 def _on_grid_of(a: xr.DataArray, b: xr.DataArray, interpolate: bool) -> xr.DataArray:
     """``b`` on the coordinates of ``a`` where they share dims (interpolated, or by position)."""
     shared = [d for d in b.dims if d in a.dims]
@@ -43,6 +62,8 @@ def _on_grid_of(a: xr.DataArray, b: xr.DataArray, interpolate: bool) -> xr.DataA
     )
     if same:
         return b.assign_coords({d: a.coords[d] for d in shared if d in a.coords})
+    if interpolate and _is_plain_curve(b) and b.dims[0] in a.coords:
+        return _interp_curve(b, a.coords[b.dims[0]])
     if interpolate:
         return b.interp({d: a.coords[d] for d in shared if d in a.coords and d in b.coords})
     if all(a.sizes[d] == b.sizes[d] for d in shared):  # by position

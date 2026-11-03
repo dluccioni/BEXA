@@ -205,6 +205,38 @@ def gaussian_frames(frames: Any, sigma: float) -> Any:
     return out
 
 
+def median_frames(frames: Any, size: int, mode: str = "nearest") -> Any:
+    """Every frame (the last two axes) median-filtered over ``size x size`` pixels (numpy or cupy).
+
+    numpy frames are split over :func:`bexa.core.parallel.compute_threads` threads, as in
+    :func:`gaussian_frames`: scipy's filters release the GIL, and eight threads filter a stack
+    about five times faster than one, with the same result.
+    """
+    ndi = ndimage_module(frames)
+    footprint = (1,) * (frames.ndim - 2) + (int(size), int(size))
+    if is_cupy_array(frames) or frames.ndim < 3:
+        return ndi.median_filter(frames, size=footprint, mode=mode)
+    from bexa.core.parallel import compute_pool, compute_threads
+
+    flat = frames.reshape(-1, *frames.shape[-2:])
+    threads = min(compute_threads(), flat.shape[0])
+    if threads <= 1:
+        return ndi.median_filter(frames, size=footprint, mode=mode)
+    out = np.empty_like(flat)
+    bounds = np.linspace(0, flat.shape[0], threads + 1).astype(int)
+    pool = compute_pool()
+    futures = [
+        pool.submit(
+            ndi.median_filter, flat[a:b], size=(1, int(size), int(size)), mode=mode, output=out[a:b]
+        )
+        for a, b in itertools.pairwise(bounds)
+        if b > a
+    ]
+    for future in futures:
+        future.result()
+    return out.reshape(frames.shape)
+
+
 def memory_budget(device: str | None = "cpu", fraction: float | None = None) -> int:
     """Bytes a single operation may use on ``device``.
 

@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 
-from bexa._log import progress
 from bexa.analysis import xrd, xrr
 from bexa.workspace.objects import DataObject
 from bexa.workspace.ops._base import DETECTOR, curve, curve_xy, new, other_dims, require
@@ -127,13 +126,9 @@ def integrate_powder(
     step = float(centres[1] - centres[0]) if centres.size > 1 else 1.0
     # every frame on the bins of the summed pattern, so the patterns line up
     options.update(bins=centres.size, x_range=(centres[0] - step / 2, centres[-1] + step / 2))
-    rows = np.empty((stacked.sizes["frame"], centres.size))
-    errors = np.empty_like(rows)
-    for i in progress(range(rows.shape[0]), total=rows.shape[0], desc="patterns", enabled=False):
-        pattern = xrd.integrate_1d(
-            np.asarray(stacked.isel(frame=i).values, float), geometry, **options
-        )
-        rows[i], errors[i] = pattern["intensity"], pattern["sigma"]
+    frames = np.asarray(stacked.transpose("frame", *da.dims[-2:]).values, float)
+    patterns = xrd.integrate_frames(frames, geometry, **options)  # every frame at once
+    rows, errors = patterns["intensity"], patterns["sigma"]
     first = {"x": centres}
     index = stacked.indexes["frame"]
     data = xr.DataArray(rows, dims=("frame", unit), coords={"frame": index, unit: first["x"]})

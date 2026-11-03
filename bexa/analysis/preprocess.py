@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 
-from bexa.core.backend import array_module, ndimage_module
+from bexa.core.backend import array_module, median_frames, ndimage_module
 from bexa.core.roi import ROI
 
 __all__ = [
@@ -40,7 +40,11 @@ def subtract_dark(frames: Any, dark: Any, mode: str = "mean") -> Any:
 
 
 def remove_hot_pixels(frames: Any, size: int | Sequence[int] = (1, 3, 3)) -> Any:
-    """Median filter over the stack (``size`` per axis; the default keeps frames separate)."""
+    """Median filter over the stack (``size`` per axis; the default keeps frames separate,
+    filtered in threads by :func:`bexa.core.backend.median_frames`)."""
+    sizes = (int(size),) * frames.ndim if isinstance(size, int) else tuple(int(s) for s in size)
+    if len(sizes) == frames.ndim and set(sizes[:-2]) <= {1} and sizes[-1] == sizes[-2]:
+        return median_frames(frames, sizes[-1], mode="reflect")
     ndi = ndimage_module(frames)
     return ndi.median_filter(frames, size=size)
 

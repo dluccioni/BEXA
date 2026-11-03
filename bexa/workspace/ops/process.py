@@ -186,19 +186,14 @@ def subtract_background(
 
 def remove_hot_pixels(obj: DataObject, threshold: float = 8.0, size: int = 3) -> DataObject:
     """Replace pixels far above their neighbours (``threshold`` times the local noise) by the
-    local median; every frame of a stack separately."""
+    local median; every frame of a stack separately, the frames in threads."""
     require(obj, (*DETECTOR, "map"), "Remove Hot Pixels")
-    from scipy.ndimage import median_filter
+    from bexa.core.backend import median_frames
 
     data = np.asarray(obj.array.values, dtype=float)
-    footprint = (1,) * (data.ndim - 2) + (int(size), int(size))
-    local = median_filter(data, size=footprint, mode="nearest")
+    local = median_frames(data, int(size))
     deviation = np.abs(data - local)
-    noise = (
-        median_filter(deviation, size=footprint, mode="nearest") * 1.4826
-        + np.sqrt(np.abs(local))
-        + 1e-12
-    )
+    noise = median_frames(deviation, int(size)) * 1.4826 + np.sqrt(np.abs(local)) + 1e-12
     hot = (data - local) > threshold * noise
     cleaned = np.where(hot, local, data)
     return new(
