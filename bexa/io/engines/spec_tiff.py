@@ -46,6 +46,7 @@ __all__ = [
     "SpecFile",
     "SpecScan",
     "SpecTiffSource",
+    "TiffLayout",
     "frame_point",
     "frame_templates",
     "frames_by_scan",
@@ -398,6 +399,90 @@ def probe_tiff(path: Path) -> tuple[tuple[int, int], np.dtype]:
         return (int(frame.shape[-2]), int(frame.shape[-1])), frame.dtype
 
 
+@dataclass(frozen=True)
+class TiffLayout:
+    """Where the pixels sit in the TIFFs a detector writes: after one frame is parsed, the
+    others are read without parsing, in one read of the rows asked for.
+
+    A detector writes every frame alike: one uncompressed page, the same tags, so
+    the same header (``head``: the byte order and where the tags are; an
+    areaDetector TIFF has its tags after the pixels, so this is the pixels'
+    size), the same file ``size`` and the pixels at the same ``offset``. A frame
+    whose header or size differs is another layout (or one still being
+    written): :meth:`read` returns ``None`` for it, and it is parsed. tifffile
+    parses a frame in 2 ms, a read of its rows takes 0.8 ms (0.2 ms for a window
+    of 50 rows) on the lab share.
+    """
+
+    head: bytes
+    offset: int
+    size: int
+    shape: tuple[int, int]
+    dtype: np.dtype
+
+    @classmethod
+    def probe(cls, path: str | Path) -> TiffLayout | None:
+        """The layout of the TIFF ``path``; ``None`` when its pixels cannot be read in place
+        (compressed, in pieces, several pages or samples, no tifffile)."""
+        try:
+            import tifffile
+        except ImportError:
+            return None
+        try:
+            with tifffile.TiffFile(str(path)) as tf:
+                page = tf.pages[0]
+                if len(tf.pages) != 1 or not isinstance(page, tifffile.TiffPage):
+                    return None
+                head_size = 16 if tf.is_bigtiff else 8
+                dtype = np.dtype(page.dtype).newbyteorder(tf.byteorder)
+                shape = (int(page.shape[-2]), int(page.shape[-1]))
+                offsets, counts = list(page.dataoffsets), list(page.databytecounts)
+                plain = (
+                    page.compression == 1
+                    and page.samplesperpixel == 1
+                    and len(page.shape) == 2
+                    and all(
+                        o + c == n
+                        for o, c, n in zip(offsets[:-1], counts[:-1], offsets[1:], strict=True)
+                    )
+                    and sum(counts) == shape[0] * shape[1] * dtype.itemsize
+                )
+            if not plain:
+                return None
+            with open(path, "rb") as f:
+                head = f.read(head_size)
+                size = os.fstat(f.fileno()).st_size
+        except (OSError, ValueError):
+            return None
+        return cls(head, int(offsets[0]), size, shape, dtype)
+
+    def read(self, path: str | Path, y: slice, x: slice) -> np.ndarray | None:
+        """The window ``y, x`` of the frame ``path``, reading only its rows; ``None`` when the
+        file's header or size is not this layout's."""
+        h, w = self.shape
+        start, stop, step = y.indices(h)
+        if step < 1:
+            return None
+        rows = np.empty((max(0, stop - start), w), self.dtype)
+        if not rows.size:
+            return rows[::step, x]
+        view = rows.data.cast("B")
+        try:
+            with open(path, "rb", buffering=0) as f:
+                if f.read(len(self.head)) != self.head or os.fstat(f.fileno()).st_size != self.size:
+                    return None
+                f.seek(self.offset + start * w * self.dtype.itemsize)
+                done = 0
+                while done < len(view):
+                    got = f.readinto(view[done:])
+                    if not got:
+                        return None
+                    done += got
+        except OSError:
+            return None
+        return rows[::step, x]
+
+
 def read_tiffs(
     paths: Sequence[Path],
     ids: np.ndarray,
@@ -405,14 +490,26 @@ def read_tiffs(
     x: slice,
     out: np.ndarray,
     invalid: int | None = None,
+    layout: TiffLayout | None = None,
 ) -> np.ndarray:
-    """The frames ``ids`` of ``paths`` (one TIFF each) cut to ``y, x`` into ``out``; a pixel at
-    ``invalid`` (the EIGER's 2**32 - 1 for a dead or masked pixel) reads as 0."""
-    for k, fid in enumerate(ids):
-        frame = _read_frame(paths[fid])[y, x]
+    """The frames ``ids`` of ``paths`` (one TIFF each) cut to ``y, x`` into ``out``, read in
+    parallel threads (:func:`bexa.core.parallel.io_each`); a pixel at ``invalid`` (the EIGER's
+    2**32 - 1 for a dead or masked pixel) reads as 0. With ``layout`` the frames of that
+    layout are read without parsing them (:class:`TiffLayout`)."""
+    from bexa.core.parallel import io_each
+
+    def read_one(k: int) -> None:
+        path = paths[int(ids[k])]
+        frame = layout.read(path, y, x) if layout is not None else None
+        if frame is None:  # another layout, or none known: tifffile parses it
+            frame = _read_frame(path)[y, x]
         if invalid is not None:  # a flagged pixel would add 4e9 counts to every sum
-            frame = np.where(frame == invalid, 0, frame)
+            if not frame.flags.writeable:  # Pillow's arrays are read-only
+                frame = frame.copy()
+            frame[frame == invalid] = 0
         out[k] = frame
+
+    io_each(read_one, len(ids))
     return out
 
 
@@ -463,6 +560,7 @@ class SpecTiffSource(BaseSource):
         self._structure: Structure | None = None
         self._shape: tuple[int, int] | None = None
         self._dtype: np.dtype | None = None
+        self._layout: TiffLayout | None = None  # the frames' layout, read without parsing
         self._load()
 
     def _load(self) -> None:
@@ -554,7 +652,11 @@ class SpecTiffSource(BaseSource):
 
     def _probe(self) -> None:
         if self.frames:
-            self._shape, self._dtype = probe_tiff(self.frames[0])
+            self._layout = TiffLayout.probe(self.frames[0])
+            if self._layout is not None:
+                self._shape, self._dtype = self._layout.shape, self._layout.dtype.newbyteorder("=")
+            else:
+                self._shape, self._dtype = probe_tiff(self.frames[0])
             return
         info = self.spec.detector_info(self.detector)
         shape = info.get("shape")
@@ -604,7 +706,7 @@ class SpecTiffSource(BaseSource):
         target = np.dtype(dtype) if dtype is not None else self.dtype
         if out is None:
             out = np.empty((ids.size, ny, nx), dtype=target)
-        return read_tiffs(self.frames, ids, y, x, out, self._invalid)
+        return read_tiffs(self.frames, ids, y, x, out, self._invalid, self._layout)
 
     # --------------------------------------------------------- the structure
     def structure(self) -> Structure:
@@ -743,7 +845,7 @@ class SpecTiffSource(BaseSource):
     def refresh(self) -> SpecTiffSource:
         """Read the SPEC file and the frames folders again (a session still running)."""
         self._structure = None
-        self._shape = self._dtype = None
+        self._shape = self._dtype = self._layout = None
         self._load()
         return self
 

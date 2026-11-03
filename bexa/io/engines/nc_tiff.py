@@ -42,7 +42,7 @@ from bexa.core.registry import register_engine
 from bexa.core.status import ScanStatus
 from bexa.core.structure import MISSING, Structure, raster_order
 from bexa.io.base import BaseSource
-from bexa.io.engines.spec_tiff import probe_tiff, read_tiffs
+from bexa.io.engines.spec_tiff import TiffLayout, probe_tiff, read_tiffs
 from bexa.io.formats import FolderListing, FormatSpec
 
 if TYPE_CHECKING:
@@ -69,9 +69,12 @@ SKIPPED = frozenset({"bexa_cache", "__pycache__"})
 LAST_NUMBER = re.compile(r"(\d+)\D*$")
 RUN_FIELD = re.compile(r"\{run(:[^{}]*)?\}")
 MAX_FOLDERS = 64  # frame folders whose listing is kept (a run folder may hold 10 000 frames)
+MAX_RUNS = 512  # netCDF files whose grid is kept (a few MB at most)
 _LISTINGS: dict[Path, tuple[int, list[tuple[str, bool]]]] = {}
 _FRAMES: dict[tuple[Path, int], tuple[int, dict[int, Path]]] = {}
 _PLACES: dict[tuple[Path, str], list[Path]] = {}
+_INDEXES: dict[tuple[Path, str], tuple[tuple[int, ...], RunIndex]] = {}
+_GRIDS: dict[tuple[Path, RunLayout], tuple[tuple[int, int], RunGrid]] = {}
 _LOCK = threading.Lock()
 
 
@@ -165,6 +168,14 @@ class RunLayout:
 
 
 # --------------------------------------------------------------- the folders
+def _stamp(folder: Path) -> int:
+    """The modification time of a folder (it changes when an entry is added), -1 if gone."""
+    try:
+        return folder.stat().st_mtime_ns
+    except OSError:
+        return -1
+
+
 def _entries(folder: Path) -> list[tuple[str, bool]]:
     """``(name, is a folder)`` of every entry, listed again only when the folder changed."""
     try:
@@ -312,14 +323,25 @@ class RunIndex:
 
 
 def run_index(folder: str | Path, layout: RunLayout) -> RunIndex:
-    """The runs of the netCDF ``folder`` and where their frames are (no frames folder listed)."""
+    """The runs of the netCDF ``folder`` and where their frames are (no frames folder listed).
+
+    Kept until a folder it read changes: a dataset of a hundred runs opens each with
+    the one index (read it, do not change it).
+    """
     folder = Path(folder)
+    places = _frames_places(folder, layout)
+    key = (Path(os.path.abspath(folder)), layout.run_file)
+    stamps = tuple(_stamp(f) for f in (folder, *places))
+    with _LOCK:
+        hit = _INDEXES.get(key)
+    if hit is not None and hit[0] == stamps:
+        return hit[1]
     index = RunIndex(folder)
     for name, is_dir in _entries(folder):
         run = None if is_dir else layout.run_of_file(name)
         if run is not None:
             index.files[run] = folder / name
-    for place in _frames_places(folder, layout):
+    for place in places:
         frames_dir = layout.is_frames_dir(place.name)
         for name, is_dir in _entries(place):
             if is_dir:
@@ -330,6 +352,8 @@ def run_index(folder: str | Path, layout: RunLayout) -> RunIndex:
             run, point = layout.frame_of(name)
             if run is not None and point is not None:
                 index.loose.setdefault(run, {}).setdefault(point, place / name)
+    with _LOCK:
+        _INDEXES[key] = (stamps, index)
     return index
 
 
@@ -436,10 +460,78 @@ def _acquisition_order(
 
 
 def read_run(path: str | Path, layout: RunLayout) -> RunGrid:
-    """The grid and counters of a run's netCDF file (the one array of ``to_array()``)."""
+    """The grid and counters of a run's netCDF file (the one array of ``to_array()``), read
+    once per process (again when the file changes)."""
+    path = Path(path)
+    st = path.stat()
+    key, stamp = (Path(os.path.abspath(path)), layout), (st.st_mtime_ns, st.st_size)
+    with _LOCK:
+        hit = _GRIDS.get(key)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    grid = _parse_run(path, layout)
+    with _LOCK:
+        if len(_GRIDS) >= MAX_RUNS:
+            _GRIDS.pop(next(iter(_GRIDS)))
+        _GRIDS[key] = (stamp, grid)
+    return grid
+
+
+def _parse_run(path: Path, layout: RunLayout) -> RunGrid:
+    named = _netcdf3_array(path, layout) or _xarray_array(path, layout)
+    if named is None:
+        raise ValueError(f"{path.name} holds no data array")
+    name, array_dims, values, coords = named
+    dims = tuple(d for d in array_dims if d != layout.channel_dim)
+    if layout.channel_dim in array_dims:  # the counters last, the motors in their order
+        values = np.moveaxis(values, array_dims.index(layout.channel_dim), -1)
+        labels = coords.get(layout.channel_dim, np.arange(values.shape[-1]))
+    else:
+        values, labels = values[..., None], np.array([name])
+    values = np.asarray(values, dtype=np.float64)
+    shape = values.shape[:-1]
+    flat = values.reshape(-1, values.shape[-1])
+    k = layout.order_channel
+    counter = flat[:, k] if k is not None and k < flat.shape[1] else None
+    order, snake = _acquisition_order(counter, shape)
+    given = layout.channel_names
+    channels = {
+        (given[c] if c < len(given) else f"{layout.channel_dim}_{labels[c]}"): flat[order, c]
+        for c in range(flat.shape[1])
+    }
+    grid = {d: coords.get(d, np.arange(n)) for d, n in zip(dims, shape, strict=True)}
+    return RunGrid(dims, grid, order, channels, snake)
+
+
+Named = tuple[str, tuple[str, ...], np.ndarray, dict[str, np.ndarray]]
+
+
+def _netcdf3_array(path: Path, layout: RunLayout) -> Named | None:
+    """``(name, dims, values, coordinates)`` of the data array of a netCDF-3 file, read by
+    scipy alone (a quarter of xarray's time); ``None`` for another kind of file."""
+    with open(path, "rb") as f:
+        if f.read(3) != b"CDF":
+            return None
+    from scipy.io import netcdf_file
+
+    with netcdf_file(path, "r", mmap=False) as f:  # no map: the arrays are copies, the file closes
+        variables = f.variables
+        arrays = [n for n, v in variables.items() if tuple(v.dimensions) != (n,)]
+        if not arrays:
+            return None
+        chosen = next(
+            (n for n in arrays if layout.channel_dim in variables[n].dimensions), arrays[0]
+        )
+        array = variables[chosen]
+        dims = tuple(str(d) for d in array.dimensions)
+        coords = {d: np.array(variables[d].data) for d in dims if d in variables}
+        return chosen, dims, np.array(array.data), coords
+
+
+def _xarray_array(path: Path, layout: RunLayout) -> Named | None:
+    """The same through xarray, for a netCDF-4 file (``h5netcdf`` or ``netCDF4`` installed)."""
     import xarray as xr
 
-    path = Path(path)
     try:
         data = xr.load_dataset(path)
     except ValueError as exc:  # no xarray backend reads this kind of file here
@@ -447,38 +539,14 @@ def read_run(path: str | Path, layout: RunLayout) -> RunGrid:
             f"{path.name} could not be read ({exc}); a netCDF-4 file needs h5netcdf "
             "(pip install h5netcdf)"
         ) from exc
-    names = [n for n in data.data_vars if layout.channel_dim in data[n].dims] or list(
-        data.data_vars
-    )
-    if not names:
-        raise ValueError(f"{path.name} holds no data array")
-    array = data[names[0]]
-    dims = tuple(str(d) for d in array.dims if d != layout.channel_dim)
-    if layout.channel_dim in array.dims:
-        values = np.asarray(array.transpose(*dims, layout.channel_dim).values, dtype=np.float64)
-        labels = (
-            array[layout.channel_dim].values
-            if layout.channel_dim in array.coords
-            else np.arange(values.shape[-1])
-        )
-    else:
-        values = np.asarray(array.values, dtype=np.float64)[..., None]
-        labels = np.array([names[0]])
-    coords = {
-        d: np.asarray(array[d].values) if d in array.coords else np.arange(array.sizes[d])
-        for d in dims
-    }
-    shape = values.shape[:-1]
-    flat = values.reshape(-1, values.shape[-1])
-    k = layout.order_channel
-    counter = flat[:, k] if k is not None and k < flat.shape[1] else None
-    order, snake = _acquisition_order(counter, shape)
-    named = layout.channel_names
-    channels = {
-        (named[c] if c < len(named) else f"{layout.channel_dim}_{labels[c]}"): flat[order, c]
-        for c in range(flat.shape[1])
-    }
-    return RunGrid(dims, coords, order, channels, snake)
+    arrays = [str(n) for n in data.data_vars]
+    if not arrays:
+        return None
+    chosen = next((n for n in arrays if layout.channel_dim in data[n].dims), arrays[0])
+    array = data[chosen]
+    dims = tuple(str(d) for d in array.dims)
+    coords = {d: np.asarray(array[d].values) for d in dims if d in array.coords}
+    return chosen, dims, np.asarray(array.values), coords
 
 
 def run_of(path: str | Path, layout: RunLayout) -> int | None:
@@ -553,6 +621,7 @@ class NcTiffSource(BaseSource):
         self._structure: Structure | None = None
         self._shape: tuple[int, int] | None = None
         self._dtype: np.dtype | None = None
+        self._layout: TiffLayout | None = None  # the frames' layout, read without parsing
         self._load()
 
     def _load(self) -> None:
@@ -562,6 +631,7 @@ class NcTiffSource(BaseSource):
             span = f"{runs[0]}..{runs[-1]}" if runs else "none"
             raise KeyError(f"no run {self.scan} in {self.folder}; runs {span}")
         self.last = self.scan == runs[-1]
+        self.frame_folders = list(index.folders.get(self.scan, ()))
         self.run_file = index.files.get(self.scan)
         self.grid = read_run(self.run_file, self.layout) if self.run_file is not None else None
         points, frames = run_frames(index, self.scan, self.layout)
@@ -679,7 +749,12 @@ class NcTiffSource(BaseSource):
 
     def _probe(self) -> None:
         if self.frames:
-            self._shape, self._dtype = probe_tiff(self.frames[0])
+            self._layout = TiffLayout.probe(self.frames[0])
+            if self._layout is not None:
+                self._shape = self._layout.shape
+                self._dtype = self._layout.dtype.newbyteorder("=")
+            else:
+                self._shape, self._dtype = probe_tiff(self.frames[0])
             return
         info = self.spec.detector_info(self.detector)
         shape = info.get("shape")
@@ -723,7 +798,7 @@ class NcTiffSource(BaseSource):
         target = np.dtype(dtype) if dtype is not None else self.dtype
         if out is None:
             out = np.empty((ids.size, ny, nx), dtype=target)
-        return read_tiffs(self.frames, ids, y, x, out, self._invalid)
+        return read_tiffs(self.frames, ids, y, x, out, self._invalid, self._layout)
 
     # --------------------------------------------------------- the structure
     def structure(self) -> Structure:
@@ -811,16 +886,21 @@ class NcTiffSource(BaseSource):
         return {"points": self.point_table()}
 
     def cache_records(self) -> list[dict[str, Any]]:
-        """The run's netCDF file and its frames."""
+        """The run's netCDF file, its first and last frames, how many there are and the times
+        of its frames folders, which change when a frame is added: not a stat of every frame
+        (ten thousand round trips on a network share at every reduction)."""
         from bexa.core.provenance import file_records
 
         own = {"folder": str(self.folder), "run": self.scan, "frames": len(self.frames)}
-        return [own, *file_records(self.files())]
+        ends = self.frames[:1] + self.frames[-1:] if len(self.frames) > 1 else self.frames
+        own_file = [self.run_file] if self.run_file is not None else []
+        folders = [{"path": str(f), "mtime_ns": _stamp(f)} for f in self.frame_folders]
+        return [own, *file_records([*own_file, *ends]), *folders]
 
     def refresh(self) -> NcTiffSource:
         """Read the run's folders again (a run still being written)."""
         self._structure = None
-        self._shape = self._dtype = None
+        self._shape = self._dtype = self._layout = None
         self._load()
         return self
 

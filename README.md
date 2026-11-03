@@ -4233,12 +4233,37 @@ reading it with Pillow otherwise).
 probe_tiff(session.frames[2][0])                 # ((24, 32), dtype('uint32'))
 ```
 
-#### `read_tiffs`
-`bexa.io.engines.spec_tiff.read_tiffs(paths, ids, y, x, out, invalid=None)`
+#### `TiffLayout`
+`bexa.io.engines.spec_tiff.TiffLayout(head, offset, size, shape, dtype)`
 
-The frames `ids` of `paths` (one TIFF each) cut to the window `y, x` into `out`, a pixel at
-`invalid` (the EIGER's 2**32 - 1) read as 0: the reading of `SpecTiffSource` and
-`NcTiffSource`.
+Where the pixels sit in the TIFFs a detector writes, so that after one frame is parsed the
+others are read without parsing, in one read of the rows asked for. A detector writes every
+frame alike (one uncompressed page, the same tags), so every frame has the same header
+(`head`: the byte order and where the tags are), the same file `size` and its pixels at the same
+`offset`. `TiffLayout.probe(path)` parses one frame (`None` when its pixels cannot be read in
+place: compressed, in pieces, several pages or samples, no `tifffile`); `read(path, y, x)` reads
+the window `y, x` of another frame, only the rows in `y`, and returns `None` when the file's
+header or size differs (another layout, or a frame still being written), which is then parsed.
+On the lab share tifffile parses an EIGER frame in 2.2 ms; reading its rows takes 0.8 ms, a
+window of 50 rows 0.2 ms. `SpecTiffSource` and `NcTiffSource` probe their first frame.
+
+```python
+# session.frames[2]: the frames of scan 2; the layout of the first, a window of the fourth
+from bexa.io.engines.spec_tiff import TiffLayout
+layout = TiffLayout.probe(session.frames[2][0])
+layout.shape, layout.dtype, layout.read(session.frames[2][3], slice(0, 4), slice(0, 8)).shape   # ((24, 32), dtype('uint32'), (4, 8))
+```
+
+#### `read_tiffs`
+`bexa.io.engines.spec_tiff.read_tiffs(paths, ids, y, x, out, invalid=None, layout=None)`
+
+The frames `ids` of `paths` (one TIFF each) cut to the window `y, x` into `out`, read in
+parallel threads (`bexa.core.parallel.io_each`), a pixel at `invalid` (the EIGER's 2**32 -
+1) read as 0: the reading of `SpecTiffSource` and `NcTiffSource`. With `layout` (a
+`TiffLayout`) the frames of that layout are read without parsing them, the others parsed.
+Forty frames of 512 x 1028 from a local disk: 1.4 ms a frame read one by one with tifffile,
+0.6 ms in threads, 0.3 ms in threads with the layout (0.85, 0.6 and 0.09 ms for a window
+of 50 x 100 pixels).
 
 ```python
 # two frames of scan 2, cut to a 4 x 4 window
@@ -4317,7 +4342,9 @@ series of frames (`frame` dim, scan type `list`). `energy_keV` is the energy (th
 it); `detector` names the spec's camera. It implements the `Source` members `files` (the
 netCDF file, then the frames), `frame_shape`, `n_frames`, `dtype`, `energy_keV`, `read_frames`,
 `structure`, `status`, `aux_tables` (`points`), `cache_records` (the folder, the run, the frame
-count, then the files), `refresh` and `close` (see `BaseSource`). Also:
+count, the netCDF file, the first and last frames and the times of the frames folders, not
+a stat of every frame), `refresh` and `close` (see `BaseSource`). The frames are read in
+threads without parsing them (`read_tiffs` with the first frame's `TiffLayout`). Also:
 
 - `point_table()`: one row per point of the netCDF file, in the order taken, with or without its
   frame: `point`, `frame` (the id `read_frames` reads, -1 when there is none), the motor
@@ -4379,9 +4406,10 @@ flat grid position of every point in the order taken), `snake`, `channels` (the 
 every point in that order, `det_0` ...), and the properties `shape` and `n_points`. The array is
 the dataset's variable holding `channel_dim` (else its first); the counter `order_channel`
 rising row by row gives the grid order, rising along a serpentine the serpentine, neither the
-counter's own order (with a warning). A file no xarray backend reads here (a netCDF-4 file
-without `h5netcdf`) raises `OSError` saying so; the files of 2025 are netCDF-3, which `scipy`
-reads.
+counter's own order (with a warning). A netCDF-3 file (the files of 2025) is read by `scipy`
+alone, 0.6 ms a file against xarray's 2.5 ms; another goes through xarray, and one no
+xarray backend reads here (a netCDF-4 file without `h5netcdf`) raises `OSError` saying so. A
+file is read once per process (again when it changes; `MAX_RUNS` kept).
 
 ```python
 # the serpentine run: the points of its second row taken backwards
@@ -4396,7 +4424,9 @@ The `RunIndex` of a netCDF folder: `files` (run to netCDF file), `folders` (run 
 folders, by the number in their names), `loose` (run to `{point: frame}` of the frames lying
 loose), `runs()` (every run with a file or frames) and `has_frames(run)`. No frames folder is
 listed: the frames of a run are listed when it opens, each folder again only when it changed.
-The frames' places are found once per process (searched again while none are found).
+The frames' places are found once per process (searched again while none are found), and
+the index is kept until one of the folders it read changes: the runs of a dataset open with
+one index (read it, do not change it).
 
 ```python
 # the synthetic runs: four files, five runs (run 5 has frames only)
@@ -4468,6 +4498,7 @@ Constants:
 
 - `TIFF_SUFFIXES`: `(".tif", ".tiff")`.
 - `MAX_FOLDERS`: `64`, the frames folders whose listing is kept (one may hold 10 000 frames).
+- `MAX_RUNS`: `512`, the netCDF files whose grid is kept.
 
 ### bexa.io.engines.array_cube: reduced cubes as sources
 
@@ -15863,6 +15894,34 @@ so that the workers share the cores.
 ```python
 # how many threads the accumulators use (BEXA_THREADS)
 compute_threads()                            # 8 on a 16-core workstation; what BEXA_THREADS says when it is set
+```
+
+#### `io_pool`
+`bexa.core.parallel.io_pool()`
+
+One `ThreadPoolExecutor` of `default_workers("io")` threads per process for reading many small
+files (its threads are named `bexa-read`): a file read releases the GIL, so the reads of a batch
+of TIFF frames overlap, and on a network share each read waits a round trip.
+
+```python
+# the shared reading pool; the same on every call
+from bexa.core.parallel import io_each, io_pool
+io_pool() is io_pool()                          # True
+```
+
+#### `io_each`
+`bexa.core.parallel.io_each(fn, count)`
+
+`fn(0)` ... `fn(count - 1)` on the shared reading threads (`io_pool`), the first error raised;
+one item, or a call from one of the pool's own threads (which could leave none free to run the
+items), runs in the calling thread. `read_tiffs` reads a batch of frames this way.
+
+```python
+# three squares written into an array from the reading threads
+import numpy as np
+squares = np.zeros(3)
+io_each(lambda k: squares.__setitem__(k, k * k), 3)
+squares.tolist()                                 # [0.0, 1.0, 4.0]
 ```
 
 #### `compute_pool`

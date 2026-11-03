@@ -81,6 +81,41 @@ def default_workers(kind: str = "io") -> int:
     return max(1, cpus - 1)
 
 
+IO_THREAD_PREFIX = "bexa-read"
+_io_pool: ThreadPoolExecutor | None = None
+_io_lock = threading.Lock()
+
+
+def io_pool() -> ThreadPoolExecutor:
+    """One shared pool of :func:`default_workers` threads for reading many small files.
+
+    A file read releases the GIL, so the reads of a batch of TIFF frames overlap
+    (on a network share each waits a round trip); the pool lives as long as the
+    process, so a batch costs no thread start.
+    """
+    global _io_pool
+    with _io_lock:
+        if _io_pool is None:
+            _io_pool = ThreadPoolExecutor(
+                max_workers=default_workers("io"), thread_name_prefix=IO_THREAD_PREFIX
+            )
+        return _io_pool
+
+
+def io_each(fn: Callable[[int], object], count: int) -> None:
+    """``fn(0)`` ... ``fn(count - 1)`` on the shared I/O threads; the first error is raised.
+
+    One item, or a call from one of the pool's own threads (whose waiting on the
+    pool could leave no thread free), runs here instead.
+    """
+    if count <= 1 or threading.current_thread().name.startswith(IO_THREAD_PREFIX):
+        for k in range(count):
+            fn(k)
+        return
+    for _ in io_pool().map(fn, range(count)):
+        pass
+
+
 class Prefetcher(Generic[T]):
     """Run an iterator in a background thread so the next item is ready when asked for.
 
