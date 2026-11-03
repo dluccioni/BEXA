@@ -46,6 +46,7 @@ __all__ = ["FALLBACK_MOTORS", "MOTOR_KEYS", "Hdf5StackSource"]
 MIN_CACHE_BYTES = 8 * 1024**2
 MAX_CACHE_BYTES = 512 * 1024**2
 SCAN_FOLDER = re.compile(r"scan(\d+)")
+DETECTOR_FIELD = re.compile(r"\{detector(:[^{}]*)?\}")
 
 
 def _file_indices(files: Sequence[Path]) -> list[int] | None:
@@ -68,6 +69,23 @@ def _next_prime(n: int) -> int:
     return n
 
 
+def scan_detectors(spec: FormatSpec, folder: Path) -> list[str]:
+    """The detectors with files in a scan folder, named by the spec's ``detector_files``
+    (``pco_ff_0000.h5``: ``pco_ff``); the spec's detectors first, in its order."""
+    template = str(spec.layout.get("detector_files", "{detector}_*.h5"))
+    parts = DETECTOR_FIELD.split(template)[::2]  # split() also returns the format specs
+    pattern = re.compile(
+        "^" + "(?P<detector>.+)".join(re.escape(p).replace(r"\*", ".*") for p in parts) + "$"
+    )
+    try:
+        names = [p.name for p in folder.iterdir()]
+    except OSError:
+        return []
+    found = {m.group("detector") for m in map(pattern.match, names) if m}
+    preferred = [d for d in spec.detectors if d in found]
+    return preferred + sorted(found - set(preferred))
+
+
 @register_engine("hdf5_stack")
 class Hdf5StackSource(BaseSource):
     """Frames from per-scan detector files, metadata from the dataset's master file.
@@ -83,7 +101,8 @@ class Hdf5StackSource(BaseSource):
     scan
         Scan number.
     detector
-        Detector name (``pco_ff``, ``pco_nf``, ...); default: first detector of the spec.
+        Detector name (``pco_ff``, ``pco_nf``, ...); default: the first of the spec's
+        detectors with files in the scan folder (:meth:`detector_names`).
     energy_keV
         Overrides the energy derived from the monochromator angle.
     motors
@@ -111,11 +130,12 @@ class Hdf5StackSource(BaseSource):
         self.root = Path(root)
         self.dataset = dataset
         self.scan = int(scan)
-        self.detector = detector or next(iter(spec.detectors), "pco_ff")
         self._energy_override = energy_keV
         self._motors = [str(m) for m in motors] if motors else None
         self.master = Path(master) if master else self.root / spec.path("master", dataset=dataset)
         self.scan_folder = self.root / spec.path("scan_folder", dataset=dataset, scan=self.scan)
+        self._detectors = scan_detectors(spec, self.scan_folder)  # again on refresh()
+        self.detector = detector or next(iter(self._detectors or spec.detectors), "pco_ff")
         self.frames_path = spec.path("frames", detector=self.detector)
         self._entry = (
             spec.path("entry", scan=self.scan) if "entry" in spec.layout else f"{self.scan}.1"
@@ -163,15 +183,15 @@ class Hdf5StackSource(BaseSource):
         detector: str | None = None,
         require_files: bool = True,
     ) -> list[int]:
-        """Scan numbers of the ``scanNNNN`` folders, those with files for ``detector`` by default.
+        """Scan numbers of the ``scanNNNN`` folders, those with files for ``detector`` (no
+        detector: for any detector) by default.
 
         A folder named differently (``scan0007_old``) is not a scan and is left
         out; ``require_files=False`` lists a scan folder that holds no detector
         file yet (a scan that has just started).
         """
         root = Path(root)
-        detector = detector or next(iter(spec.detectors), "pco_ff")
-        pattern = spec.path("detector_files", detector=detector)
+        pattern = spec.path("detector_files", detector=detector or "*")
         found = []
         for folder in sorted((root / dataset).glob("scan*")):
             match = SCAN_FOLDER.fullmatch(folder.name)
@@ -183,6 +203,10 @@ class Hdf5StackSource(BaseSource):
                 continue
             found.append(int(match.group(1)))
         return found
+
+    def detector_names(self) -> list[str]:
+        """The detectors with files in the scan folder: the spec's first, in its order."""
+        return list(self._detectors) or [self.detector]
 
     def _scan_files(self) -> None:
         """Find the detector files and count their frames; none yet is not an error."""
@@ -392,6 +416,7 @@ class Hdf5StackSource(BaseSource):
     def refresh(self) -> Hdf5StackSource:
         """Re-read file sizes and metadata (for a scan still being written)."""
         self.close()
+        self._detectors = scan_detectors(self.spec, self.scan_folder)
         self._scan_files()
         self._structure = None
         self._status = None

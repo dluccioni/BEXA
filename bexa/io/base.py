@@ -204,8 +204,18 @@ class BaseSource(ABC):
             block = ids[start : start + batch]
             yield block, self.read_frames(block)
 
+    def detector_names(self) -> list[str]:
+        """The detectors whose frames the scan's files hold; ``detector`` is the one read.
+
+        This default knows only the one read; an engine whose files may hold
+        several (an LCLS run, a BLISS scan with two cameras) lists them all.
+        """
+        name = getattr(self, "detector", None)
+        return [name] if isinstance(name, str) else []
+
     def cache_records(self) -> list[dict[str, Any]]:
-        """What identifies the data for cache keys: path, size and mtime of every file.
+        """What identifies the data for cache keys: path, size and mtime of every file,
+        and the detector read when the files hold several.
 
         Engines whose files change while the data they serve does not (a master
         file that BLISS appends a scan to) override this with records of the part
@@ -213,7 +223,11 @@ class BaseSource(ABC):
         """
         from bexa.core.provenance import file_records
 
-        return file_records(self.files())
+        records = file_records(self.files())
+        detector = getattr(self, "detector", None)
+        if isinstance(detector, str) and len(self.detector_names()) > 1:
+            records.append({"path": "", "detector": detector})  # one file, several detectors
+        return records
 
     # ---- helpers ---------------------------------------------------------
     def frame_bytes(self, y: slice = slice(None), x: slice = slice(None), dtype: Any = None) -> int:

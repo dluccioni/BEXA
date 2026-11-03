@@ -31,6 +31,8 @@ from bexa.io.multi import MultiScanSource
 
 log = get_logger(__name__)
 
+IMAGE_SUFFIXES = (".tif", ".tiff", ".npy", ".npz")  # a frame or stack format="generic_stack" opens
+
 __all__ = ["Scan", "list_scans", "open", "open_profile", "open_source"]
 
 
@@ -117,6 +119,20 @@ class Scan:
         return isinstance(self.source, MultiScanSource)
 
     @property
+    def detector(self) -> str | None:
+        """The detector whose frames the scan reads."""
+        name = getattr(self.source, "detector", None)
+        return name if isinstance(name, str) else None
+
+    @property
+    def detectors(self) -> list[str]:
+        """Every detector whose frames the scan's files hold (:meth:`with_detector` reads one)."""
+        names = getattr(self.source, "detector_names", None)
+        if callable(names):
+            return list(names())
+        return [self.detector] if self.detector else []
+
+    @property
     def status(self) -> ScanStatus:
         """The state of the scan: complete, running, aborted, empty or unreadable."""
         status = getattr(self.source, "status", None)
@@ -139,6 +155,28 @@ class Scan:
         if self.recipe is not None:
             opened.recipe = {**self.recipe, "motors": chosen}
         return opened
+
+    def with_detector(self, detector: str) -> Scan:
+        """The same scan read with the frames of another of its detectors (:attr:`detectors`).
+
+        An LCLS run holds the images of several cameras, a BLISS scan the files
+        of the far-field and the near-field camera: the scan opens again from its
+        recipe with ``detector``, its layers and reshapes too, its pixel size the
+        detector's. ``ValueError`` for a detector the files do not hold.
+        """
+        if detector == self.detector:
+            return self
+        known = self.detectors
+        if known and detector not in known:
+            raise ValueError(f"{self.name} has no detector {detector!r}; its detectors: {known}")
+        if self.recipe is None:
+            raise ValueError(f"{self.name} was not opened from its files: it reads one detector")
+        return open(
+            **{**self.recipe, "detector": detector},
+            crystal=self.crystal,
+            cache=self.cache if self.cache is not None else False,
+            cache_reductions=self.cache_reductions,
+        )
 
     def layer(self, dim: str, index: int) -> Scan:
         """The frames at one point of the motor dim ``dim``, as a scan of their own.
@@ -224,6 +262,10 @@ class Scan:
             f"{frame_mb * s.n_frames / 1e3:.2f} GB for the stack",
             f"  {len(self.files)} files, first: {self.files[0]}",
         ]
+        if self.detector:
+            others = [d for d in self.detectors if d != self.detector]
+            also = f" (also in the files: {', '.join(others)})" if others else ""
+            lines.append(f"  detector: {self.detector}{also}")
         if self.roi:
             lines.append("  " + self.roi.describe(s))
         if self.geometry is not None:
@@ -460,6 +502,11 @@ def _resolve_spec(
             raise ValueError(
                 f"{folder} holds {len(scan_dirs)} scan folders but no master file "
                 f"({folder.name}.h5 is missing: copy it from the dataset folder of RAW_DATA)"
+            )
+        if path.suffix.lower() in IMAGE_SUFFIXES:
+            raise ValueError(
+                f"no format spec matches {path}; closest: {hint}. Open the file alone "
+                'with format="generic_stack"'
             )
         raise ValueError(
             f"no format spec matches {path}; closest: {hint}. "

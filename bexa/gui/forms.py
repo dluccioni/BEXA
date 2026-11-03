@@ -84,6 +84,17 @@ def _first_channels(obj: DataObject | None) -> list[str]:
         return []
 
 
+def _first_detectors(obj: DataObject | None) -> list[str]:
+    """The detectors the first input's scan (a set: its first scan) holds."""
+    if obj is None or obj.kind not in ("scan", "scanset"):
+        return []
+    scan = obj.data.scans[0] if obj.kind == "scanset" else obj.data
+    try:
+        return list(scan.detectors)
+    except Exception:
+        return []
+
+
 def _first_dims(obj: DataObject | None, pixels: bool = False) -> list[str]:
     """The dims of the first input; a scan's motors, with its pixel dims when ``pixels``."""
     if obj is None:
@@ -186,7 +197,7 @@ class Form:
                 value=p.default if p.default in p.choices else None,
                 **common,
             )
-        if p.kind in ("object", "roi", "dim", "channel"):
+        if p.kind in ("object", "roi", "dim", "channel", "detector"):
             return ipw.Dropdown(options=[("none", None)], value=None, **common)
         if p.kind == "dims":
             return DimToggles(label)
@@ -231,6 +242,8 @@ class Form:
                 options = ([("none", None)] if p.kind == "channel" else []) + [
                     (c, c) for c in channels
                 ]
+            elif p.kind == "detector":
+                options = [(d, d) for d in _first_detectors(self.first)]
             else:
                 continue
             self._set_options(widget, options, p)
@@ -289,7 +302,7 @@ class Form:
                 elif p.kind in ("objects", "rois", "dims", "channels"):
                     allowed = [o[1] if isinstance(o, tuple) else o for o in widget.options]
                     widget.value = tuple(v for v in (value or []) if v in allowed)
-                elif p.kind in ("bool", "choice", "object", "roi", "dim", "channel"):
+                elif p.kind in ("bool", "choice", "object", "roi", "dim", "channel", "detector"):
                     widget.value = value
                 else:
                     widget.value = p.text(value)

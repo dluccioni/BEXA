@@ -6,8 +6,12 @@ spec recognises as a whole (a BLISS dataset, a SPEC session, a PAL-XFEL run)
 and the data files a spec recognises one by one (one HDF5 file per scan, saved
 cubes). A recognised folder is not entered, the scan folders of a known layout
 are skipped, and of the files that share a naming pattern only the first is
-opened. Data no spec recognises is reported with the spec that came closest,
-and :func:`write_drafts` drafts one format spec per unknown HDF5 layout rather
+opened. A layout may say otherwise in its spec: a SPEC session's folder
+(``survey_inside``) can hold other datasets, a Python scan's netCDF folder, and
+is entered but for the folders it names; a layout's frames folders
+(``survey_skip``, ``python_images``) are never entered. Data no spec
+recognises is reported with the spec that came closest, and
+:func:`write_drafts` drafts one format spec per unknown HDF5 layout rather
 than one per dataset (``bexa profile sniff --recursive``). The scan picker lists
 its dataset folders with the same walk.
 """
@@ -123,6 +127,8 @@ class _Walker:
         self.listing = FolderListing()
         self.entries: list[SurveyEntry] = []
         globs = {s.fingerprint.get("scan_dir_glob") for s in specs}
+        for spec in specs:  # the frames folders of a layout: never a dataset of their own
+            globs.update(str(g) for g in spec.layout.get("survey_skip", ()) or ())
         self.scan_globs = sorted(str(g) for g in globs if g)
 
     def skipped(self, name: str) -> bool:
@@ -135,6 +141,17 @@ class _Walker:
         scored = match_spec(folder, self.specs, quick=self.quick, listing=self.listing)
         if scored and scored[0][0] >= 1.0:
             self.entries.append(self.recognised(folder, "folder", scored))
+            inside = scored[0][1].layout.get("survey_inside")
+            if inside and level < self.depth:  # other datasets may sit in its subfolders
+                skip = list(inside.get("skip", ())) if isinstance(inside, dict) else []
+                for name, (is_dir, is_link) in sorted(self.listing.entries(folder).items()):
+                    if (
+                        is_dir
+                        and not is_link
+                        and not self.skipped(name)
+                        and not any(fnmatch.fnmatch(name, g) for g in skip)
+                    ):
+                        self.visit(folder / name, level + 1)
             return
         entries = sorted(self.listing.entries(folder).items())
         files = [

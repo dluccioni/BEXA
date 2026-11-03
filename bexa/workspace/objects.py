@@ -250,7 +250,8 @@ class DataObject:
         if self.kind == "scan":
             s = self.data.structure
             grid = " x ".join(f"{d}[{n}]" for d, n in zip(s.dims, s.shape, strict=True))
-            return f"scan {s.scan_type} {grid}"
+            several = len(self.data.detectors) > 1  # the detector read, when there is a choice
+            return f"scan {s.scan_type} {grid}" + (f", {self.data.detector}" if several else "")
         if self.kind == "scanset":
             return f"scan set of {len(self.data)} scans"
         if self.kind == "table":

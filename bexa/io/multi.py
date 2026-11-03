@@ -43,6 +43,16 @@ class MultiScanSource(BaseSource):
         self._offsets = np.cumsum([0, *(p.n_frames for p in self.parts)])
         self._structure: Structure | None = None
 
+    @property
+    def detector(self) -> str | None:
+        """The detector the parts read (the first part's)."""
+        name = getattr(self.parts[0], "detector", None)
+        return name if isinstance(name, str) else None
+
+    def detector_names(self) -> list[str]:
+        first = self.parts[0]
+        return list(first.detector_names()) if hasattr(first, "detector_names") else []
+
     def files(self) -> list[Path]:
         seen: dict[Path, None] = {}
         for p in self.parts:

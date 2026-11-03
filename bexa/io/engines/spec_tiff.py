@@ -49,7 +49,9 @@ __all__ = [
     "frame_point",
     "frame_templates",
     "frames_by_scan",
+    "probe_tiff",
     "read_spec_file",
+    "read_tiffs",
     "scan_frames",
     "session_frames",
     "spec_file_of",
@@ -383,7 +385,7 @@ def _read_frame(path: Path) -> np.ndarray:
             return np.asarray(im)
 
 
-def _probe_frame(path: Path) -> tuple[tuple[int, int], np.dtype]:
+def probe_tiff(path: Path) -> tuple[tuple[int, int], np.dtype]:
     """Shape and dtype of a TIFF without reading its pixels (tifffile), else by reading it."""
     try:
         import tifffile
@@ -394,6 +396,24 @@ def _probe_frame(path: Path) -> tuple[tuple[int, int], np.dtype]:
     except ImportError:
         frame = _read_frame(path)
         return (int(frame.shape[-2]), int(frame.shape[-1])), frame.dtype
+
+
+def read_tiffs(
+    paths: Sequence[Path],
+    ids: np.ndarray,
+    y: slice,
+    x: slice,
+    out: np.ndarray,
+    invalid: int | None = None,
+) -> np.ndarray:
+    """The frames ``ids`` of ``paths`` (one TIFF each) cut to ``y, x`` into ``out``; a pixel at
+    ``invalid`` (the EIGER's 2**32 - 1 for a dead or masked pixel) reads as 0."""
+    for k, fid in enumerate(ids):
+        frame = _read_frame(paths[fid])[y, x]
+        if invalid is not None:  # a flagged pixel would add 4e9 counts to every sum
+            frame = np.where(frame == invalid, 0, frame)
+        out[k] = frame
+    return out
 
 
 # -------------------------------------------------------------------- the source
@@ -534,7 +554,7 @@ class SpecTiffSource(BaseSource):
 
     def _probe(self) -> None:
         if self.frames:
-            self._shape, self._dtype = _probe_frame(self.frames[0])
+            self._shape, self._dtype = probe_tiff(self.frames[0])
             return
         info = self.spec.detector_info(self.detector)
         shape = info.get("shape")
@@ -584,12 +604,7 @@ class SpecTiffSource(BaseSource):
         target = np.dtype(dtype) if dtype is not None else self.dtype
         if out is None:
             out = np.empty((ids.size, ny, nx), dtype=target)
-        for k, fid in enumerate(ids):
-            frame = _read_frame(self.frames[fid])[y, x]
-            if self._invalid is not None:  # a flagged pixel would add 4e9 counts to every sum
-                frame = np.where(frame == self._invalid, 0, frame)
-            out[k] = frame
-        return out
+        return read_tiffs(self.frames, ids, y, x, out, self._invalid)
 
     # --------------------------------------------------------- the structure
     def structure(self) -> Structure:

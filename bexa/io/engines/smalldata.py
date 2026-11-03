@@ -275,6 +275,10 @@ class SmalldataSource(BaseSource):
     def files(self) -> list[Path]:
         return [self.path]
 
+    def detector_names(self) -> list[str]:
+        """The detectors with per-event images in the run: the spec's first, then by name."""
+        return list(self.detectors)
+
     @property
     def frame_shape(self) -> tuple[int, int]:
         return self._frame_shape

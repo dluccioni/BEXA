@@ -359,12 +359,29 @@ def _dir_and_parents(folder: Path, levels: int = 3) -> list[Path]:
     return out
 
 
+def _engine_recognises(spec: FormatSpec, path: Path, is_dir: bool, listing: FolderListing) -> bool:
+    """The engine's own check (``recognises``), for a layout spread over folders that no
+    name pattern of a fingerprint places: a Python scan's netCDF and frames folders."""
+    from bexa.core.registry import engines
+
+    try:
+        engine = engines.get(spec.engine)
+    except KeyError:  # an engine whose optional package is missing here
+        return False
+    check = getattr(engine, "recognises", None)
+    return bool(check(spec, path, is_dir, listing)) if check is not None else False
+
+
 def _fingerprint_checks(
     spec: FormatSpec, path: Path, is_dir: bool, listing: FolderListing, quick: bool = False
 ) -> list[bool]:
     """One boolean per fingerprint item; ``quick`` leaves out the items that open HDF5 files."""
     fp = spec.fingerprint
     results: list[bool] = []
+    if "file_names" in fp and not is_dir:  # a file given must be named as the layout's are
+        results.append(any(fnmatch.fnmatch(path.name, g) for g in fp["file_names"]))
+    if fp.get("engine_check"):
+        results.append(_engine_recognises(spec, path, is_dir, listing))
     if is_dir and fnmatch.fnmatch(path.name, fp.get("scan_dir_glob", "")):
         path = path.parent  # a scanNNNN folder is recognised through its dataset folder
     folder = path if is_dir else path.parent

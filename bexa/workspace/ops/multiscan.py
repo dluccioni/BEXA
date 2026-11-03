@@ -29,6 +29,7 @@ __all__ = [
     "stack_per_scan",
     "stack_scans",
     "subset",
+    "use_detector",
 ]
 
 STACK_QUANTITIES = ("sum", "max", "mean", "com", "stats", "preview", "argmax", "energy_com")
@@ -154,6 +155,22 @@ def layers(obj: DataObject, dim: str) -> DataObject:
     values = scan.structure.coords[dim]
     labels = [f"{obj.name} {dim}={float(v):.5g}" for v in values]
     return DataObject(f"{obj.name}_{dim}_layers", ScanSet(parts, labels), parents=[obj.name])
+
+
+def use_detector(obj: DataObject, detector: str) -> DataObject:
+    """The scan (every scan of a set) read with the frames of another of its detectors.
+
+    The files of an LCLS run hold the images of several cameras, a BLISS scan's
+    folder the files of the far-field and the near-field camera; the scan opens
+    again with ``detector`` (:meth:`bexa.core.scan.Scan.with_detector`), its pixel
+    size the detector's.
+    """
+    require(obj, ("scan", "scanset"), "Use Detector")
+    if obj.kind == "scanset":
+        scans = [scan.with_detector(detector) for scan in obj.data.scans]
+        made = ScanSet(scans, list(obj.data.labels))
+        return DataObject(f"{obj.name}_{detector}", made, meta=dict(obj.meta), parents=[obj.name])
+    return new(obj, obj.data.with_detector(detector), detector)
 
 
 def reshape(

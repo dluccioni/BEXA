@@ -24,7 +24,7 @@ from bexa._log import get_logger
 from bexa.core.registry import register_engine
 from bexa.core.structure import Structure
 from bexa.io.base import BaseSource
-from bexa.io.formats import FormatSpec
+from bexa.io.formats import FormatSpec, safe_format
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -36,6 +36,13 @@ RUN_RE = re.compile(r"run=(\d+)")
 SCAN_RE = re.compile(r"scan=(\d+)")
 FLAG_KEYS = ("laser_flag", "raw_laser_flag")
 AXIS_TOLERANCE = 1e-9
+
+
+def _frames_path(spec: FormatSpec, detector: str) -> str:
+    """The dataset of a detector's frames in a raw file: its own ``frames_path``, else the
+    layout's (empty when neither names one)."""
+    path = spec.detectors.get(detector, {}).get("frames_path") or spec.layout.get("frames_path")
+    return safe_format(str(path), detector=detector) if path else ""
 
 
 @dataclass
@@ -106,17 +113,17 @@ class Hdf5PointsSource(BaseSource):
         self.raw_root = Path(raw_root)
         self.run = int(run)
         self.scan = int(scan)
-        self.detector = detector or next(iter(spec.detectors), "jungfrau2")
         self._energy_override = energy_keV
         fields = {"raw_root": str(self.raw_root), "run": self.run, "scan": self.scan}
         self.points_dir = Path(spec.path("points", **fields))
         self.frames_dir = Path(spec.path("frames", **fields))
         layout = spec.layout
         self.point_glob = str(layout.get("point_glob", "p*.h5"))
+        self._detectors: list[str] | None = None
+        self.detector = detector or next(iter(self.detector_names() or spec.detectors), "jungfrau2")
         self.table_key = str(layout.get("table_key", "measurements"))
         self.metadata_key = str(layout.get("metadata_key", "metadata"))
-        info = spec.detectors.get(self.detector, {})
-        frames_path = info.get("frames_path") or layout.get("frames_path")
+        frames_path = _frames_path(spec, self.detector)
         if not frames_path:
             raise KeyError(f"spec {spec.name} gives no frames_path for detector {self.detector!r}")
         self.frames_path = str(frames_path)
@@ -124,6 +131,20 @@ class Hdf5PointsSource(BaseSource):
         self._structure: Structure | None = None
         self._tables: dict[int, pd.DataFrame] = {}
         self._scan_files()
+
+    def detector_names(self) -> list[str]:
+        """The spec's detectors whose frames the scan's first raw file holds, in its order."""
+        if self._detectors is None:
+            tables = sorted(self.points_dir.glob(self.point_glob), key=point_number)
+            found: list[str] = []
+            if tables:
+                with (
+                    contextlib.suppress(OSError),
+                    h5py.File(self.frames_dir / tables[0].name, "r") as f,
+                ):
+                    found = [d for d in self.spec.detectors if _frames_path(self.spec, d) in f]
+            self._detectors = found
+        return list(self._detectors)
 
     # ----------------------------------------------------------- discovery
     @classmethod

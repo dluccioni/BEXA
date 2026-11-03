@@ -16,6 +16,7 @@ for _optional in (
     "hdf5_points",
     "spec_h5",
     "spec_tiff",
+    "nc_tiff",
     "array_cube",
     "smalldata",
     "extra_data",

@@ -1434,3 +1434,119 @@ def make_aps_session(
         out.totals[number] = totals
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out
+
+
+# the runs of the default Python session: number, motors (slow first) as (start, stop, points),
+# options (snake, partial, missing, netcdf, frames)
+DEFAULT_PYTHON_RUNS: tuple[tuple[int, dict[str, tuple[float, float, int]], dict[str, Any]], ...] = (
+    (1, {"nsamstageZ": (3.745, 3.755, 3), "nsamstageY": (-7.52, -7.51, 4)}, {}),
+    (2, {"nsamstageY": (-7.60, -7.59, 3), "nsamstageZ": (3.69, 3.70, 4)}, {"snake": True}),
+    (3, {"nsamstageZ": (3.70, 3.71, 5)}, {}),
+    (4, {"objstageZ": (2.60, 2.61, 3), "objstageY": (-8.30, -8.29, 3)}, {"partial": 4}),
+    (
+        5,
+        {"nsamstageZ": (3.745, 3.755, 2), "nsamstageY": (-7.52, -7.51, 3)},
+        {"netcdf": False, "partial": 2},
+    ),
+)
+PYTHON_CHANNELS = 13  # det_0 ... det_12 of the netCDF files of 7-ID-C
+
+
+@dataclass
+class SyntheticPythonRuns:
+    """What :func:`make_aps_python_runs` wrote: the netCDF files, the frames, the planted truth."""
+
+    root: Path
+    folder: Path  # the netCDF files' folder
+    images: Path  # the frames folder (python_images), or the folder of loose frames
+    frame_shape: tuple[int, int]
+    runs: dict[int, dict[str, np.ndarray]] = field(default_factory=dict)  # run -> motor coords
+    frames: dict[int, list[Path]] = field(default_factory=dict)  # run -> TIFFs, in the order taken
+    truth: dict[int, np.ndarray] = field(default_factory=dict)  # (*grid, 2) spot centre (y, x)
+    totals: dict[int, np.ndarray] = field(default_factory=dict)  # det_0 on the grid: frame sums
+
+
+def make_aps_python_runs(
+    root: str | Path,
+    runs: Sequence[
+        tuple[int, Mapping[str, tuple[float, float, int]], Mapping[str, Any]]
+    ] = DEFAULT_PYTHON_RUNS,
+    frame_shape: tuple[int, int] = (24, 32),
+    seed: int = 0,
+    netcdf_dir: str = "data_nc",
+    frames_dir: str = "python_images/MapScan_{run}",
+    first_point: int = 1,
+) -> SyntheticPythonRuns:
+    """Write the scans a Python script runs at APS 7-ID: ``run_<n>.nc`` and a TIFF per point.
+
+    ``runs`` holds ``(number, motors, options)``: ``motors`` the scanned motors, slow
+    first, as ``(start, stop, points)``. The options are ``snake`` (the fast motor turns
+    back on every other row), ``partial`` (the last points have no frame: a run
+    stopped early), ``missing`` (points, in the order taken, whose frame is left
+    out), ``netcdf=False`` (frames only: the script has not written the file yet)
+    and ``frames=False`` (the file alone). Each netCDF file holds one array with
+    the motors and ``det`` (13 counters) as dims, as the beamline's: ``det_0`` is
+    the frame's total, ``det_12`` counts the frames over the session. Each frame
+    holds a Gaussian spot whose centre moves with the motors (``truth``).
+    ``netcdf_dir`` and ``frames_dir`` are relative to ``root``; ``frames_dir`` has the
+    field ``{run}`` (``"."``: the TIFFs loose beside the netCDF files' folder) and the
+    frames are named ``MapScan_<run>_<point>.tiff``, counting from ``first_point``.
+    """
+    import xarray as xr
+
+    from bexa.core.structure import raster_order
+    from bexa.io.formats import safe_format
+
+    rng = np.random.default_rng(seed)
+    root = Path(root)
+    folder = root / netcdf_dir
+    folder.mkdir(parents=True, exist_ok=True)
+    H, W = frame_shape
+    yy, xx = np.mgrid[0:H, 0:W]
+    images = root / (Path(frames_dir).parent if "{run}" in frames_dir else Path(frames_dir))
+    out = SyntheticPythonRuns(root, folder, images, (H, W))
+    counter = 1000
+    for number, motors, options in runs:
+        names = list(motors)
+        coords = {m: np.linspace(*motors[m][:2], int(motors[m][2])) for m in names}
+        shape = tuple(len(coords[m]) for m in names)
+        n = int(np.prod(shape))
+        # the grid position of every point in the order taken
+        order = np.argsort(raster_order(n, shape, snake=bool(options.get("snake"))).reshape(-1))
+        where = np.unravel_index(order, shape)
+        rel = [(w / max(s - 1, 1)) - 0.5 for w, s in zip(where, shape, strict=True)]
+        cy = H / 2 + 6.0 * rel[0]
+        cx = W / 2 + (8.0 * rel[1] if len(rel) > 1 else np.zeros(n))
+        taken = n - int(options.get("partial", 0))
+        missing = {int(k) for k in options.get("missing", ())}
+        channels = np.zeros((n, PYTHON_CHANNELS))
+        place = root / safe_format(frames_dir, run=number)
+        written: list[Path] = []
+        for k in range(n):
+            spot = np.exp(-0.5 * (((yy - cy[k]) / 2.0) ** 2 + ((xx - cx[k]) / 3.0) ** 2))
+            frame = rng.poisson(10.0 + 3000.0 * spot).astype(np.uint32)
+            channels[k, 0] = float(frame.sum())
+            channels[k, 1:12] = rng.normal(100.0, 5.0, 11)
+            channels[k, 12] = counter + k
+            if k < taken and k not in missing and options.get("frames", True):
+                place.mkdir(parents=True, exist_ok=True)
+                path = place / f"MapScan_{number}_{k + first_point}.tiff"
+                _write_tiff(path, frame)
+                written.append(path)
+        counter += n
+        grid = np.zeros((*shape, PYTHON_CHANNELS))
+        grid.reshape(n, PYTHON_CHANNELS)[order] = channels
+        if options.get("netcdf", True):
+            array = xr.DataArray(
+                grid,
+                dims=(*names, "det"),
+                coords={**coords, "det": np.arange(PYTHON_CHANNELS, dtype=np.int32)},
+            )
+            array.to_netcdf(folder / f"run_{number}.nc")
+        truth = np.zeros((*shape, 2))
+        truth.reshape(n, 2)[order] = np.stack([cy, cx], axis=1)
+        out.runs[number] = coords
+        out.frames[number] = written
+        out.truth[number] = truth
+        out.totals[number] = grid[..., 0]
+    return out

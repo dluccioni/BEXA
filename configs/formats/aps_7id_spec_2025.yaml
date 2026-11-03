@@ -10,6 +10,7 @@ description: APS 7-ID SPEC file with one areaDetector TIFF frame per scan point,
 fingerprint:
   text_glob: "*.spec"                # the SPEC file itself, the folder holding it, or a frame below it
   text_tags: ["#F", "#O0", "#S"]     # the tags every SPEC file opens with
+  file_names: ["*.spec", "*_S[0-9]*_[0-9]*.tif", "*_S[0-9]*_[0-9]*.tiff"]   # a file given: the session or a frame
 
 layout:
   spec_glob: "*.spec"                           # the SPEC file of a dataset folder
@@ -18,6 +19,8 @@ layout:
   frames_dir:                                   # where the TIFFs are, relative to the SPEC file,
     - "images/{prefix}/S{scan:03d}"             # tried in order: the beamline's folder per scan,
     - "."                                       # then next to the file
+  survey_inside:       # the session's folder may hold other datasets (a Python scan's run_<n>.nc
+    skip: ["images"]   # folder): the survey looks in its subfolders, but not in its frames
 
 motors:
   # #o mnemonics of the 7-ID-C diffractometer: the file lists them all, this order breaks ties

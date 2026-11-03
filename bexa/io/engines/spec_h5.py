@@ -165,15 +165,20 @@ class SpecH5Source(BaseSource):
         self._n_total = int(np.prod([len(v) for v in self.coords.values()]))
 
         det = f[self.det_group]
+        found = [
+            key
+            for key, node in det.items()
+            if key != self.i0_dataset
+            and isinstance(node, h5py.Group)
+            and "data" in node
+            and node["data"].ndim >= 3
+        ]
+        preferred = [d for d in self.spec.detectors if d in found]  # the spec's first
+        self.image_detectors = preferred + [d for d in found if d not in preferred]
         if detector is None:
-            for key in det:
-                node = det[key]
-                is_image_group = isinstance(node, h5py.Group) and "data" in node
-                if key != self.i0_dataset and is_image_group and node["data"].ndim >= 3:
-                    detector = key
-                    break
-            if detector is None:
+            if not self.image_detectors:
                 raise KeyError(f"no image dataset under {self.det_group}")
+            detector = self.image_detectors[0]
         self.detector = detector
         self._frames_key = f"{self.det_group}/{detector}/data"
         ds = f[self._frames_key]
@@ -207,6 +212,11 @@ class SpecH5Source(BaseSource):
     # ---------------------------------------------------------- properties
     def files(self) -> list[Path]:
         return [self.path]
+
+    def detector_names(self) -> list[str]:
+        """The groups of the scan's detector group holding images: the spec's detectors first,
+        then by name."""
+        return list(self.image_detectors)
 
     @property
     def frame_shape(self) -> tuple[int, int]:

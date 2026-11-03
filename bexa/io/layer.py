@@ -24,8 +24,8 @@ from bexa.io.base import BaseSource, Source
 
 __all__ = ["GridSource", "LayerSource", "ReshapedSource"]
 
-# the labels of a scan that its layers keep: the scan number and the dataset name
-LABELS = ("scan", "dataset")
+# the labels of a scan that its layers keep: the scan number, the dataset, the detector
+LABELS = ("scan", "dataset", "detector")
 
 
 class GridSource(BaseSource):
@@ -53,6 +53,10 @@ class GridSource(BaseSource):
 
     def files(self) -> list[Path]:
         return self.parent.files()
+
+    def detector_names(self) -> list[str]:
+        parent = self.parent
+        return list(parent.detector_names()) if hasattr(parent, "detector_names") else []
 
     def cache_records(self) -> list[dict[str, Any]]:
         """The records of the scan, then what this grid is."""

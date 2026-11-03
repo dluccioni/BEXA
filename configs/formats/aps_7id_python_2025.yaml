@@ -1,0 +1,45 @@
+# APS 7-ID-C (summer 2025): the scans run from the beamline's Python scripts, not from SPEC.
+# The script saves each run's metadata as run_<n>.nc (netCDF): one array whose dims are the
+# motors scanned, slow first, and det, the 13 counters read at every point, with the motor
+# positions as coordinates (xarray.load_dataset(path).to_array()). The EIGER saves one
+# areaDetector TIFF per point into a folder per run, python_images/<run folder>/; the netCDF
+# folder and python_images usually sit beside the SPEC file, sometimes deeper: both are
+# searched for. A copy may put the TIFFs loose (MapScan_102_1.tiff: run 102, point 1).
+name: aps_7id_python_2025
+engine: nc_tiff
+description: APS 7-ID Python scans, a run_<n>.nc file per run and one areaDetector TIFF per point, 2025.
+
+fingerprint:
+  engine_check: true     # the netCDF folder, a run's file, or frames with a netCDF folder near
+
+layout:
+  run_file: "run_{run}.nc"            # a run's metadata, all in one folder
+  frames_dirs: ["python_images*"]     # the folders holding a subfolder of frames per run
+  frame_name: '^(?:(?P<prefix>.*)_)?(?P<run>\d+)_(?P<point>\d+)\.tiff?$'   # MapScan_102_1.tiff
+  run_dir: '(?P<run>\d+)\D*$'         # the run of a frames subfolder: the last number of its name
+  search_up: 3                        # folders above where a search starts ...
+  search_depth: 2                     # ... and levels below each, searched for the other folder
+  search_skip: ["images"]             # never searched: SPEC's frames, images/<file>/S<scan>/
+  survey_skip: ["python_images*"]     # never a dataset of their own: their runs are listed once
+  channel_dim: det                    # the dim of the counters in the netCDF array
+  channel_names: []                   # the counters in order; unnamed ones are det_0, det_1, ...
+  order_channel: 12                   # det 12 counts the detector's frames: the order of the points
+  first_point: auto                   # the number of a run's first frame: 0, 1, or auto
+  running_seconds: 120                # the last run is running while a frame came this recently
+
+motors:
+  units:
+    nsamstageX: mm      # the nano sample stages, nsx/nsy/nsz in SPEC
+    nsamstageY: mm
+    nsamstageZ: mm
+    objstageY: mm
+    objstageZ: mm
+
+detectors:
+  areadetector:       # 7idEiger1, a Dectris EIGER2 Si 500K
+    shape: [512, 1028]      # the frame shape when a run has no TIFF yet
+    dtype: uint32
+    pixel_size_um: 75.0
+    invalid_value: 4294967295   # 2**32 - 1: the EIGER's flag for a dead or masked pixel, read as 0
+
+axis_priority: [nsamstageZ, nsamstageY, nsamstageX, objstageZ, objstageY]

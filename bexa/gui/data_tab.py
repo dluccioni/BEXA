@@ -6,6 +6,8 @@
   new points of the opened scans still being written; auto refreshes every 10 s;
 - a path (folder, master file, SPEC session, run, package, cube, frame file): sniffed
   against every format spec, opened as one scan, as a scan set, or loaded as objects;
+  What is it? lists the detectors its files hold, and the one chosen is the one read
+  (the scans added from the picker too);
 - a beamtime profile and a sample name;
 - synthetic demo data to try the tools.
 """
@@ -37,6 +39,20 @@ def _wrap() -> Any:
     import ipywidgets as ipw
 
     return ipw.Layout(flex_flow="row wrap")
+
+
+def _detectors(path: Path, spec: Any) -> list[str]:
+    """The detectors the files of ``path`` hold, read from its first scan (none: [])."""
+    from bexa.core.scan import list_scans
+    from bexa.core.scan import open as open_scan
+
+    try:
+        numbers = list_scans(path, format=spec.name)
+        scan = open_scan(path, format=spec, scan=numbers[0] if numbers else None, cache=False)
+        with scan:
+            return list(scan.detectors)
+    except Exception:  # a dataset without a scan yet, a file of no scan
+        return []
 
 
 def _no_format(exc: Exception) -> bool:
@@ -115,6 +131,14 @@ class DataTab:
         self.format = ipw.Text(
             description="format", placeholder="auto", layout=ipw.Layout(width="320px"), style=label
         )
+        self.detector = ipw.Combobox(
+            description="detector",
+            placeholder="auto",
+            options=[],
+            ensure_option=False,
+            layout=ipw.Layout(width="320px"),
+            style=label,
+        )
         choose_file = ipw.Button(icon="file-o", tooltip="choose a file", layout=small())
         choose_folder = ipw.Button(icon="folder-o", tooltip="choose a folder", layout=small())
         choose_file.on_click(lambda _b: app.choose_path("file", self._chosen))
@@ -167,7 +191,7 @@ class DataTab:
                 self.picker_box,
                 _section("Open a path"),
                 ipw.HBox([self.path, choose_file, choose_folder]),
-                ipw.HBox([self.scan_numbers, self.format], layout=_wrap()),
+                ipw.HBox([self.scan_numbers, self.format, self.detector], layout=_wrap()),
                 ipw.HBox([sniff, open_scan, open_set, load], layout=_wrap()),
                 self.sniffed,
                 _section("Beamtime profile"),
@@ -278,7 +302,7 @@ class DataTab:
         self._sniff()
 
     def _sniff(self) -> None:
-        def look() -> str:
+        def look() -> tuple[str, list[str]]:
             from bexa.io.formats import match_spec
 
             path = Path(self._path())
@@ -288,18 +312,25 @@ class DataTab:
             head = f"<b>{html.escape(path.name)}</b>: "
             if scored and scored[0][0] >= 1.0:
                 spec = scored[0][1]
-                return head + f"{spec.name} ({spec.engine})"
+                found = _detectors(path, spec)
+                named = f", detectors: {', '.join(found)}" if len(found) > 1 else ""
+                return head + f"{spec.name} ({spec.engine}){named}", found
             if path.is_dir():
-                return head + "no scans yet (Use folder to work in it anyway)"
-            return head + "no scan layout: load it as an object, or look inside on Browse"
+                return head + "no scans yet (Use folder to work in it anyway)", []
+            return head + "no scan layout: load it as an object, or look inside on Browse", []
 
-        self.app.guarded(look, show=lambda text: setattr(self.sniffed, "value", text))
+        def show(result: tuple[str, list[str]]) -> None:
+            self.sniffed.value, self.detector.options = result[0], result[1]
+
+        self.app.guarded(look, show=show)
 
     def _open(self, as_set: bool) -> None:
         path = self._path()
         numbers = parse_ints(self.scan_numbers.value, "scans")
         fmt = self.format.value.strip() or None
         options = {"format": fmt} if fmt else {}
+        if self.detector.value.strip():
+            options["detector"] = self.detector.value.strip()
 
         def work() -> list[Any] | Path:
             try:
@@ -358,11 +389,14 @@ class DataTab:
             self.app.say("no scans listed: Use folder first", "error")
             return
         ws = self.app.ws
+        detector = self.detector.value.strip()
 
         def work() -> list[Any]:
             scans = picker.scans
             if not scans:
                 raise ValueError("no scan is selected in the picker")
+            if detector:  # the detector chosen, for the scans whose files hold it
+                scans = [s.with_detector(detector) if detector in s.detectors else s for s in scans]
             if how == "scans":
                 return ws.add_scans(scans)
             made = ws.add_scans(scans, as_set=True, name="selection")

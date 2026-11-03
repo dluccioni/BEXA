@@ -68,6 +68,7 @@ PARSED_AS_IS = (
     "dims",
     "channel",
     "channels",
+    "detector",
     "roi",
     "rois",
     "spec",
@@ -1034,6 +1035,15 @@ OPS: list[Op] = [
         [Input("obj", SCAN, "Scan")],
         [P("dim", "Along", "dim")],
         "Split a scan along one motor into a scan set, one scan per point.",
+    ),
+    _o(
+        "use_detector",
+        "Use Detector",
+        "Multi-scan",
+        multiscan.use_detector,
+        [Input("obj", ("scan", "scanset"), "Scan or scan set")],
+        [P("detector", "Detector", "detector", help="The detectors the scan's files hold")],
+        "Read a scan with another of the detectors its files hold (a second camera).",
     ),
     _o(
         "reshape",
