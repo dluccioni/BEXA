@@ -76,7 +76,8 @@ def com_map(
         (the notebooks used a fifth of the motor range). ``style.set(com={"span": 0.1})``
         sets it for every COM map.
     cmap
-        Default the style's ``diverging_cmap`` (``"bwr"``).
+        Default the style's ``diverging_cmap`` (``"bwr"``). A pixel without a COM
+        (NaN: left out by ``min_prominence``) is grey (``style.MISSING_COLOUR``).
     clim
         Explicit limits instead of centre and span: ``(vmin, vmax)``, ``("p", lo, hi)``
         or ``"p2-98"``.
@@ -97,7 +98,8 @@ def com_map(
             fraction = style.option("com", "span_fraction", span_fraction, fallback=0.2)
             span = fraction * float(np.ptp(finite)) if finite.size else 1.0
         vmin, vmax = c - span / 2, c + span / 2
-    im = ax.imshow(data, cmap=style.colormap("com", cmap), vmin=vmin, vmax=vmax)
+    cmap = style.named_colormap(style.colormap("com", cmap))
+    im = ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax)
     unit = com.attrs.get("units", "") if hasattr(com, "attrs") else ""
     label = str(getattr(com, "name", "") or "centre of mass") + (f" ({unit})" if unit else "")
     style.colorbar(fig, im, ax, "com", colorbar, label=label)
@@ -125,14 +127,15 @@ def bivariate_rgb(
 
     Each map is scaled to [0, 1] over its range (or ``limits``), taken through its
     colormap (a name or a matplotlib colormap), and the two RGB pictures averaged,
-    as in the lab's notebooks; a point either map lacks (NaN) is black.
+    as in the lab's notebooks; a point either map lacks (NaN) is grey
+    (``style.MISSING_COLOUR``).
     """
     values_a, values_b = as_array(map_a), as_array(map_b)
     a, lim_a = _normalize(values_a, limits[0])
     b, lim_b = _normalize(values_b, limits[1])
     cmap_a, cmap_b = (_colormap(c) for c in cmaps)
     rgb = 0.5 * cmap_a(a)[..., :3] + 0.5 * cmap_b(b)[..., :3]
-    rgb[~(np.isfinite(values_a) & np.isfinite(values_b))] = 0.0
+    rgb[~(np.isfinite(values_a) & np.isfinite(values_b))] = style.MISSING_COLOUR
     return rgb, lim_a, lim_b
 
 
@@ -196,13 +199,16 @@ def hsv_mosaicity(
     title: str | None = None,
     figsize: tuple[float, float] | None = None,
 ) -> tuple[Any, Any]:
-    """darfix-style mosaicity image: hue from ``map_a``, saturation from ``map_b``."""
+    """darfix-style mosaicity image: hue from ``map_a``, saturation from ``map_b``; a point
+    either map lacks (NaN) is grey (``style.MISSING_COLOUR``)."""
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     fig, ax = new_axes(ax, style.figure_size("hsv", figsize))
-    h, lim_a = _normalize(as_array(map_a))
-    s, lim_b = _normalize(as_array(map_b))
+    values_a, values_b = as_array(map_a), as_array(map_b)
+    h, lim_a = _normalize(values_a)
+    s, lim_b = _normalize(values_b)
     rgb = hsv_to_rgb(np.stack([h, s, np.ones_like(h)], axis=-1))
+    rgb[~(np.isfinite(values_a) & np.isfinite(values_b))] = style.MISSING_COLOUR
     ax.imshow(rgb)
     ax.set_xticks([])
     ax.set_yticks([])

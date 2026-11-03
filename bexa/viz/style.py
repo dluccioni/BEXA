@@ -28,6 +28,7 @@ __all__ = [
     "DEFAULT",
     "GLOBAL_OPTIONS",
     "KINDS",
+    "MISSING_COLOUR",
     "PAPER",
     "SCREEN",
     "THEMES",
@@ -365,14 +366,22 @@ def colormap(kind: str, cmap: Any = DEFAULT) -> Any:
     return option(kind, "cmap", cmap, global_name=global_name)
 
 
+# a point without a value (NaN: a pixel COM Maps left out, a frame not saved): mid grey, not
+# the white of bwr's middle nor the black at the low end of a dark map
+MISSING_COLOUR = (0.5, 0.5, 0.5)
+
+
 def named_colormap(cmap: Any, reverse: bool = False) -> Any:
     """The matplotlib colour map of ``cmap`` (any name matplotlib knows, ``"RdBu"``,
-    ``"cmr.rainforest"`` once registered, or a colour map), reversed with ``reverse``;
-    ``ValueError`` naming the close names for one it does not know."""
+    ``"cmr.rainforest"`` once registered, a colour map, or ``None``: the theme's
+    ``rcParams["image.cmap"]``), reversed with ``reverse``, a NaN drawn in
+    :data:`MISSING_COLOUR`; ``ValueError`` naming the close names for one it does not know."""
     import difflib
 
     import matplotlib
 
+    if cmap is None:
+        cmap = plt.rcParams["image.cmap"]
     if isinstance(cmap, str):
         try:
             cmap = matplotlib.colormaps[cmap]
@@ -380,7 +389,7 @@ def named_colormap(cmap: Any, reverse: bool = False) -> Any:
             close = difflib.get_close_matches(cmap, list(matplotlib.colormaps), n=3)
             hint = f"; close: {', '.join(close)}" if close else ""
             raise ValueError(f"no colour map {cmap!r}{hint}") from None
-    return cmap.reversed() if reverse else cmap
+    return (cmap.reversed() if reverse else cmap).with_extremes(bad=MISSING_COLOUR)
 
 
 def colorbar(

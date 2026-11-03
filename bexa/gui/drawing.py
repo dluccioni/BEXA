@@ -135,6 +135,7 @@ def draw_image(
 
     ``options.cmap`` is any matplotlib colour map (``options.reverse`` reverses it);
     ``"auto"`` draws a COM map (named ``com_...``) in bwr and anything else in viridis.
+    A point without a value (NaN: a pixel COM Maps left out) is grey.
     ``options.scale`` is linear, log (``log10(1 + I)``) or centred (limits about the
     median), ``"auto"`` centred for a COM map and linear otherwise. ``options.aspect``
     draws the axes to scale (one unit as long on both) or not (``ASPECTS``).

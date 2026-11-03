@@ -2561,9 +2561,10 @@ weight `w_f` of frame `f` at motor value `m_f`, per pixel:
   with a negative value, weights below it are raised to it).
 - `moments`: 1 gives `com_<axis>`; 2 adds `width_<axis>`; 3 adds `skew_<axis>`; 4 adds
   `kurtosis_<axis>` (excess kurtosis). `total`, the sum of the weights, is always returned.
-- `min_prominence`: leave out (NaN in every map but `total`; the attr `min_prominence` says
-  so) the pixels whose peak rises above their lowest weight by less than this fraction of the
-  strongest pixel's rise (`prominent`): the background, whose COM is noise. The rise is a
+- `min_prominence`: leave out (NaN in every map but `total`, drawn grey; the attr
+  `min_prominence` says so) the pixels whose peak rises above their lowest weight by less than
+  this fraction of the strongest pixel's rise (`prominent`): the background, whose COM is
+  noise. The rise is a
   pixel's highest smoothed weight over the frames less its lowest, kept as the frames come
   (two images more, no second pass): the one part that smooths every frame
   (`bexa.core.backend.gaussian_extremes`); 0 keeps every pixel and leaves the cache key as
@@ -7707,13 +7708,15 @@ style.colormap("com")                            # 'bwr'
 `bexa.viz.style.named_colormap(cmap, reverse=False)`
 
 The matplotlib colour map of `cmap`: any name matplotlib knows (`"bwr"`, `"magma"`, one a
-package registered), or a colour map itself; `reverse` gives it reversed. `ValueError` for a
-name matplotlib does not know, naming the close ones. The View and the bivariate pictures take
-their colour maps through it.
+package registered), a colour map itself, or `None` for the theme's `rcParams["image.cmap"]`;
+`reverse` gives it reversed. A NaN is drawn in `MISSING_COLOUR` (grey). `ValueError` for a
+name matplotlib does not know, naming the close ones. The View, `maps.com_map` and the
+bivariate pictures take their colour maps through it.
 
 ```python
 # a name, reversed; a typo
 style.named_colormap("bwr", reverse=True).name   # 'bwr_r'
+style.named_colormap("bwr").get_bad()            # array([0.5, 0.5, 0.5, 1. ]): NaN in grey
 ```
 
 #### `colorbar`
@@ -7868,6 +7871,10 @@ Constants:
 - `GLOBAL_OPTIONS`: the names of those fields but `kinds`.
 - `KINDS`: dict of plot kind to `(module, function)`, what `set` validates a kind's keywords
   against.
+- `MISSING_COLOUR`: `(0.5, 0.5, 0.5)`, the mid grey of a point without a value (NaN: a pixel
+  COM Maps left out with `min_prominence`) in every colour map of `named_colormap` and in the
+  pictures of `bexa.viz.maps`; not the white of bwr's middle, where such a point used to
+  pass for the median COM.
 
 ### bexa.viz.auto: one call picks the figure
 
@@ -8178,7 +8185,8 @@ A centre-of-mass map with colour limits `center +/- span / 2`, so tilts around a
 as red and blue. `center` is `"mean"`, `"median"` or a value in the map's units; `span`
 defaults to `span_fraction` (a fifth) of the map's range (`style.set(com={"span": 0.1})` sets it
 for every COM map); `clim` (a `resolve_clim` spec) replaces centre and span. `cmap` defaults
-to the style's `diverging_cmap` (bwr). The colourbar is labelled with the
+to the style's `diverging_cmap` (bwr); a pixel without a COM (NaN, left out by
+`min_prominence`) is grey (`style.MISSING_COLOUR`). The colourbar is labelled with the
 name and `attrs["units"]` (`com_mu (deg)`), the title defaults to the name, ticks are removed and
 `scalebar` works as in `images.show`. For width maps use `center="median", cmap="viridis"`, as
 `bexa.plot` does for `width_*`. Returns `(fig, ax, im)`.
@@ -8198,7 +8206,8 @@ Two maps in one RGB image, for example the centre of mass in chi and in mu. Each
 normalised to 0..1 over its minimum and maximum (or the `(low, high)` pair in `limits`; NaN goes
 to the low end), sent through its colormap (a name or a matplotlib colormap: `bwr` and `PiYG`
 by default, the notebooks' blue-red and green-purple as `BLUE_RED` and `GREEN_PURPLE`), and
-the two RGB images are averaged (`bivariate_rgb`; a point either map lacks is black). `key=True` adds an inset (top right) with the colour of
+the two RGB images are averaged (`bivariate_rgb`; a point either map lacks is grey). `key=True`
+adds an inset (top right) with the colour of
 every pair of values, its axes in the maps' units and labelled with `labels` (default: the
 DataArray names). `scalebar` as in `images.show`. Returns `(fig, ax)`.
 
@@ -8215,8 +8224,8 @@ len(ax.images), len(fig.axes)                   # (1, 1)
 Two maps as one RGB picture `(..., 3)`, and the `(low, high)` each was scaled by: each map
 scaled to 0..1 over its range (or `limits`), taken through its colormap (a name or a matplotlib
 colormap; `bwr` for the first, `PiYG` for the second by default) and the two averaged, as in
-the lab's notebooks; a point either map lacks (NaN) is black. What `bivariate` draws and COM
-Maps stores for a COM along two dims.
+the lab's notebooks; a point either map lacks (NaN) is grey (`style.MISSING_COLOUR`). What
+`bivariate` draws and COM Maps stores for a COM along two dims.
 
 ```python
 # res: the COM maps of the demo scan; the tilts in chi and mu as one picture
@@ -8238,8 +8247,8 @@ maps.bivariate_key().shape                       # (100, 100, 3)
 `bexa.viz.maps.hsv_mosaicity(map_a, map_b, ax=None, labels=None, key=True, scalebar=DEFAULT, title=None, figsize=None)`
 
 darfix-style mosaicity image: hue from `map_a` and saturation from `map_b`, each normalised over
-its minimum and maximum, at full brightness, with an inset key; `labels`, `scalebar` and
-`title` as in `bivariate`. Returns `(fig, ax)`.
+its minimum and maximum, at full brightness, with an inset key; a point either map lacks
+(NaN) is grey. `labels`, `scalebar` and `title` as in `bivariate`. Returns `(fig, ax)`.
 
 ```python
 # res: the COM maps of the demo scan; chi as hue, mu as saturation
@@ -10265,8 +10274,8 @@ is streamed (`MotorCOM`, or `DimCOM` for other dims), a stack, map or volume red
 Frames are smoothed by `sigma` pixels first (0 to switch off); in memory as in a scan, values
 without a negative one or a NaN are not smoothed themselves but their weighted sums are (one
 `einsum` pass each, in float64): the same maps, two to eight times faster. `min_prominence`
-leaves out (NaN) the points whose peak rises above its lowest value by less than this fraction
-of the strongest
+leaves out (NaN, grey in the View and in the two-COM picture) the points whose peak rises above
+its lowest value by less than this fraction of the strongest
 point's rise: the background, whose COM is noise (0 keeps every point). The rise is measured
 as `MotorCOM` and `DimCOM` measure it, in memory too: a point's highest smoothed weight over
 the frames (and the pixels along) less its lowest. `widths`
@@ -12355,7 +12364,8 @@ pixel above 2048), percentile limits unless `vmin`/`vmax` are set, the named ROI
 dims they limit, but for those named in `hidden` (the others keep their colours).
 `options.cmap` is any matplotlib colour map (`bexa.viz.style.named_colormap`; `reverse`
 reverses it); `"auto"`, the default, draws a COM map, a DataArray named `com_...`, in bwr
-(`COM_CMAP`) and anything else in viridis. `options.scale` (`SCALES`) maps the values to the
+(`COM_CMAP`) and anything else in viridis; a point without a value (NaN: a pixel COM Maps
+left out) is grey in every colour map. `options.scale` (`SCALES`) maps the values to the
 colours linearly, as `log10(1 + I)` or centred (the limits about the median); `"auto"` is
 centred for a COM map and linear otherwise. `options.aspect` (`ASPECTS`) draws the axes to
 scale (a unit as long on both) or not (the image fills the axes); `"auto"` is to scale for a
