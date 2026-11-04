@@ -674,9 +674,30 @@ class RoiIntegral(Accumulator):
 
 
 def prominent(rise: Any, fraction: float) -> Any:
-    """Where a peak rises (its highest weight less its lowest) by at least ``fraction`` of
-    the strongest rise: the points :class:`MotorCOM` and :class:`DimCOM` keep."""
-    return rise >= float(fraction) * rise.max()
+    """Where a peak rises above the edges of the scan range (its highest weight less its
+    highest on an edge) by at least ``fraction`` of the strongest rise: the points
+    :class:`MotorCOM` and :class:`DimCOM` keep. A peak on an edge (no rise) is never kept."""
+    return (rise > 0) & (rise >= float(fraction) * rise.max())
+
+
+def _scan_ends(plan: Plan, dims: Sequence[str]) -> dict[int, tuple[int, int]]:
+    """The first and the last grid position the plan's frames take along each motor dim of
+    ``dims``, by the dim's index: the edges of the scan range."""
+    positions = plan.grid_positions(plan.frame_ids)
+    return {
+        i: (int(p.min()), int(p.max()))
+        for i, (d, p) in enumerate(zip(plan.motor_dims, positions, strict=True))
+        if d in dims and p.size
+    }
+
+
+def _on_edge(plan: Plan, ends: dict[int, tuple[int, int]], frame_ids: np.ndarray) -> np.ndarray:
+    """Which of the frames lie on an edge of the scan range (``ends``: :func:`_scan_ends`)."""
+    positions = plan.grid_positions(frame_ids)
+    edge = np.zeros(len(frame_ids), dtype=bool)
+    for i, (first, last) in ends.items():
+        edge |= (positions[i] == first) | (positions[i] == last)
+    return edge
 
 
 @register_accumulator("motor_com")
@@ -708,10 +729,12 @@ class MotorCOM(Accumulator):
         1 gives ``com_<axis>``; 2 adds ``width_<axis>``; 3 adds ``skew_<axis>``;
         4 adds ``kurtosis_<axis>``. ``total`` (sum of weights) is always returned.
     min_prominence
-        Leave out (NaN in every map but ``total``) the pixels whose peak rises above
-        their lowest weight by less than this fraction of the strongest pixel's rise:
-        the background, whose COM is noise. The rise is the highest weight of a
-        pixel's frames less the lowest; 0 keeps every pixel.
+        Leave out (NaN in every map but ``total``) the pixels whose peak does not rise
+        above the edges of the scan range by this fraction of the strongest pixel's
+        rise: the background, whose COM is noise, and the peaks on an edge or beyond it,
+        whose COM the range cuts. The rise is the highest weight of a pixel's frames less
+        its highest on the frames at either end of an axis, so a pixel whose intensity
+        climbs to an edge has none. 0 keeps every pixel.
     """
 
     name = "motor_com"
@@ -739,6 +762,7 @@ class MotorCOM(Accumulator):
         }
         if min_prominence:  # only when used: the results cached before keep their keys
             params["min_prominence"] = float(min_prominence)
+            params["rise_over"] = "edges"  # until 2026-11-03 the lowest weight
         super().__init__(**params)
         self.axes = tuple(axes) if axes else None
         self.sigma = float(sigma)
@@ -762,9 +786,10 @@ class MotorCOM(Accumulator):
         self.raw = self._zeros((n_rows, *shape))
         self.smoothed: Any = None
         self.raw_rows = np.zeros(n_rows)  # each row's motor powers summed: the clip floor's sums
-        if self.min_prominence:  # every pixel's highest and lowest weight
+        if self.min_prominence:  # every pixel's highest weight, and its highest on an edge
             self.peak = self.xp.full(shape, -self.xp.inf, dtype=self.dtype)
-            self.floor = self.xp.full(shape, self.xp.inf, dtype=self.dtype)
+            self.edge = self.xp.full(shape, -self.xp.inf, dtype=self.dtype)
+            self.ends = _scan_ends(self.plan, self.use_axes)
         # motor values are taken from the middle of each axis: the moments of a batch are then
         # formed in the frames' dtype (float32 BLAS, no float64 copy of the batch) without
         # losing the width, which for an energy of 17 keV is 1e-6 of the value squared
@@ -787,10 +812,11 @@ class MotorCOM(Accumulator):
         w = frames if frames.dtype.kind == "f" else frames.astype(self.dtype)
         if self.weights == "log":
             w = xp.log10(1.0 + xp.clip(w, 0, None))
-        if self.min_prominence:
-            high, low = backend.gaussian_extremes(w, self.sigma)  # threads on the CPU
+        if self.min_prominence:  # threads on the CPU
+            edge = _on_edge(self.plan, self.ends, frame_ids)
+            high, rim = backend.gaussian_maxima(w, self.sigma, edge)
             xp.maximum(self.peak, high, out=self.peak)
-            xp.minimum(self.floor, low, out=self.floor)
+            xp.maximum(self.edge, rim, out=self.edge)
         rows = self._rows(frame_ids)
         if float(xp.nanmin(w)) < 0:  # the clip changes these weights: smooth them one by one
             w = xp.clip(backend.gaussian_frames(w, self.sigma), self.clip, None)
@@ -841,8 +867,8 @@ class MotorCOM(Accumulator):
                 fourth = mean4 - 4 * mean1 * mean3 + 6 * mean1**2 * mean2 - 3 * mean1**4
                 kurt = fourth / xp.clip(var**2, 1e-30, None) - 3.0
                 out[f"kurtosis_{axis}"] = self._image(kurt, f"kurtosis_{axis}", motor=axis, **attrs)
-        if self.min_prominence:  # the extremes of the clipped weights
-            rise = xp.clip(self.peak, self.clip, None) - xp.clip(self.floor, self.clip, None)
+        if self.min_prominence:  # of the clipped weights
+            rise = xp.clip(self.peak, self.clip, None) - xp.clip(self.edge, self.clip, None)
             keep = backend.to_host(prominent(rise, self.min_prominence))
             for name, data in out.items():
                 if name != "total":
@@ -868,9 +894,11 @@ class DimCOM(Accumulator):
     ``clip``; pixel coordinates are full-resolution indices (``window.coords``).
     Results: ``total``, ``com_<dim>`` and, with ``moments=2``, ``width_<dim>``; a point
     without a frame is NaN. ``min_prominence`` leaves out (NaN but in ``total``) the
-    points whose peak rises above their lowest weight by less than this fraction of
+    points whose peak does not rise above the edges of the range by this fraction of
     the strongest point's rise; the rise is the highest weight the point's COM is taken
-    from (its frames, its pixels along) less the lowest.
+    from (its frames, its pixels along) less its highest on an edge (the frames at
+    either end of a motor along, the first and last pixels of a pixel dim along), so a
+    peak on an edge is always left out.
 
     As in :class:`MotorCOM` the frames are not smoothed one by one: scipy's Gaussian
     (reflect mode) is symmetric and keeps sums, so a smoothed frame summed over a pixel
@@ -904,6 +932,7 @@ class DimCOM(Accumulator):
             params["moments"] = moments
         if min_prominence:
             params["min_prominence"] = float(min_prominence)
+            params["rise_over"] = "edges"  # until 2026-11-03 the lowest weight
         super().__init__(**params)
         self.along = tuple(str(d) for d in along)
         self.over = tuple(str(d) for d in over)
@@ -955,9 +984,10 @@ class DimCOM(Accumulator):
         # what a floor of ``clip`` under every weight adds to the sums of one frame
         ones = self.xp.ones((1, *plan.window.shape))
         self.floor_sums = {t: self.clip * s for t, s in self._pixel_sums(ones, self.plain).items()}
-        if self.min_prominence:  # every point's highest and lowest weight
+        if self.min_prominence:  # every point's highest weight, and its highest on an edge
             self.peak = self._zeros(shape)
-            self.floor = self.xp.full(shape, self.xp.inf, dtype=np.float64)
+            self.edge = self._zeros(shape)
+            self.ends = _scan_ends(plan, self.along)
 
     def _pixel_sums(self, w: Any, weights: dict[str, np.ndarray]) -> dict[Any, Any]:
         """The batch ``w`` ``(n, y, x)`` summed over the summed pixel dims with the coordinate
@@ -995,16 +1025,25 @@ class DimCOM(Accumulator):
             return backend.gaussian_frames(flat, self.sigma).reshape(data.shape)
         return backend.ndimage_module(data).gaussian_filter1d(data, self.sigma, axis=-1)
 
-    def _extremes(self, w: Any) -> tuple[Any, Any]:
-        """Each frame's highest and lowest weight over the pixel dims the COM is along (the
-        other summed pixel dims summed first): ``(n, map pixels...)`` each."""
+    def _maxima(self, w: Any) -> tuple[Any, Any]:
+        """Each frame's highest weight over the pixel dims the COM is along (the other summed
+        pixel dims summed first), and its highest on their first and last pixels (0 without
+        a pixel dim along): ``(n, map pixels...)`` each."""
         along = tuple(1 + PIXEL_DIMS.index(d) for d in PIXEL_DIMS if d in self.along)
         rest = tuple(a for a in self.summed if a not in along)
         values = w.sum(axis=rest, keepdims=True) if rest else w
-        high = values.max(axis=along, keepdims=True) if along else values
-        low = values.min(axis=along, keepdims=True) if along else values
+        if not along:
+            high, rim = values, self.xp.zeros_like(values)
+        else:
+            high = values.max(axis=along, keepdims=True)
+            rim = None
+            for a in along:
+                ends = [slice(None)] * values.ndim
+                ends[a] = slice(None, None, max(values.shape[a] - 1, 1))  # the first and last
+                face = values[tuple(ends)].max(axis=along, keepdims=True)
+                rim = face if rim is None else self.xp.maximum(rim, face)
         gone = tuple(sorted({*rest, *along}))
-        return (high.squeeze(axis=gone), low.squeeze(axis=gone)) if gone else (high, low)
+        return (high.squeeze(axis=gone), rim.squeeze(axis=gone)) if gone else (high, rim)
 
     def update(self, frames: Any, frame_ids: np.ndarray) -> None:
         xp = self.xp
@@ -1014,13 +1053,17 @@ class DimCOM(Accumulator):
         smoothed = None
         if self.min_prominence:
             smoothed = xp.clip(backend.gaussian_frames(w, self.sigma), self.clip, None)
-            high, low = self._extremes(smoothed)
+            high, rim = self._maxima(smoothed)
+            if self.ends:  # a frame at an end of a motor along lies on the edge as a whole
+                edge = _on_edge(self.plan, self.ends, frame_ids)
+                edge = xp.asarray(edge).reshape((-1,) + (1,) * (high.ndim - 1))
+                rim = xp.where(edge, high, rim)
             if index:
                 _scatter(xp, "maximum", self.peak, index, high)
-                _scatter(xp, "minimum", self.floor, index, low)
+                _scatter(xp, "maximum", self.edge, index, rim)
             else:
                 xp.maximum(self.peak, high.max(axis=0), out=self.peak)
-                xp.minimum(self.floor, low.min(axis=0), out=self.floor)
+                xp.maximum(self.edge, rim.max(axis=0), out=self.edge)
         if float(xp.nanmin(w)) < 0:  # the clip changes these weights: smooth them one by one
             if smoothed is None:
                 smoothed = xp.clip(backend.gaussian_frames(w, self.sigma), self.clip, None)
@@ -1076,7 +1119,7 @@ class DimCOM(Accumulator):
         keep = None
         if self.min_prominence:
             keep = prominent(
-                xp.where(sums[None] > 0, self.peak - self.floor, 0.0), self.min_prominence
+                xp.where(sums[None] > 0, self.peak - self.edge, 0.0), self.min_prominence
             )
             attrs["min_prominence"] = self.min_prominence
         for d in self.along:

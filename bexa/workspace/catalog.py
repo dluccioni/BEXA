@@ -342,8 +342,9 @@ OPS: list[Op] = [
                 "number",
                 0.0,
                 minimum=0,
-                help="Leave out points whose peak rises less than this fraction of the "
-                "strongest (0 to 1; 0 keeps all)",
+                help="Leave out points whose peak rises above the edges of the range by "
+                "less than this fraction of the strongest; a peak on an edge is always "
+                "left out (0 to 1; 0 keeps all)",
             ),
             P("widths", "Width maps", "bool", True),
             P("total", "Total map", "bool", True),

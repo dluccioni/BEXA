@@ -205,36 +205,44 @@ def gaussian_frames(frames: Any, sigma: float) -> Any:
     return out
 
 
-def gaussian_extremes(frames: Any, sigma: float) -> tuple[Any, Any]:
-    """The highest and the lowest value of every pixel over the frames of ``(n, y, x)``, each
-    frame smoothed as by :func:`gaussian_frames`, without keeping the smoothed frames.
+def gaussian_maxima(frames: Any, sigma: float, edge: Any) -> tuple[Any, Any]:
+    """The highest value of every pixel over the frames of ``(n, y, x)``, and over the frames
+    ``edge`` marks (a boolean per frame), each frame smoothed as by :func:`gaussian_frames`,
+    without keeping the smoothed frames; NaN skipped, ``-inf`` where no value is left.
 
     numpy frames are smoothed one at a time in each of the compute threads, which keep
-    their own highest and lowest values; a cupy array is smoothed at once.
+    their own highest values; a cupy array is smoothed at once.
     """
+    edge = np.asarray(to_host(edge), dtype=bool)
     if is_cupy_array(frames) or frames.ndim != 3 or frames.dtype.kind != "f" or sigma <= 0:
+        xp = array_module(frames)
         smoothed = gaussian_frames(frames, sigma)
-        return smoothed.max(axis=0), smoothed.min(axis=0)
+        smoothed = xp.where(xp.isnan(smoothed), -xp.inf, smoothed)
+        rim = xp.full(frames.shape[1:], -xp.inf, smoothed.dtype)
+        if edge.any():
+            rim = smoothed[xp.asarray(edge)].max(axis=0)
+        return smoothed.max(axis=0), rim
     from scipy.ndimage import gaussian_filter
 
     from bexa.core.parallel import compute_pool, compute_threads
 
-    def extremes(part: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        smoothed = np.empty(part.shape[1:], part.dtype)
-        high = np.full(part.shape[1:], -np.inf, part.dtype)
-        low = np.full(part.shape[1:], np.inf, part.dtype)
-        for frame in part:
-            gaussian_filter(frame, sigma, output=smoothed)
-            np.maximum(high, smoothed, out=high)
-            np.minimum(low, smoothed, out=low)
-        return high, low
+    def maxima(a: int, b: int) -> tuple[np.ndarray, np.ndarray]:
+        smoothed = np.empty(frames.shape[1:], frames.dtype)
+        high = np.full(frames.shape[1:], -np.inf, frames.dtype)
+        rim = high.copy()
+        for i in range(a, b):
+            gaussian_filter(frames[i], sigma, output=smoothed)
+            np.fmax(high, smoothed, out=high)
+            if edge[i]:
+                np.fmax(rim, smoothed, out=rim)
+        return high, rim
 
     threads = min(compute_threads(), frames.shape[0])
     bounds = np.linspace(0, frames.shape[0], threads + 1).astype(int)
     pool = compute_pool()
-    futures = [pool.submit(extremes, frames[a:b]) for a, b in itertools.pairwise(bounds) if b > a]
+    futures = [pool.submit(maxima, a, b) for a, b in itertools.pairwise(bounds) if b > a]
     parts = [future.result() for future in futures]
-    return np.maximum.reduce([h for h, _ in parts]), np.minimum.reduce([lo for _, lo in parts])
+    return np.maximum.reduce([h for h, _ in parts]), np.maximum.reduce([r for _, r in parts])
 
 
 def median_frames(frames: Any, size: int, mode: str = "nearest") -> Any:

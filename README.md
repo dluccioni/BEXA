@@ -2562,13 +2562,18 @@ weight `w_f` of frame `f` at motor value `m_f`, per pixel:
 - `moments`: 1 gives `com_<axis>`; 2 adds `width_<axis>`; 3 adds `skew_<axis>`; 4 adds
   `kurtosis_<axis>` (excess kurtosis). `total`, the sum of the weights, is always returned.
 - `min_prominence`: leave out (NaN in every map but `total`, drawn grey; the attr
-  `min_prominence` says so) the pixels whose peak rises above their lowest weight by less than
-  this fraction of the strongest pixel's rise (`prominent`): the background, whose COM is
-  noise. The rise is a
-  pixel's highest smoothed weight over the frames less its lowest, kept as the frames come
-  (two images more, no second pass): the one part that smooths every frame
-  (`bexa.core.backend.gaussian_extremes`); 0 keeps every pixel and leaves the cache key as
-  it was.
+  `min_prominence` says so) the pixels whose peak does not rise above the edges of the scan
+  range by this fraction of the strongest pixel's rise (`prominent`): the background, whose
+  COM is noise, and the peaks on an edge or beyond it, whose COM the range cuts. The rise is
+  a pixel's highest smoothed weight over the frames less its highest on the frames at either
+  end of an axis (the first and last positions the scan's frames take), so a pixel whose
+  intensity climbs to an edge has none and a peak just inside an edge must clearly rise
+  above it. Along `("mu",)` of a chi x mu scan, the edges are the first and last mu at
+  every chi; along both, the frames on the border of the grid. Kept as the frames come (two
+  images more, no second pass): the one part that smooths every frame
+  (`bexa.core.backend.gaussian_maxima`); 0 keeps every pixel and leaves the cache key as it
+  was. Until 2026-11-03 the rise was the highest weight less the lowest, and a peak on an
+  edge passed; the cache key tells them apart.
 
 The frames are not smoothed one by one. The smoothing is linear, so each batch adds its
 frames to the moment sums as they are, all of them in one matrix product (`1` and the powers
@@ -2619,29 +2624,32 @@ every frame is smoothed for its rise. The frame centres of 369 frames of 1024 x 
 0.85 s on the CPU instead of 9.9 s. Results: `total`, `com_<dim>` and, with `moments=2` (`1`:
 the COM alone, the second moments not summed), `width_<dim>`; a point without a frame is NaN.
 `min_prominence`
-leaves out (NaN but in `total`) the points whose peak rises above their lowest weight by less
-than this fraction of the strongest point's rise (`prominent`); the rise is the highest
-weight the point's COM is taken from (its frames, and its pixels along) less the lowest, a
-frame centre's the frame's brightest smoothed pixel less its faintest. The new settings enter
-the cache key only when set.
+leaves out (NaN but in `total`) the points whose peak does not rise above the edges of the
+range by this fraction of the strongest point's rise (`prominent`); the rise is the highest
+weight the point's COM is taken from (its frames, and its pixels along) less its highest on
+an edge: the frames at either end of a motor along, the first and last rows and columns of
+the window for a pixel dim along. A frame centre's is the frame's brightest smoothed pixel
+less its brightest on the border of the window, so a spot the window cuts is left out. The
+new settings enter the cache key only when set.
 
 ```python
 # scan: the demo chi x mu scan; every frame's centre on the detector, as chi x mu maps
 com = scan.reduce([bexa.acc.DimCOM(("y", "x"), ("chi", "mu"))])
 com["com_x"].dims, sorted(com.data_vars)       # ('chi', 'mu'), ['com_x', 'com_y', 'total', 'width_x', 'width_y']
 centres = scan.reduce([bexa.acc.DimCOM(("y", "x"), ("chi", "mu"), moments=1, min_prominence=0.3)])
-sorted(centres.data_vars), round(float(np.isnan(centres["com_x"]).mean()), 2)   # (['com_x', 'com_y', 'total'], 0.52): the frames off the peak left out
+sorted(centres.data_vars), round(float(np.isnan(centres["com_x"]).mean()), 2)   # (['com_x', 'com_y', 'total'], 0.88): the frames off the peak, and those whose brightest pixel is on the frame's border, left out
 ```
 
 #### `prominent`
 `bexa.core.reductions.prominent(rise, fraction)`
 
-Where a peak rises by at least `fraction` of the strongest rise: `rise` holds, per point, the
-highest weight less the lowest (a boolean array of its shape comes back). What `MotorCOM`,
-`DimCOM` and COM Maps keep with `min_prominence`.
+Where a peak rises above the edges of the scan range by at least `fraction` of the strongest
+rise: `rise` holds, per point, the highest weight less the highest on an edge (a boolean
+array of its shape comes back). A point without a rise, its peak on an edge, is never kept.
+What `MotorCOM`, `DimCOM` and COM Maps keep with `min_prominence`.
 
 ```python
-# three points: no peak, half the strongest, the strongest
+# three points: a peak on an edge, half the strongest, the strongest
 from bexa.core.reductions import prominent
 prominent(np.array([0.0, 5.0, 10.0]), 0.3).tolist()   # [False, True, True]
 ```
@@ -10274,11 +10282,12 @@ is streamed (`MotorCOM`, or `DimCOM` for other dims), a stack, map or volume red
 Frames are smoothed by `sigma` pixels first (0 to switch off); in memory as in a scan, values
 without a negative one or a NaN are not smoothed themselves but their weighted sums are (one
 `einsum` pass each, in float64): the same maps, two to eight times faster. `min_prominence`
-leaves out (NaN, grey in the View and in the two-COM picture) the points whose peak rises above
-its lowest value by less than this fraction of the strongest
-point's rise: the background, whose COM is noise (0 keeps every point). The rise is measured
-as `MotorCOM` and `DimCOM` measure it, in memory too: a point's highest smoothed weight over
-the frames (and the pixels along) less its lowest. `widths`
+leaves out (NaN, grey in the View and in the two-COM picture) the points whose peak does not
+rise above the edges of the range by this fraction of the strongest point's rise: the
+background, whose COM is noise, and the peaks on an edge or beyond it, whose COM the range
+cuts (0 keeps every point). The rise is measured as `MotorCOM` and `DimCOM` measure it, in
+memory too: a point's highest smoothed weight over the frames (and the pixels along) less
+its highest at either end of a dim along. `widths`
 and `total` choose those maps (no widths: their sums are not formed). `coms` says how the
 COMs come out (`COMS_AS`): `"maps"`, a map each; `"picture"`, along two dims, the two as one
 colour picture `com_<a>_<b>` (kind `rgb`): the first through the first of `picture_cmaps`
@@ -16210,19 +16219,22 @@ smooth = backend.gaussian_frames(frames, 3.0)                 # (8, 64, 80), smo
 backend.gaussian_frames(frames, 0) is frames                  # True
 ```
 
-#### `gaussian_extremes`
-`bexa.core.backend.gaussian_extremes(frames, sigma)`
+#### `gaussian_maxima`
+`bexa.core.backend.gaussian_maxima(frames, sigma, edge)`
 
-The highest and the lowest value of every pixel over the frames of `(n, y, x)`, each frame
-smoothed as by `gaussian_frames`, without keeping the smoothed frames: numpy frames are
-smoothed one at a time in each of the compute threads, which keep their own highest and lowest
-values (a cupy array is smoothed at once). The rise of `MotorCOM` and of a stack's COM Maps
-with `min_prominence` goes through it.
+The highest value of every pixel over the frames of `(n, y, x)`, and its highest over the
+frames `edge` marks (a boolean per frame), each frame smoothed as by `gaussian_frames`,
+without keeping the smoothed frames; NaN is skipped and a pixel without a value left is
+`-inf`. numpy frames are smoothed one at a time in each of the compute threads, which keep
+their own highest values (a cupy array is smoothed at once). The rise of `MotorCOM` and of a
+stack's COM Maps with `min_prominence` goes through it, the frames at either end of an axis
+marked.
 
 ```python
-# frames: the eight frames above; every pixel's highest and lowest value, smoothed by 3 pixels
-high, low = backend.gaussian_extremes(frames, 3.0)
-high.shape, bool((high >= low).all())          # ((64, 80), True)
+# frames: the eight frames above; every pixel's highest value, and its highest on the first and
+# last frame, smoothed by 3 pixels
+high, rim = backend.gaussian_maxima(frames, 3.0, [True] + [False] * 6 + [True])
+high.shape, bool((high >= rim).all())          # ((64, 80), True)
 ```
 
 #### `median_frames`

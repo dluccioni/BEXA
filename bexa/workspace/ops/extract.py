@@ -253,9 +253,11 @@ def com_maps(
     the detector as ``a x b`` maps. Results: ``com_<dim>`` (the intensity-weighted
     mean coordinate), ``width_<dim>`` (its spread) and ``total``. Frames are
     smoothed by ``sigma`` pixels first (0 to switch off). ``min_prominence`` leaves
-    out (NaN) the points whose peak rises above its lowest value by less than this
-    fraction of the strongest point's rise: the background, whose COM is noise (0
-    keeps every point). ``widths`` and ``total`` choose those maps (no widths: they
+    out (NaN) the points whose peak does not rise above the edges of the range (its
+    highest value less its highest at either end of a dim along) by this fraction of
+    the strongest point's rise: the background, whose COM is noise, and the peaks on
+    an edge, whose COM the range cuts (0 keeps every point). ``widths`` and ``total``
+    choose those maps (no widths: they
     are not computed). ``coms`` says how the COMs come out: ``"maps"``, one map each;
     ``"picture"``, along two dims, the two as one picture ``com_<a>_<b>`` (the first
     through the first of ``picture_cmaps``, the second through the second, averaged,
@@ -305,19 +307,26 @@ def _com_stack(
     widths: bool,
 ) -> list[DataObject]:
     """:func:`com_maps` of a stack along its motors, one at a time, over its pixels; the
-    rise of a pixel is its highest smoothed weight over the frames less its lowest, as
-    :class:`~bexa.core.reductions.MotorCOM` measures it."""
+    rise of a pixel is its highest smoothed weight over the frames less its highest on the
+    frames at either end of a motor along, as :class:`~bexa.core.reductions.MotorCOM`
+    measures it."""
     from bexa.analysis.rocking import moments
-    from bexa.core.backend import gaussian_extremes
+    from bexa.core.backend import gaussian_maxima
     from bexa.core.reductions import prominent
 
     data, _ = windowed(obj, roi)
     pixels = pixel_dims(data)
     keep = None
-    if min_prominence:  # the extremes of the clipped weights
-        frames = np.asarray(data.transpose(*other_dims(data), *pixels).values, np.float32)
-        high, low = gaussian_extremes(frames.reshape(-1, *frames.shape[-2:]), sigma)
-        keep = prominent(np.clip(high, 1e-10, None) - np.clip(low, 1e-10, None), min_prominence)
+    if min_prominence:  # of the clipped weights
+        motors = other_dims(data)
+        frames = np.asarray(data.transpose(*motors, *pixels).values, np.float32)
+        edge = np.zeros([data.sizes[d] for d in motors], dtype=bool)
+        for axis in along:  # the frames at either end of a motor along
+            ends: list[Any] = [slice(None)] * len(motors)
+            ends[motors.index(axis)] = [0, -1]
+            edge[tuple(ends)] = True
+        high, rim = gaussian_maxima(frames.reshape(-1, *frames.shape[-2:]), sigma, edge.ravel())
+        keep = prominent(np.clip(high, 1e-10, None) - np.clip(rim, 1e-10, None), min_prominence)
     linear = _linear(data)
     out = []
     keys = (("com", "com"), ("std", "width")) if widths else (("com", "com"),)
@@ -466,10 +475,11 @@ def _com_arrays(
 ) -> dict[str, xr.DataArray]:
     """``com_<dim>``, ``width_<dim>`` and ``total`` of an array: the weights are the values,
     smoothed over the pixel dims by ``sigma`` and clipped to 1e-10, the other dims summed;
-    ``min_prominence`` leaves out the points whose weights rise least (NaN), the rise
-    measured as :class:`~bexa.core.reductions.DimCOM` does: the pixel dims neither along
-    nor over summed, the highest weight over the rest less the lowest. Values without a
-    negative one or a NaN are not smoothed themselves (:func:`_linear_com_sums`)."""
+    ``min_prominence`` leaves out the points whose weights rise least above the edges
+    (NaN), the rise measured as :class:`~bexa.core.reductions.DimCOM` does: the pixel
+    dims neither along nor over summed, the highest weight over the rest less its highest
+    at either end of a dim along. Values without a negative one or a NaN are not
+    smoothed themselves (:func:`_linear_com_sums`)."""
     pixels = pixel_dims(data)
     rest = [d for d in pixels if d not in along and d not in over]  # summed before the rise
     rise = None
@@ -478,8 +488,7 @@ def _com_arrays(
         sums = _linear_com_sums(data, along, over, sigma, floor_dims=summed)
         if min_prominence:
             v = _smooth_pixels(data.sum(rest, skipna=False) if rest else data, pixels, sigma)
-            spread = [d for d in v.dims if d not in over]
-            rise = v.max(spread) - v.min(spread)
+            rise = _rise_over_edges(v, along, over)
     else:
         if sigma and pixels:
             from bexa.core.backend import gaussian_frames
@@ -494,9 +503,7 @@ def _com_arrays(
             c = c - float(c.mean())  # about the middle: the second moment keeps its precision
             sums.update({(d, 1): (w * c).sum(along), (d, 2): (w * c**2).sum(along)})
         if min_prominence:
-            v = clipped.sum(rest) if rest else clipped
-            spread = [d for d in v.dims if d not in over]
-            rise = v.max(spread) - v.min(spread)
+            rise = _rise_over_edges(clipped.sum(rest) if rest else clipped, along, over)
     total = sums[None]
     out = {"total": total.transpose(*over).rename("total")}
     keep = None
@@ -513,6 +520,18 @@ def _com_arrays(
         out[f"com_{d}"] = (mean1 + middle).transpose(*over).rename(f"com_{d}")
         out[f"width_{d}"] = width.transpose(*over).rename(f"width_{d}")
     return out
+
+
+def _rise_over_edges(v: xr.DataArray, along: Sequence[str], over: Sequence[str]) -> xr.DataArray:
+    """The rise of every point of the maps over ``over``: the highest of the weights ``v``
+    over the other dims less their highest at either end of a dim of ``along`` (0 for a
+    peak on an edge)."""
+    spread = [d for d in v.dims if d not in over]
+    rim = None
+    for d in along:
+        face = v.isel({d: [0, -1]}).max(spread)
+        rim = face if rim is None else np.fmax(rim, face)
+    return v.max(spread) - rim
 
 
 def _linear(data: xr.DataArray) -> bool:
