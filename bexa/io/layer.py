@@ -268,6 +268,24 @@ class RenamedSource(GridSource):
     def detector_names(self) -> list[str]:
         return [self.alias(d) for d in super().detector_names()]
 
+    def read_frames(
+        self,
+        index: np.ndarray | slice,
+        y: slice = slice(None),
+        x: slice = slice(None),
+        dtype: Any = None,
+        out: np.ndarray | None = None,
+    ) -> np.ndarray:
+        """The parent's frames; those of a counter read as a detector (a netCDF run's: a value
+        per point) moved as the counter is."""
+        frames = self.parent.read_frames(index, y, x, dtype=dtype, out=out)
+        name = getattr(self.parent, "detector", None)
+        moved = name in self.scales or name in self.offsets
+        if moved and name in self.parent.structure().per_frame:  # a counter, not a camera
+            frames *= self.scales.get(name, 1.0)
+            frames += self.offsets.get(name, 0.0)
+        return frames
+
     def _table(self, table: pd.DataFrame) -> pd.DataFrame:
         out = table.copy()
         for column in table.columns:

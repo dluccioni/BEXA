@@ -84,7 +84,8 @@ class NamesEditor:
         motors = set(s.motor_dims)
         self.rows = [("motor", d, s.units.get(d, "")) for d in s.motor_dims]
         self.rows += [("counter", k, s.units.get(k, "")) for k in s.per_frame if k not in motors]
-        self.rows += [("detector", d, "") for d in scan.detectors]
+        # a counter that is a detector too (a netCDF run's) has its counter's row
+        self.rows += [("detector", d, "") for d in scan.detectors if d not in s.per_frame]
         listed = motors | set(s.per_frame)  # a motor's fixed position shares its row
         self.rows += [("position", k, s.units.get(k, "")) for k in s.scalars if k not in listed]
         given = ws[name].data.names

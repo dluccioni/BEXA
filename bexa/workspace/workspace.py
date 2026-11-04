@@ -229,6 +229,30 @@ class Workspace:
                 changed.append(obj.name)
         return changed
 
+    def use_detector(self, name: str, detector: str) -> DataObject:
+        """Read the scan ``name`` with another of its detectors (``scan.detectors``: a second
+        camera, a counter of a netCDF run), the object itself: the View draws that detector
+        and the operations read it from then on. A scan set changes in every scan that
+        holds it (``ValueError`` when none does). Logged; the scans open again from their
+        files (:meth:`bexa.core.scan.Scan.with_detector`)."""
+        obj = self[name]
+        if obj.kind == "scan":
+            obj.data = obj.data.with_detector(detector)
+            obj.meta.update(_scan_meta(obj.data))
+        elif obj.kind == "scanset":
+            scans = obj.data.scans
+            if not any(detector in s.detectors for s in scans):
+                raise ValueError(f"no scan of {name} holds a detector {detector!r}")
+            read = [s.with_detector(detector) if detector in s.detectors else s for s in scans]
+            obj.data = ScanSet(read, obj.data.labels)
+        else:
+            raise TypeError(f"{name} is a {obj.kind}: only scans have detectors")
+        command = call_text("ws.use_detector", obj.name, detector)
+        obj.history.append(command)
+        self._emit("changed", name=obj.name)
+        self.record(command, results=[obj.name])
+        return obj
+
     # --------------------------------------------------------------------- ROIs
     def set_roi(self, name: str, roi: ROI | Mapping[str, Any] | None = None, **ranges: Any) -> ROI:
         """Define (or replace) a named ROI: ``set_roi("peak", y=(10, 50), x=(20, 80))``.

@@ -28,6 +28,11 @@ stood. Its folder is searched for near the netCDF folder the same way; the
 names name the counters (however many the run read) and the numbers are the
 scan's positions (``nsam: [x, y, z]`` is ``nsamstageX``, ``nsamstageY``,
 ``nsamstageZ`` by the layout's ``log_positions``).
+
+Every counter of ``det`` is a detector too (``detector_names``): read with one
+(``detector="power"``), the run's frames are its values, a frame of 1 x 1 per
+point, so the View draws it on the grid and every operation takes it. A run
+opens with the camera when it has a frame of it, else with its first counter.
 """
 
 from __future__ import annotations
@@ -773,8 +778,11 @@ class NcTiffSource(BaseSource):
     scan
         The run number (``run_<n>.nc``).
     detector
-        Name from the spec's ``detectors``: its ``shape`` is the frame shape of a
-        run without a frame yet, a pixel at its ``invalid_value`` reads as 0.
+        A counter of the netCDF file (:meth:`detector_names`), whose values are
+        read as frames of 1 x 1; else the camera, by its name in the spec's
+        ``detectors``: its ``shape`` is the frame shape of a run without a frame
+        yet, a pixel at its ``invalid_value`` reads as 0. ``None``: the camera
+        when the run has a frame of it, else the first counter.
     energy_keV
         The photon energy (the netCDF file does not hold it).
     """
@@ -795,9 +803,7 @@ class NcTiffSource(BaseSource):
         self.layout = RunLayout.of(spec)
         self.scan = int(scan)
         self.folder = run_folder_of(path, self.layout, self.scan)
-        self.detector = detector or next(iter(spec.detectors), "areadetector")
-        invalid = spec.detector_info(self.detector).get("invalid_value")
-        self._invalid = None if invalid is None else int(invalid)
+        self._asked = detector
         self._energy = energy_keV
         self._structure: Structure | None = None
         self._shape: tuple[int, int] | None = None
@@ -824,21 +830,44 @@ class NcTiffSource(BaseSource):
         if self.grid is None:  # no netCDF file yet: the frames in the order of their numbers
             self.points, self.frames = points, frames
             self.positions = np.arange(len(frames), dtype=np.int64)
-            return
-        n = self.grid.n_points
-        positions = points - first_point(points, n, self.layout.first_point)
-        keep = (positions >= 0) & (positions < n)
-        if not keep.all():
-            log.warning(
-                "%s run %d: %d frames are numbered past its %d points and are left out",
-                self.folder.name,
-                self.scan,
-                int((~keep).sum()),
-                n,
-            )
-        self.points = points[keep]
-        self.positions = positions[keep]  # the place of each frame in the order taken
-        self.frames = [f for f, k in zip(frames, keep, strict=True) if k]
+        else:
+            n = self.grid.n_points
+            positions = points - first_point(points, n, self.layout.first_point)
+            keep = (positions >= 0) & (positions < n)
+            if not keep.all():
+                log.warning(
+                    "%s run %d: %d frames are numbered past its %d points and are left out",
+                    self.folder.name,
+                    self.scan,
+                    int((~keep).sum()),
+                    n,
+                )
+            self.points = points[keep]
+            self.positions = positions[keep]  # the place of each frame in the order taken
+            self.frames = [f for f, k in zip(frames, keep, strict=True) if k]
+        self._read_with(self._asked)
+
+    def _read_with(self, asked: str | None) -> None:
+        """Read ``asked``: a counter of the netCDF file (``values``, one per point in the order
+        taken) or the camera (the TIFFs); ``None``, the camera when it took a frame (or there
+        is no netCDF file yet), else the first counter."""
+        counters = dict(self.grid.channels) if self.grid is not None else {}
+        camera = next(iter(self.spec.detectors), "areadetector")
+        if asked is None:
+            asked = camera if self.frames or not counters else next(iter(counters))
+        self.detector = asked
+        self.values: np.ndarray | None = counters.get(asked)
+        self.camera = camera if self.values is not None else asked
+        invalid = self.spec.detector_info(self.camera).get("invalid_value")
+        self._invalid = None if invalid is None else int(invalid)
+        if self.values is not None:
+            self.positions = np.arange(self.values.size, dtype=np.int64)
+
+    def detector_names(self) -> list[str]:
+        """The camera, when it took a frame of the run (or there is no netCDF file yet), then
+        every counter of the netCDF file (``det``): each a detector the run is read with."""
+        counters = list(self.grid.channels) if self.grid is not None else []
+        return ([self.camera] if self.frames or not counters else []) + counters
 
     # ----------------------------------------------------------- discovery
     @classmethod
@@ -872,12 +901,14 @@ class NcTiffSource(BaseSource):
         detector: str | None = None,
         require_files: bool = True,
     ) -> list[int]:
-        """The run numbers of the netCDF folder behind ``root/dataset``, those with frames by
-        default; a run with frames but no netCDF file yet counts."""
+        """The run numbers of the netCDF folder behind ``root/dataset``, those with data by
+        default: frames, or a netCDF file (its counters are detectors)."""
         layout = RunLayout.of(spec)
         index = run_index(run_folder_of(_dataset_path(Path(root), dataset), layout), layout)
         runs = index.runs()
-        return [r for r in runs if index.has_frames(r)] if require_files else runs
+        if not require_files:
+            return runs
+        return [r for r in runs if r in index.files or index.has_frames(r)]
 
     @classmethod
     def scan_status(
@@ -931,11 +962,14 @@ class NcTiffSource(BaseSource):
 
     # ------------------------------------------------------------ the frames
     def files(self) -> list[Path]:
-        """The run's netCDF file and log, then its frames."""
+        """The run's netCDF file and log, then the frames read (none for a counter)."""
         own = [f for f in (self.run_file, self.log_file) if f is not None]
-        return own + list(self.frames)
+        return own + (list(self.frames) if self.values is None else [])
 
     def _probe(self) -> None:
+        if self.values is not None:  # a counter: a value per point
+            self._shape, self._dtype = (1, 1), self.values.dtype
+            return
         if self.frames:
             self._layout = TiffLayout.probe(self.frames[0])
             if self._layout is not None:
@@ -944,7 +978,7 @@ class NcTiffSource(BaseSource):
             else:
                 self._shape, self._dtype = probe_tiff(self.frames[0])
             return
-        info = self.spec.detector_info(self.detector)
+        info = self.spec.detector_info(self.camera)
         shape = info.get("shape")
         self._shape = (int(shape[0]), int(shape[1])) if shape else (1, 1)
         self._dtype = np.dtype(info.get("dtype", "uint32"))
@@ -958,7 +992,7 @@ class NcTiffSource(BaseSource):
 
     @property
     def n_frames(self) -> int:
-        return len(self.frames)
+        return len(self.frames) if self.values is None else int(self.values.size)
 
     @property
     def dtype(self) -> np.dtype:
@@ -986,6 +1020,9 @@ class NcTiffSource(BaseSource):
         target = np.dtype(dtype) if dtype is not None else self.dtype
         if out is None:
             out = np.empty((ids.size, ny, nx), dtype=target)
+        if self.values is not None:
+            out[...] = self.values[ids][:, None, None][:, y, x]
+            return out
         return read_tiffs(self.frames, ids, y, x, out, self._invalid, self._layout)
 
     # --------------------------------------------------------- the structure
@@ -1003,7 +1040,7 @@ class NcTiffSource(BaseSource):
         if grid is None or not grid.dims:  # frames before the netCDF file, or one point
             channels = grid.channels if grid is not None else {}
             return Structure.frames_only(
-                len(self.frames),
+                self.n_frames,
                 self.frame_shape,
                 title=f"run {self.scan}: frames",
                 per_frame={k: v[self.positions] for k, v in channels.items() if v.size},
@@ -1012,7 +1049,7 @@ class NcTiffSource(BaseSource):
         shape = grid.shape
         flat = grid.order[self.positions]  # the grid position of every frame
         index = np.full(grid.n_points, MISSING, dtype=np.int64)
-        index[flat] = np.arange(len(self.frames))
+        index[flat] = np.arange(self.n_frames)
         units = self.spec.motors.get("units", {}) or {}
         title = " x ".join(f"{d} {n}" for d, n in zip(grid.dims, shape, strict=True))
         return Structure(
@@ -1021,7 +1058,7 @@ class NcTiffSource(BaseSource):
             coords=dict(grid.coords),
             frame_index=index.reshape(shape),
             frame_shape=self.frame_shape,
-            n_frames=len(self.frames),
+            n_frames=self.n_frames,
             per_frame={name: values[self.positions] for name, values in grid.channels.items()},
             scan_type="raster" if len(shape) > 1 else "line",
             units={d: units[d] for d in grid.dims if d in units},
@@ -1034,15 +1071,15 @@ class NcTiffSource(BaseSource):
 
     @property
     def status(self) -> ScanStatus:
-        """``complete`` with a frame for every point of the netCDF file; ``running`` for the
-        last run short of its points while its frames come (one written in the last
-        ``running_seconds``); else ``aborted``, or ``empty`` without a frame. A run without
-        its netCDF file yet is never complete."""
-        if self.grid is not None and len(self.frames) >= self.grid.n_points:
+        """``complete`` with a frame for every point of the netCDF file (always, read with a
+        counter); ``running`` for the last run short of its points while its frames come
+        (one written in the last ``running_seconds``); else ``aborted``, or ``empty``
+        without a frame. A run without its netCDF file yet is never complete."""
+        if self.grid is not None and self.n_frames >= self.grid.n_points:
             return ScanStatus.COMPLETE
         if self.last and self._recent():
             return ScanStatus.RUNNING
-        return ScanStatus.ABORTED if self.frames else ScanStatus.EMPTY
+        return ScanStatus.ABORTED if self.n_frames else ScanStatus.EMPTY
 
     def _recent(self) -> bool:
         """A frame (or the run's file) written in the last ``running_seconds``."""
@@ -1065,7 +1102,7 @@ class NcTiffSource(BaseSource):
         if grid is None:
             return pd.DataFrame({"point": self.positions, "frame": np.arange(len(self.frames))})
         frame = np.full(grid.n_points, -1, dtype=np.int64)
-        frame[self.positions] = np.arange(len(self.frames))
+        frame[self.positions] = np.arange(self.n_frames)
         table = {"point": np.arange(grid.n_points), "frame": frame}
         if grid.dims:
             where = np.unravel_index(grid.order, grid.shape)
@@ -1108,11 +1145,19 @@ class NcTiffSource(BaseSource):
     def cache_records(self) -> list[dict[str, Any]]:
         """The run's netCDF file, its first and last frames, how many there are and the times
         of its frames folders, which change when a frame is added: not a stat of every frame
-        (ten thousand round trips on a network share at every reduction)."""
+        (ten thousand round trips on a network share at every reduction). Read with a
+        counter, its name instead of the frames."""
         from bexa.core.provenance import file_records
 
-        own = {"folder": str(self.folder), "run": self.scan, "frames": len(self.frames)}
-        ends = self.frames[:1] + self.frames[-1:] if len(self.frames) > 1 else self.frames
+        own: dict[str, Any] = {
+            "folder": str(self.folder),
+            "run": self.scan,
+            "frames": self.n_frames,
+        }
+        if self.values is not None:  # a counter: its name, the netCDF file its values
+            own["detector"] = self.detector
+        read = self.frames if self.values is None else []
+        ends = read[:1] + read[-1:] if len(read) > 1 else read
         own_file = [f for f in (self.run_file, self.log_file) if f is not None]
         folders = [{"path": str(f), "mtime_ns": _stamp(f)} for f in self.frame_folders]
         return [own, *file_records([*own_file, *ends]), *folders]

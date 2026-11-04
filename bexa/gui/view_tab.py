@@ -1,7 +1,11 @@
 """The View tab: whatever is selected, drawn the way it should be.
 
 - a scan: its raw frames, one at a time, a slider per motor (one frame read per move);
+  a point detector (a counter of a netCDF run: frames of 1 x 1) against its motor, or as
+  an image of its last two motors;
 - a scan set: the same for any of its scans;
+- the detector a scan of several reads, chosen here: the object itself reads it, so the
+  operations take it too (``Workspace.use_detector``);
 - a stack: a slider per motor dim, or the frames summed / maximum / mean;
 - an image or map: on its coordinates, with colour map, limits, log scale and ROIs;
 - curves: every selected curve overlaid, with error bars and their fits;
@@ -60,6 +64,7 @@ class ViewTab:
         self._shown: xr.DataArray | None = None
         self._line_start: tuple[float, float] | None = None
         self._selector: Any = None
+        self._points_read: tuple[Any, int, xr.DataArray] | None = None
         self.sliders: dict[str, Any] = {}
         self.hidden_rois: set[str] = set()  # the ROIs not drawn (their toggles off)
         self.title = ipw.HTML()
@@ -73,6 +78,13 @@ class ViewTab:
             layout=ipw.Layout(width="300px", display="none"),
             style={"description_width": "40px"},
         )
+        self.detector = ipw.Dropdown(
+            description="detector",
+            layout=ipw.Layout(width="280px", display="none"),
+            style={"description_width": "60px"},
+        )
+        self.detector.observe(lambda c: self._detector_chosen(c["new"]), names="value")
+        set_tooltip(self.detector, "the detector the scan reads, here and in every operation")
         self.row_dim = ipw.Dropdown(
             description="rows", layout=ipw.Layout(width="180px", display="none")
         )
@@ -187,7 +199,7 @@ class ViewTab:
         self.box = ipw.VBox(
             [
                 self.title,
-                ipw.HBox([self.mode, self.member, self.row_dim, self.col_dim]),
+                ipw.HBox([self.mode, self.member, self.detector, self.row_dim, self.col_dim]),
                 self.slider_box,
                 self.image_options,
                 self.curve_options,
@@ -306,7 +318,7 @@ class ViewTab:
             self.table.value = ""
             return
         main = objects[0]
-        key = (main.name, main.kind, main.shape)
+        key = (main.name, main.kind, main.shape, self._reads(main))
         if key != self._key:
             same = self._key is not None and self._key[:2] == key[:2]  # a scan that grew
             self._key = key
@@ -334,6 +346,7 @@ class ViewTab:
             if main.kind == "scanset":
                 self.member.options = [(label, k) for k, label in enumerate(main.data.labels)]
                 self.member.value = member if keep and member in range(len(main.data)) else 0
+            self._detector_options(main)
             volume = main.kind == "volume"
             self.row_dim.layout.display = self.col_dim.layout.display = "" if volume else "none"
             if volume:
@@ -348,7 +361,9 @@ class ViewTab:
         if main.kind in ("scan", "scanset"):
             scan = self._scan(main)
             s = scan.structure
-            return [(d, np.asarray(s.coords[d])) for d in s.motor_dims]
+            # a point detector draws its last one or two motors at once
+            dims = s.motor_dims[:-2] if self._points(main) else s.motor_dims
+            return [(d, np.asarray(s.coords[d])) for d in dims]
         if main.kind == "stack" and self.mode.value == "one frame":
             data = main.array
             return [(str(d), main.coord(str(d))) for d in data.dims[:-2]]
@@ -391,13 +406,54 @@ class ViewTab:
             return
         objects = self._objects()
         if objects:
+            self._detector_options(objects[0])  # another scan of a set: its own
             self._make_sliders(objects[0])
         self.redraw()
 
     def _scan(self, main: DataObject) -> Any:
         if main.kind == "scanset":
-            return main.data.scans[int(self.member.value or 0)]
+            scans = main.data.scans
+            k = int(self.member.value or 0)  # still another set's before the controls are built
+            return scans[k] if k < len(scans) else scans[0]
         return main.data
+
+    def _reads(self, main: DataObject) -> str | None:
+        """The detector the scan shown reads (none for other objects)."""
+        return self._scan(main).detector if main.kind in ("scan", "scanset") else None
+
+    def _points(self, main: DataObject) -> bool:
+        """True for a scan read with a point detector: a frame of 1 x 1 per point."""
+        scans = main.kind in ("scan", "scanset")
+        return scans and tuple(self._scan(main).frame_shape) == (1, 1)
+
+    # ------------------------------------------------------------------ detectors
+    def _detector_options(self, main: DataObject) -> None:
+        """The detectors of the scan shown, the one it reads chosen; hidden for one."""
+        names = self._scan(main).detectors if main.kind in ("scan", "scanset") else []
+        syncing, self._syncing = self._syncing, True
+        try:
+            self.detector.options = names
+            reads = self._reads(main)
+            self.detector.value = reads if reads in names else (names[0] if names else None)
+            self.detector.layout.display = "" if len(names) > 1 else "none"
+        finally:
+            self._syncing = syncing
+
+    def _detector_chosen(self, detector: str | None) -> None:
+        """Read the scan shown (every scan of a set that holds it) with ``detector``: the
+        object itself, so every operation reads that detector too."""
+        objects = self._objects()
+        if self._syncing or not detector or not objects:
+            return
+        main = objects[0]
+        if main.kind not in ("scan", "scanset") or self._reads(main) == detector:
+            return
+        # the workspace says the object changed, and the panels follow (this one redraws)
+        done = self.app.guarded(lambda: self.app.ws.use_detector(main.name, detector))
+        if done is None:  # it failed (said in red): the dropdown shows what is read
+            self._detector_options(main)
+            return
+        self.app.say(f"{main.name} reads {detector}", "ok")
 
     def _index(self) -> dict[str, int]:
         out = {}
@@ -430,6 +486,8 @@ class ViewTab:
             if main.kind == "curve" or (main.kind == "map" and self.mode.value == "curves"):
                 self._visible(False, True)
                 self._curves(fig, objects)
+            elif self._points(main):
+                self._draw_points(fig, main)
             elif main.kind == "rgb":
                 self._visible(True, False)  # its axes to scale or not
                 draw_rgb(fig, main.array, main.name, self._image_options())
@@ -517,6 +575,45 @@ class ViewTab:
                 f"{d} index {i}" for d, i in index.items()
             )
         return data, ""
+
+    def _point_values(self, scan: Any) -> xr.DataArray:
+        """A point detector's value at every point of the scan's grid (NaN where none was
+        taken), read once per scan and frame count."""
+        s = scan.structure
+        kept = self._points_read
+        if kept is not None and kept[0] is scan and kept[1] == s.n_frames:
+            return kept[2]
+        values = np.asarray(scan.source.read_frames(np.arange(s.n_frames)), dtype=float)
+        grid = np.full(s.frame_index.shape, np.nan)
+        taken = s.frame_index >= 0
+        grid[taken] = values.reshape(-1)[s.frame_index[taken]]
+        coords = {d: np.asarray(s.coords[d]) for d in s.motor_dims}
+        data = xr.DataArray(grid, dims=s.motor_dims, coords=coords, name=scan.detector)
+        self._points_read = (scan, s.n_frames, data)
+        return data
+
+    def _draw_points(self, fig: Any, main: DataObject) -> None:
+        """A point detector against the scan's motor, or as an image of its last two motors
+        (a slider for each other)."""
+        scan = self._scan(main)
+        index = self._index()
+        values = self._point_values(scan)
+        picked = values.isel(index)
+        where = ", ".join(f"{d}={values[d].values[i]:.5g}" for d, i in index.items())
+        title = str(scan.detector) + (f" at {where}" if where else "")
+        if picked.ndim == 1:
+            self._visible(False, True)
+            options = CurveOptions(
+                self.log_y.value, self.errors.value, self.markers.value, self.normalize.value
+            )
+            draw_curves(fig, [(str(scan.detector), picked, None)], options, title=title)
+            return
+        self._visible(True, False)
+        self._shown = picked
+        rois = self.app.ws.rois if self.show_rois.value else None
+        ax = draw_image(fig, picked, self._image_options(), title, rois, self.hidden_rois)
+        if self.draw.value:
+            self._attach_selector(ax)
 
     def _curves(self, fig: Any, objects: list[DataObject]) -> None:
         main = objects[0]

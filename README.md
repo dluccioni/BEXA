@@ -1317,12 +1317,14 @@ sorted(scan.structure.per_frame)                # the channels to choose from: m
 
 The same scan read with the frames of another of its detectors: the files of an LCLS run hold
 the images of several cameras, a BLISS scan's folder the files of the far-field and the
-near-field camera. `Scan.detectors` lists the detectors the files hold (`detector_names()` of
+near-field camera, an APS 7-ID netCDF run its counters (a value per point: frames of 1 x 1).
+`Scan.detectors` lists the detectors the files hold (`detector_names()` of
 the source), `Scan.detector` names the one read. The scan opens again from its recipe with
 `detector` (its layers and reshapes too, the same cache), its geometry the detector's pixel
 size; the same detector gives the scan itself, one the files do not hold `ValueError`. `bexa.open(...,
 detector=...)`, `bexa.open_dataset(..., detector=...)`, `--detector` on the command line and
-the detector field of the GUI's Data tab choose it at opening, Use Detector (Multi-scan) after.
+the detector field of the GUI's Data tab choose it at opening; the View's detector field
+(`Workspace.use_detector`: the object itself) or Use Detector (Multi-scan) after.
 
 ```python
 # an LCLS run with two image detectors: the Jungfrau read first, then the ePix
@@ -3446,7 +3448,7 @@ the helpers:
 - `chunk_frames`: property, frames per HDF5 chunk; reduction batches are multiples of it; default 1.
 - `refresh()`: re-reads the metadata of a scan still being written, returns the source (`scan.refresh()` calls it).
 - `close()`: closes the open file handles.
-- `detector_names()`: the detectors whose frames the scan's files hold (`Scan.detectors`); by default the one read, `detector`; an engine whose files may hold several lists them all, the ones its spec does not know too (`Hdf5StackSource` by the detector files' names, `Hdf5PointsSource` by the groups of a point file, `SpecH5Source` and `SmalldataSource` by the groups of the file, `SpecTiffSource` by the scan's `#UXML` groups).
+- `detector_names()`: the detectors whose frames the scan's files hold (`Scan.detectors`); by default the one read, `detector`; an engine whose files may hold several lists them all, the ones its spec does not know too (`Hdf5StackSource` by the detector files' names, `Hdf5PointsSource` by the groups of a point file, `SpecH5Source` and `SmalldataSource` by the groups of the file, `SpecTiffSource` by the scan's `#UXML` groups, `NcTiffSource` by the counters of its netCDF file).
 - `cache_records()`: what identifies the data in cache keys, one dict per file (`path`, `size`, `mtime` by default: `bexa.core.provenance.file_records`), then `{"path": "", "detector": ...}` when the files hold several detectors, so two detectors of one file never share a result; an engine whose files change while the data they serve does not (`Hdf5StackSource`) overrides it with records of the part it reads.
 - `frame_bytes(y=slice(None), x=slice(None), dtype=None)`: bytes of one frame cut to the window, at `dtype` (default: stored).
 - `contiguous_runs(index)`: static; yields `(start, stop)` for each run of consecutive ids of a sorted id array.
@@ -4514,6 +4516,17 @@ its names name the counters, however many the run read (a counter past them keep
 warning), keeps `det_0` .... The log is one of the run's `files` and of its cache records,
 and `Scan.metadata()` shows the netCDF file's variables and the log as the files hold them.
 
+Every counter of `det` is a detector too (`Scan.detectors`: the camera, when it took a frame
+of the run or there is no netCDF file yet, then the counters by their names). Read with one
+(`bexa.open(folder, scan=10, detector="power")`, the Data tab's or the View's detector field),
+the run's frames are its values, a frame of 1 x 1 at every point of the netCDF file in the
+order taken: the run is complete, the View draws it against its motor (an image of the last two
+motors, a slider for each other), and every operation takes it (ROI sums, COM maps along the
+motors, fits). A run opens with the camera when it has a frame of it, else with its first
+counter, so a run whose frames were not copied, or a scan of counters alone, opens with data.
+The frame count, the status and `files` follow the detector read (for a counter the netCDF file
+and the log, no TIFF), and a counter's name enters the cache key.
+
 ```python
 import tempfile
 from pathlib import Path
@@ -4542,14 +4555,20 @@ the spec), the per-frame channels its counters at the frames' points, the scan t
 (two motors or more) or `line`, the title `run 1: nsamstageZ 3 x nsamstageY 4` (`serpentine`
 added for one); a point without its frame is missing. Without its netCDF file yet a run is a
 series of frames (`frame` dim, scan type `list`). `energy_keV` is the energy (the file lacks
-it); `detector` names the spec's camera. It implements the `Source` members `files` (the
-netCDF file and the run's log, then the frames), `frame_shape`, `n_frames`, `dtype`,
-`energy_keV`, `read_frames`, `structure` (the log's positions as its `scalars`), `status`,
+it); `detector` is a counter of the netCDF file, read as frames of 1 x 1, or the camera, by its
+name in the spec (`None`: the camera when it took a frame of the run, else the first counter).
+It implements the `Source` members `files` (the netCDF file and the run's log, then the frames
+read), `frame_shape`, `n_frames`, `dtype`, `energy_keV`, `read_frames`, `structure` (the log's
+positions as its `scalars`), `status` (always `complete` read with a counter),
 `aux_tables` (`points`), `file_metadata` (the netCDF file's variables, its dims and
 attributes, the run's log), `cache_records` (the folder, the run, the frame count, the netCDF
 file and the log, the first and last frames and the times of the frames folders, not a stat
-of every frame), `refresh` and `close` (see `BaseSource`). The frames are read in
-threads without parsing them (`read_tiffs` with the first frame's `TiffLayout`). Also:
+of every frame; a counter's name instead of the frames), `refresh` and `close` (see
+`BaseSource`). The frames are read in threads without parsing them (`read_tiffs` with the
+first frame's `TiffLayout`). Also:
+
+- `detector_names()`: the camera, when it took a frame of the run (or there is no netCDF file
+  yet), then every counter of the netCDF file.
 
 - `point_table()`: one row per point of the netCDF file, in the order taken, with or without its
   frame: `point`, `frame` (the id `read_frames` reads, -1 when there is none), the motor
@@ -4558,8 +4577,8 @@ threads without parsing them (`read_tiffs` with the first frame's `TiffLayout`).
   file, frame or folder names its run, and a folder of several runs without `scan` raises
   `LookupError`.
 - `list_scans(spec, root, dataset, detector=None, require_files=True)`: classmethod, the run
-  numbers of the netCDF folder behind `root/dataset`, those with frames by default; a run with
-  frames and no file yet counts.
+  numbers of the netCDF folder behind `root/dataset`, those with data by default: frames, or a
+  netCDF file (its counters are detectors).
 - `scan_status(spec, root, dataset, scan, detector=None)`: classmethod, the status of one run
   (`unreadable` when it cannot be opened).
 - `recognises(spec, path, is_dir, listing)`: classmethod, the fingerprint's `engine_check`: True
@@ -4568,8 +4587,10 @@ threads without parsing them (`read_tiffs` with the first frame's `TiffLayout`).
 - attributes: `folder` (the netCDF folder; `dataset`, its name, is what `Scan.name` shows),
   `scan`, `run_file`, `log_file` and `log` (the run's log and its `RunLog`, `None` without
   one), `grid` (the `RunGrid`, `None` before the file), `points` (the numbers in
-  the frames' names), `positions` (each frame's place in the order taken), `frames`, `last`
-  (the last run of the folder), `layout`, `detector`.
+  the frames' names), `positions` (each frame's place in the order taken), `frames` (the
+  camera's TIFFs), `last` (the last run of the folder), `layout`, `detector` (the one read),
+  `camera` (the camera's name), `values` (the counter read, a value per point in the order
+  taken; `None` for the camera).
 
 ```python
 # scan: run 1 of the synthetic runs; its grid, status and counters
@@ -4584,6 +4605,9 @@ early = bexa.open(runs.folder, scan=5, cache=False)   # frames, no run_5.nc yet
 early.dims, early.status                         # (('frame', 'y', 'x'), <ScanStatus.RUNNING: 'running'>)
 NcTiffSource.list_scans(spec, runs.root, "data_nc"), bexa.list_scans(runs.images)   # ([1, 2, 3, 4, 5], [1, 2, 3, 4, 5])
 [f.name for f in scan.files][:2]                 # ['run_1.nc', 'MapScan_1_1.tiff']
+scan.detector, scan.detectors[:3]                # ('areadetector', ['areadetector', 'det_0', 'det_1'])
+total = scan.with_detector("det_0")              # det_0, the frame's total: a value per point
+total.frame_shape, total.n_frames, [f.name for f in total.files]   # ((1, 1), 12, ['run_1.nc'])
 ```
 
 #### `RunLayout`
@@ -5288,7 +5312,8 @@ src.structure().motor_dims, src.cache_records()[-1]["into"][0]   # (('chi', 'a',
 The scan of `parent` with names of its own and its values moved, its frames the parent's: what
 `Scan.renamed` reads. `names` maps a motor, channel, position or detector to its alias;
 `offsets` and `scales`, by the parent's names, make a value `scale * value + offset`, on the
-coordinates, the per-frame channels, the scalars, `point_table()` and `aux_tables()`; the
+coordinates, the per-frame channels, the scalars, `point_table()` and `aux_tables()`, and on
+the frames of a counter read as the detector (a netCDF run's), never a camera's; the
 units follow the names, and `detector_names()` and `detector` give the aliases. An alias,
 offset or scale that changes nothing is dropped; renaming `y` or `x`, or an alias that is
 another name of the scan, raises `ValueError`. `alias(name)` is a name's alias (itself
@@ -9822,6 +9847,12 @@ without an entry of their own:
   gets its new points; finished scans are left alone, and objects made from a scan keep what
   they were made from (run the operation again). Emits `changed` for each object that grew
   and returns their names; not logged, since a script reads the files as they are.
+- `use_detector(name, detector)`: read the scan `name` with another of its detectors
+  (`scan.detectors`: a second camera, a counter of a netCDF run), the object itself, so the
+  View draws that detector and every operation reads it from then on; a scan set changes in
+  every scan that holds it (`ValueError` when none does, `TypeError` for an object that is
+  not a scan). Logged; the scans open again from their files (`Scan.with_detector`), so a
+  saved workspace reopens them with it. What the View's detector field does.
 - `set_names(names=None, offsets=None, scales=None)`: names, offsets and scales for every scan opened from now on (`open_scan`, `open_scans`, `open_scan_set`, `add_scans`): a scan with any of these names, as its files give them, opens renamed (`Scan.renamed`); kept in `settings["names"]`, so saved with the workspace, and logged; none clears them. Returns what it keeps.
 - `named(scan)`: `scan` renamed by the names the workspace keeps, those it has; a scan renamed already, or without any of them, as it is; names that clash with the scan's own are left out with a warning.
 - `remove_roi(name)`: forget a named ROI.
@@ -10990,7 +11021,8 @@ The scan (every scan of a set) read with the frames of another of its detectors
 (`Scan.with_detector`): a second camera of a BLISS scan, another image detector of an LCLS run.
 The result is named `<object>_<detector>`, and `describe()` of a scan whose files hold several
 detectors names the one read. On the Analysis tab: Multi-scan, "Use Detector" (its drop-down
-lists the detectors of the scan chosen); in code `ws.run("use_detector", ...)`.
+lists the detectors of the scan chosen); in code `ws.run("use_detector", ...)`. The View's
+detector field changes the object itself instead (`ws.use_detector`).
 
 ```python
 # an LCLS run opened in the workspace, then read with its ePix
@@ -12811,7 +12843,8 @@ app.ws.names()                                   # ['run_1']
 What the objects list's **Names and offsets** opens on the Browse tab, above the scan's full
 metadata: a row per motor, counter and detector (positions too with **positions too**, or found
 by name), each with the name its files give, an **alias**, an **offset** and a **scale** (a
-value becomes `scale x value + offset`; a detector takes an alias only). **Apply** makes the
+value becomes `scale x value + offset`; a detector takes an alias only, and a counter that is
+a detector too, a netCDF run's, has its counter's row only). **Apply** makes the
 scan renamed (`ws.run("rename", ...)`, a new object `<scan>_named`); **Remember for scans
 opened later** also keeps them in the workspace (`ws.set_names`), merged with the names kept
 for other scans; **Clear** empties the rows. A renamed scan shows its files' names with its
@@ -12862,7 +12895,10 @@ mapping_text({"mu": "omega", "chi": 1.5})        # 'mu=omega, chi=1.5'
 ### bexa.gui.view_tab: drawing the selection
 
 The View tab: a scan's raw frames (a slider per motor, one frame read per move), a scan set's
-scans, a stack with a slider per motor dim or its frames summed (maximum, mean), images and maps
+scans, the detector a scan of several reads (**detector**: the object itself reads it, so the
+operations take it too), a point detector (a counter of a netCDF run, frames of 1 x 1) against
+its motor or as an image of its last two motors, a stack with a slider per motor dim or its
+frames summed (maximum, mean), images and maps
 on their coordinates (colour map, limits, log, colour bar, ROIs), curves overlaid with error bars
 and their fits, a map as curves, a volume with two dims as the image, colour pictures, tables
 and text. ROIs are typed, or drawn with ipympl; a line drawn on an image makes its line profile;
@@ -12879,7 +12915,9 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 #### `ViewTab`
 `bexa.gui.view_tab.ViewTab(app)`
 
-The tab: `pane`, `mode`, `member` (the scan of a set), `row_dim`
+The tab: `pane`, `mode`, `member` (the scan of a set), `detector` (the detectors of the scan
+shown, the one it reads chosen, hidden for a scan of one; a choice is `ws.use_detector`, on
+every scan of a set that holds it), `row_dim`
 and `col_dim` (a volume), `sliders` by dim, the image options (`cmap`: a combo box offering
 `colormap_names()` and taking any matplotlib colour map typed, `reverse`, `scale`, `percent`,
 `vmin`, `vmax`, `colorbar`, `show_rois`, `aspect`: the axes to scale or not, for a colour
