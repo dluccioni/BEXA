@@ -1,6 +1,7 @@
 """Scans chosen in several dataset folders: the selection of the scan picker.
 
-A scan is named by its dataset folder and number, ``(Path, int)``, so the
+A scan is named by its dataset folder and number, ``(Path, int)`` (the SPEC
+file of a session, for a folder of several: ``Dataset.parts``), so the
 selection survives listing other folders. Each set of folders listed is
 opened once as a :class:`bexa.core.dataset.Dataset` and kept, so listing it
 again is instant, and a selected scan is opened through whichever of these
@@ -70,6 +71,7 @@ class Selection:
         self.opened: dict[tuple[Path, ...], OpenedDataset] = {}
         self.keys: set[tuple[Path, int]] = set()
         self.order: list[Path] = []  # the folders in the order they were first opened
+        self.home: dict[Path, Path] = {}  # the SPEC file of a session: the folder it is in
         self._rows: dict[tuple[Path, int], dict[str, Any]] = {}
 
     def open(self, folders: Sequence[str | Path]) -> OpenedDataset:
@@ -80,10 +82,21 @@ class Selection:
             opened = OpenedDataset(Dataset(list(wanted), **self.open_options))
             opened.index()
             self.opened[wanted] = opened
-        for folder in opened.dataset.paths:
-            if folder_path(folder) not in self.order:
-                self.order.append(folder_path(folder))
+        self._place(opened.dataset)
         return opened
+
+    def _place(self, dataset: Dataset) -> None:
+        """Note where the dataset numbers its scans: its folders, or the SPEC files of a
+        folder of several sessions (``home``), in the order first seen (``order``)."""
+        folders = [folder_path(f) for f in dataset.paths]
+        for part in map(folder_path, dataset.parts):
+            self.home[part] = part if part in folders else part.parent
+            if part not in self.order:
+                self.order.append(part)
+
+    def folder_of(self, path: Path) -> Path:
+        """The dataset folder of a scan's path: the path, or the folder of a SPEC session."""
+        return self.home.get(path, path)
 
     def ordered(self) -> list[tuple[Path, int]]:
         """The selected scans folder by folder, in the order the folders were opened."""
@@ -99,6 +112,8 @@ class Selection:
             if key in opened.ids:
                 return opened.dataset, opened.ids[key]
         folder, number = key
+        if folder.is_file():  # a SPEC session of a folder of several: the folder lists it
+            folder = folder.parent
         if (folder,) not in self.opened and folder.is_dir():
             opened = self.open([folder])
             if key in opened.ids:
@@ -159,6 +174,7 @@ class Selection:
         for opened in self.opened.values():
             opened.dataset.refresh()
             opened.index()
+            self._place(opened.dataset)  # a SPEC session started since
         self._rows.clear()
         gone = sorted(key for key in self.keys if not self.allowed(key))
         if gone:

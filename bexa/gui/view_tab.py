@@ -3,9 +3,8 @@
 - a scan: its raw frames, one at a time, a slider per motor (one frame read per move);
   a point detector (a counter of a netCDF run: frames of 1 x 1) against its motor, or as
   an image of its last two motors;
-- a scan set: the same for any of its scans;
-- the detector a scan of several reads, chosen here: the object itself reads it, so the
-  operations take it too (``Workspace.use_detector``);
+- a scan set: the same for any of its scans; the detector a scan reads is chosen in the
+  objects list (``Workspace.use_detector``), and the View draws that one;
 - a stack: a slider per motor dim, or the frames summed / maximum / mean;
 - an image or map: on its coordinates, with colour map, limits, log scale and ROIs;
 - curves: every selected curve overlaid, with error bars and their fits;
@@ -78,13 +77,6 @@ class ViewTab:
             layout=ipw.Layout(width="300px", display="none"),
             style={"description_width": "40px"},
         )
-        self.detector = ipw.Dropdown(
-            description="detector",
-            layout=ipw.Layout(width="280px", display="none"),
-            style={"description_width": "60px"},
-        )
-        self.detector.observe(lambda c: self._detector_chosen(c["new"]), names="value")
-        set_tooltip(self.detector, "the detector the scan reads, here and in every operation")
         self.row_dim = ipw.Dropdown(
             description="rows", layout=ipw.Layout(width="180px", display="none")
         )
@@ -199,7 +191,7 @@ class ViewTab:
         self.box = ipw.VBox(
             [
                 self.title,
-                ipw.HBox([self.mode, self.member, self.detector, self.row_dim, self.col_dim]),
+                ipw.HBox([self.mode, self.member, self.row_dim, self.col_dim]),
                 self.slider_box,
                 self.image_options,
                 self.curve_options,
@@ -346,7 +338,6 @@ class ViewTab:
             if main.kind == "scanset":
                 self.member.options = [(label, k) for k, label in enumerate(main.data.labels)]
                 self.member.value = member if keep and member in range(len(main.data)) else 0
-            self._detector_options(main)
             volume = main.kind == "volume"
             self.row_dim.layout.display = self.col_dim.layout.display = "" if volume else "none"
             if volume:
@@ -406,7 +397,6 @@ class ViewTab:
             return
         objects = self._objects()
         if objects:
-            self._detector_options(objects[0])  # another scan of a set: its own
             self._make_sliders(objects[0])
         self.redraw()
 
@@ -425,35 +415,6 @@ class ViewTab:
         """True for a scan read with a point detector: a frame of 1 x 1 per point."""
         scans = main.kind in ("scan", "scanset")
         return scans and tuple(self._scan(main).frame_shape) == (1, 1)
-
-    # ------------------------------------------------------------------ detectors
-    def _detector_options(self, main: DataObject) -> None:
-        """The detectors of the scan shown, the one it reads chosen; hidden for one."""
-        names = self._scan(main).detectors if main.kind in ("scan", "scanset") else []
-        syncing, self._syncing = self._syncing, True
-        try:
-            self.detector.options = names
-            reads = self._reads(main)
-            self.detector.value = reads if reads in names else (names[0] if names else None)
-            self.detector.layout.display = "" if len(names) > 1 else "none"
-        finally:
-            self._syncing = syncing
-
-    def _detector_chosen(self, detector: str | None) -> None:
-        """Read the scan shown (every scan of a set that holds it) with ``detector``: the
-        object itself, so every operation reads that detector too."""
-        objects = self._objects()
-        if self._syncing or not detector or not objects:
-            return
-        main = objects[0]
-        if main.kind not in ("scan", "scanset") or self._reads(main) == detector:
-            return
-        # the workspace says the object changed, and the panels follow (this one redraws)
-        done = self.app.guarded(lambda: self.app.ws.use_detector(main.name, detector))
-        if done is None:  # it failed (said in red): the dropdown shows what is read
-            self._detector_options(main)
-            return
-        self.app.say(f"{main.name} reads {detector}", "ok")
 
     def _index(self) -> dict[str, int]:
         out = {}

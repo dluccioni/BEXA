@@ -21,6 +21,12 @@ not: the scan's ``#UXML`` groups name each (``ad_file_info``, prefix
 detector; another one added to the beamline is listed by its EPICS name
 (``SpecTiffSource.detector_names``) and read from its own folder
 (:func:`area_detectors`).
+
+A folder may hold several sessions, one SPEC file each (SPEC's ``newfile``
+starts another in the same folder): :class:`bexa.core.dataset.Dataset` lists the
+scans of every one, each named by its file (``SpecTiffSource.sessions``), and a
+scan opens from its own file (the folder alone says which session it is not:
+:class:`SeveralSessionsError`).
 """
 
 from __future__ import annotations
@@ -53,6 +59,7 @@ log = get_logger(__name__)
 
 __all__ = [
     "AreaDetector",
+    "SeveralSessionsError",
     "SpecFile",
     "SpecScan",
     "SpecTiffSource",
@@ -67,6 +74,7 @@ __all__ = [
     "scan_frames",
     "session_frames",
     "spec_file_of",
+    "spec_files",
 ]
 
 SPEC_SUFFIX = ".spec"
@@ -449,19 +457,37 @@ def spec_file_of(path: str | Path, glob: str = "*.spec") -> Path:
     return _one_spec_file(path.parent, glob)
 
 
-def _one_spec_file(folder: Path, glob: str) -> Path:
+class SeveralSessionsError(ValueError):
+    """A folder holding several SPEC sessions given where one session is meant: which one is
+    not known (``files``: every SPEC file of the folder)."""
+
+    def __init__(self, folder: Path, files: Sequence[Path]) -> None:
+        self.folder = folder
+        self.files = list(files)
+        names = [p.name for p in self.files]
+        super().__init__(
+            f"{folder} holds several SPEC files {names}: give the file itself, or open the "
+            "folder with bexa.open_dataset to list the scans of every one"
+        )
+
+
+def spec_files(folder: str | Path, glob: str = "*.spec") -> list[Path]:
+    """The SPEC files of a folder, by name: one per session it holds."""
     try:  # one listing, no stat per entry
         with os.scandir(folder) as entries:
-            found = sorted(
+            return sorted(
                 Path(e.path) for e in entries if fnmatch.fnmatch(e.name, glob) and e.is_file()
             )
     except OSError:
-        found = []
+        return []
+
+
+def _one_spec_file(folder: Path, glob: str) -> Path:
+    found = spec_files(folder, glob)
     if not found:
         raise FileNotFoundError(f"no SPEC file ({glob}) in {folder}")
     if len(found) > 1:
-        names = [p.name for p in found]
-        raise ValueError(f"{folder} holds several SPEC files {names}; give the file itself")
+        raise SeveralSessionsError(folder, found)
     return found[0]
 
 
@@ -768,6 +794,13 @@ class SpecTiffSource(BaseSource):
             with_frames = session_frames(spec_file, frame_templates(spec.layout))
             numbers = [n for n in numbers if with_frames.get(n)]
         return numbers
+
+    @classmethod
+    def sessions(cls, spec: FormatSpec, folder: str | Path) -> list[Path]:
+        """The SPEC files of a dataset folder, one per session: what
+        :class:`bexa.core.dataset.Dataset` lists the scans of, each file apart, when there are
+        several."""
+        return spec_files(folder, str(spec.layout.get("spec_glob", "*.spec")))
 
     @property
     def dataset(self) -> str:

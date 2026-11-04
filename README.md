@@ -1323,8 +1323,9 @@ the source), `Scan.detector` names the one read. The scan opens again from its r
 `detector` (its layers and reshapes too, the same cache), its geometry the detector's pixel
 size; the same detector gives the scan itself, one the files do not hold `ValueError`. `bexa.open(...,
 detector=...)`, `bexa.open_dataset(..., detector=...)`, `--detector` on the command line and
-the detector field of the GUI's Data tab choose it at opening; the View's detector field
-(`Workspace.use_detector`: the object itself) or Use Detector (Multi-scan) after.
+choose it at opening; in the GUI a scan opens with its default detector, and the objects
+list's **detector** (`Workspace.use_detector`: the object itself) or Use Detector
+(Multi-scan) read another after.
 
 ```python
 # an LCLS run with two image detectors: the Jungfrau read first, then the ePix
@@ -1619,7 +1620,9 @@ folder = "/data/visitor/hc6293/id03/20260119/RAW_DATA/WS2G_100/WS2G_100_DFXM"  #
 Open a dataset folder (or its master file, or one of its `scanNNNN` folders) as a `Dataset`
 (top-level name `bexa.open_dataset`); a list of folders when a measurement continued in another
 dataset (one table, ids running over all of them); `profile=` with `sample=` (or `dataset=`)
-instead of a path, as for `bexa.open`. The keywords are those of `Dataset`.
+instead of a path, as for `bexa.open`. A folder holding several SPEC sessions (one SPEC file
+each) gives the scans of every one the same way, the `dataset` column naming the file. The
+keywords are those of `Dataset`.
 
 ```python
 # folder: a dataset folder (the synthetic z-stack); every scan of it as one Dataset
@@ -1640,7 +1643,10 @@ a BLISS dataset copied without its master file says "no master file ... is missi
 scans are then opened with that spec, loaded once (no file is read for it per scan, so the
 967 scans of an APS session list in seconds from a network share). Scans are opened once and
 their handles kept until `refresh` or `close`; a `Dataset` is a context manager, and in a
-notebook it shows its table.
+notebook it shows its table. A folder holding several SPEC sessions (SPEC's `newfile` starts
+another in the same folder) lists the scans of every one, each SPEC file in place of the
+folder (`parts`): ids running over all of them, the `dataset` column naming the file, each
+scan opened from its own file; a SPEC file given is that session alone.
 
 - `scans`: property, every scan id, sorted: the scan numbers with detector files for one
   folder, `0, 1, 2, ...` over the combined table for several.
@@ -1649,6 +1655,8 @@ notebook it shows its table.
   lists of `Scan`.
 - `folders`: property, the dataset folders in the order their scans are numbered; `paths` is
   the same list, `path` the first folder and `name` the folder names joined with `" + "`.
+- `parts`: property, where the scans are numbered, in order: the folders, with each SPEC file
+  of a folder holding several sessions in place of the folder.
 - `cache`: the shared `bexa.core.cache.Cache`, or `None`; `clear_cache()` empties it.
 - `problems`: property, `{id: reason}` for the scans the table could not read (see `table`).
 
@@ -1795,9 +1803,9 @@ except bexa.ScanNotReadyError as error:
 `bexa.core.dataset.Dataset.origin(scan_id)`
 
 The dataset folder and the scan number behind an id, `(Path, int)`: for one folder the number
-is the id itself, for several it says which folder a running id comes from. An id that is not
-in the dataset raises `ValueError`. The scan picker keeps its selection across folders as these
-pairs.
+is the id itself, for several it says which folder a running id comes from; for a session of a
+folder of several, the SPEC file (one of `parts`). An id that is not in the dataset raises
+`ValueError`. The scan picker keeps its selection across folders as these pairs.
 
 ```python
 # both: the z-stack continued in a second folder; where a running id comes from
@@ -1811,7 +1819,8 @@ folder_of.name, number                       # ('demo_zstack_2', 1)
 Look at the folders again, for a dataset that is still being written, and return the dataset:
 new scans appear, the scans that were running, empty or unreadable are read anew by the next
 `table`, and the complete and aborted ones keep their handles and rows (their files do not
-change any more). `everything=True` closes and forgets every scan.
+change any more). A SPEC session started in a folder of sessions since joins, its file one of
+`parts`. `everything=True` closes and forgets every scan.
 
 ```python
 # ds, live: datasets whose folders may hold new or finished scans since they were opened
@@ -4171,11 +4180,14 @@ the EIGER2 Si 500K of 7-ID-C (512 x 1028 uint32, 75 um pixels); a pixel at the d
 Every area detector SPEC records a scan with is found, known to the spec or not: the scan's
 `#UXML` groups name each (`ad_file_info`, prefix `7idEiger1:TIFF1:`) with where its TIFF
 plugin wrote; the one writing where the spec looks is the spec's `areadetector`, another (a
-camera added at the beamline) is listed by its EPICS name (`Scan.detectors`, the Data tab's
-detector field) and read from its own folder (`Scan.with_detector("7idPilatus")`).
+camera added at the beamline) is listed by its EPICS name (`Scan.detectors`, the objects
+list's detector field) and read from its own folder (`Scan.with_detector("7idPilatus")`).
 `bexa.open(folder, scan=4)`, `bexa.open(frame.tif)` and `bexa.open_dataset(folder)` all work; a
 session has many scans of many kinds, so `bexa.open(folder)` without `scan=` says which to
-choose. A TIFF not named as the session's frames is not one of them (the spec's `file_names`):
+choose. A folder may hold several sessions, a SPEC file each (SPEC's `newfile` starts another
+in the same folder): `bexa.open_dataset(folder)` and the scan picker list the scans of every
+one, each named by its file (`Dataset.parts`), while `bexa.open(folder, scan=4)` raises
+`SeveralSessionsError`, since the number names a scan of each: open the SPEC file itself. A TIFF not named as the session's frames is not one of them (the spec's `file_names`):
 a Python scan's frame opens its run (`bexa.io.engines.nc_tiff`), another program's says to
 open it alone with `format="generic_stack"`.
 
@@ -4184,9 +4196,10 @@ import tempfile
 from pathlib import Path
 import bexa
 import numpy as np
-from bexa.io.engines.spec_tiff import (SpecTiffSource, area_detectors, frame_point, frame_templates,
-                                       frames_by_scan, probe_tiff, read_spec_file, read_tiffs,
-                                       scan_frames, session_frames, spec_file_of)
+from bexa.io.engines.spec_tiff import (SeveralSessionsError, SpecTiffSource, area_detectors,
+                                       frame_point, frame_templates, frames_by_scan, probe_tiff,
+                                       read_spec_file, read_tiffs, scan_frames, session_frames,
+                                       spec_file_of, spec_files)
 from bexa.io.formats import load_spec
 from bexa.testing import make_aps_session
 
@@ -4226,7 +4239,10 @@ growing file plus the frames), `refresh` and `close` (see `BaseSource`). Also:
   (whose name gives the scan); `LookupError` when the session holds several scans and none is
   named, and for a file that is not one of the session's frames.
 - `list_scans(spec, root, dataset, detector=None, require_files=True)`: classmethod, the scan
-  numbers of `root/dataset` (a folder, or the file's stem), those with a frame by default.
+  numbers of `root/dataset` (a folder, or the file's stem), those with a frame by default;
+  `SeveralSessionsError` for a folder of several sessions.
+- `sessions(spec, folder)`: classmethod, the SPEC files of a folder (`spec_files` with the
+  spec's `spec_glob`), one per session: what `Dataset` lists apart when there are several.
 - attributes: `spec_file`, `session` (the `SpecFile`), `record` (the `SpecScan`), `command` (a
   `ScanCommand`), `points` (the point numbers that have a frame), `frames` (their files), `scan`,
   `detector`, `default_detector` (the spec's), `area_detectors` (the scan's other area
@@ -4346,12 +4362,47 @@ two.detectors, two.with_detector("7idPilatus").frame_shape   # (['areadetector',
 The SPEC file behind a path: the file itself, the one found in a folder, or the session of a
 frame: `<prefix>_S004_00012.tif` belongs to `<prefix>.spec`, next to it or up to three folders
 above (`images/<prefix>/S004/`); for another file, the one SPEC file of its folder.
-`FileNotFoundError` without one, `ValueError` when a folder holds several.
+`FileNotFoundError` without one, `SeveralSessionsError` when a folder holds several.
 
 ```python
 # session.root: the folder of the synthetic session, one of its frames, and a frame of the beamline layout
 spec_file_of(session.root).name, spec_file_of(session.frames[2][0]).name   # ('wse2_1_1.spec', 'wse2_1_1.spec')
 spec_file_of(beamline.frames[2][0]) == beamline.path   # True: three folders up
+```
+
+#### `spec_files`
+`bexa.io.engines.spec_tiff.spec_files(folder, glob="*.spec")`
+
+The SPEC files of a folder, sorted by name: one per session it holds (none for a folder that
+cannot be listed).
+
+```python
+# a folder of one session, then a second session written beside it
+two = work / "two"
+first = make_aps_session(two)
+[p.name for p in spec_files(two)]                # ['wse2_1_1.spec']
+second = make_aps_session(two, name="wse2_1_2", seed=1)
+[p.name for p in spec_files(two)]                # ['wse2_1_1.spec', 'wse2_1_2.spec']
+```
+
+#### `SeveralSessionsError`
+`bexa.io.engines.spec_tiff.SeveralSessionsError(folder, files)`
+
+A `ValueError`: a folder holding several SPEC sessions given where one session is meant
+(`bexa.open(folder, scan=4)`, `bexa.list_scans(folder)`), so the scan is not known. `folder`
+and `files` (every SPEC file of it) say where; the message says to give the file itself, or
+to open the folder with `bexa.open_dataset`, which lists the scans of every session.
+
+```python
+# two: the folder of two sessions; a scan number names one of each
+try:
+    bexa.open(two, scan=2, cache=False)
+except SeveralSessionsError as error:
+    [p.name for p in error.files]                # ['wse2_1_1.spec', 'wse2_1_2.spec']
+both = bexa.open_dataset(two, cache=False)       # the scans of both, ids 0 to 9
+both.table()[["id", "dataset", "scan"]].values.tolist()[4:6]   # [[4, 'wse2_1_1.spec', 5], [5, 'wse2_1_2.spec', 1]]
+[p.name for p in both.parts], both.origin(6)[0].name   # (['wse2_1_1.spec', 'wse2_1_2.spec'], 'wse2_1_2.spec')
+bexa.open_dataset(second.path, cache=False).scans     # [1, 2, 3, 4, 5]: a file given, its session alone
 ```
 
 #### `frames_by_scan`
@@ -4518,7 +4569,7 @@ and `Scan.metadata()` shows the netCDF file's variables and the log as the files
 
 Every counter of `det` is a detector too (`Scan.detectors`: the camera, when it took a frame
 of the run or there is no netCDF file yet, then the counters by their names). Read with one
-(`bexa.open(folder, scan=10, detector="power")`, the Data tab's or the View's detector field),
+(`bexa.open(folder, scan=10, detector="power")`, the objects list's detector field),
 the run's frames are its values, a frame of 1 x 1 at every point of the netCDF file in the
 order taken: the run is complete, the View draws it against its motor (an image of the last two
 motors, a slider for each other), and every operation takes it (ROI sums, COM maps along the
@@ -9501,7 +9552,8 @@ listing.status_text(), [number for _, number in listing.selection]   # ('2 of 5 
 
 ### bexa.notebook.selection: scans chosen in several dataset folders
 
-The selection of the scan picker. A scan is named by its dataset folder and number, so the
+The selection of the scan picker. A scan is named by its dataset folder and number (the SPEC
+file of a session, for a folder of several: `Dataset.parts`), so the
 selection survives listing other folders; each set of folders listed is opened once as a
 `Dataset` and kept, and a selected scan is opened through whichever of these datasets holds it.
 Used through `ScanPicker`; the class is public for scripts that keep a selection of their own.
@@ -9525,8 +9577,10 @@ opened: `order`), `locate(key)` (the dataset holding a scan and its id there; a 
 opened yet is opened alone; `KeyError` when no dataset holds it), `scan(key)`, `allowed(key)`
 (the scan is on disk, opens and has an allowed status), `row(key)` (its table row),
 `label(folder, root=None)` (its name, or its path under `root` when two folders share a name),
-`table(root=None)` (one row per selected scan, the positioners that differ), `refresh()` (every
-opened folder again; scans gone or no longer allowed leave) and `close()`.
+`folder_of(path)` (the dataset folder of a key's path: the path, or the folder of a SPEC
+session; `home` maps them), `table(root=None)` (one row per selected scan, the positioners
+that differ), `refresh()` (every opened folder again; scans gone or no longer allowed leave)
+and `close()`.
 
 ```python
 # folder: the demo z-stack; two of its scans chosen by (folder, number), then read
@@ -9852,7 +9906,7 @@ without an entry of their own:
   View draws that detector and every operation reads it from then on; a scan set changes in
   every scan that holds it (`ValueError` when none does, `TypeError` for an object that is
   not a scan). Logged; the scans open again from their files (`Scan.with_detector`), so a
-  saved workspace reopens them with it. What the View's detector field does.
+  saved workspace reopens them with it. What the objects list's detector field does.
 - `set_names(names=None, offsets=None, scales=None)`: names, offsets and scales for every scan opened from now on (`open_scan`, `open_scans`, `open_scan_set`, `add_scans`): a scan with any of these names, as its files give them, opens renamed (`Scan.renamed`); kept in `settings["names"]`, so saved with the workspace, and logged; none clears them. Returns what it keeps.
 - `named(scan)`: `scan` renamed by the names the workspace keeps, those it has; a scan renamed already, or without any of them, as it is; names that clash with the scan's own are left out with a warning.
 - `remove_roi(name)`: forget a named ROI.
@@ -11021,8 +11075,8 @@ The scan (every scan of a set) read with the frames of another of its detectors
 (`Scan.with_detector`): a second camera of a BLISS scan, another image detector of an LCLS run.
 The result is named `<object>_<detector>`, and `describe()` of a scan whose files hold several
 detectors names the one read. On the Analysis tab: Multi-scan, "Use Detector" (its drop-down
-lists the detectors of the scan chosen); in code `ws.run("use_detector", ...)`. The View's
-detector field changes the object itself instead (`ws.use_detector`).
+lists the detectors of the scan chosen); in code `ws.run("use_detector", ...)`. The objects
+list's detector field changes the object itself instead (`ws.use_detector`).
 
 ```python
 # an LCLS run opened in the workspace, then read with its ePix
@@ -12520,17 +12574,21 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 `bexa.gui.objects_panel.ObjectsPanel(app)`
 
 The panel of an `App`: `listing` (a `SelectMultiple`
-of the objects), `filter`, `search`, `details`, `metadata` and `names` (the **Full metadata**
-and **Names and offsets** buttons, shown for a scan), `notes`, `rois`, `more` (the **Details**
-`Accordion`), `box`. `refresh()`
-lists the
-objects again, `select(names)` selects from code.
+of the objects), `filter`, `search`, `detector` (the detectors of the scan selected, a scan
+set's those of its scans, the one it reads chosen; shown for every scan, fixed for a scan of
+one; a choice is `ws.use_detector`: the object itself, so the View and every operation read
+that detector, on every scan of a set that holds it), `details`, `metadata` and `names` (the
+**Full metadata** and **Names and offsets** buttons, shown for a scan), `notes`, `rois`, `more`
+(the **Details** `Accordion`), `box`. `refresh()` lists the objects again, `select(names)`
+selects from code.
 
 ```python
 # the panel lists the scan; a filter by kind
 [label for label, _ in app.objects.listing.options]  # ['[scan] demo_rocking  mu[25] x y[64] x x[80]']
 app.objects.filter.value = "curve"
 app.objects.listing.options                     # ()
+app.set_selection([rock.name])
+app.objects.detector.options, app.objects.detector.disabled   # (('pco_ff',), True): one detector
 ```
 
 - `KIND_FILTERS`: the choices of the kind filter.
@@ -12540,7 +12598,8 @@ app.objects.listing.options                     # ()
 The Data tab: the folder to work in, any existing folder, scans or not yet (a beamtime folder
 before its first scan): the scan picker (`bexa.notebook.ScanPicker`) lists its datasets once
 there are any, running scans included, and its selection is added as scans, a scan set or a
-series; Refresh looks again and reads the new points of the opened scans still being written,
+series (a folder of several SPEC sessions lists the scans of every one, each named by its
+file); Refresh looks again and reads the new points of the opened scans still being written,
 auto does it every 10 s. A path is sniffed against every format spec and opened as one scan,
 every scan of a dataset (complete, aborted or running), a scan set, or loaded as objects (scans
 named by number open whatever their status, so a SPEC scan whose frames were not copied opens
@@ -12560,10 +12619,10 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 
 The tab: `root` (the folder field), `folder_note` (how many datasets, or none yet), `datasets`
 and `picker` (the folder's datasets and their scan picker, `None` without any), `auto` (the
-toggle), `path`, `scan_numbers`, `format`, `detector` (a combo box: "What is it?" lists the
-detectors the path's files hold, read from its first scan, and the one typed or chosen is
-the one opened, for the scans added from the picker too when their files hold it),
-`sniffed` (what "What is it?" found, the detectors when there are several), `profile`,
+toggle), `path`, `scan_numbers`, `format`, `sniffed` (what "What is it?" found: the spec,
+the detectors the path's files hold when there are several, read from its first scan, the
+SPEC files of a folder of several sessions; a scan opens with its default detector, and the
+objects list's **detector** switches it), `profile`,
 `sample`, `demo`. Its buttons call the workspace through `App.submit`; on a local kernel the
 **...** next to the folder chooses it in the system's dialog, and the file and folder buttons
 next to the path fill it in and say what it is (`App.choose_path`). Members:
@@ -12631,8 +12690,12 @@ names=False)` that of a scan object under its names and offsets, unfolded with `
 objects list's **Full metadata** and **Names and offsets**).
 `go(folder)` lists a folder (a file: its folder, the file selected); **...** chooses a file in
 the system's dialog and goes to it (on a local kernel); **Use this folder** makes
-the folder listed the one to work in (`DataTab.use_folder`), scans or not; `show_figure()`,
-`show_text(text)` and `show_html(markup)` fill the preview area.
+the folder listed the one to work in (`DataTab.use_folder`), scans or not; `refresh()` (the
+refresh button) looks again and keeps what is picked: the folder's entries, the file picked
+read anew (a SPEC file being written: its new scans and points, the scan, the columns plotted
+and the search kept: `SpecInspector.state`) and, in the background, the opened scans' new
+points (`Workspace.refresh`); `show_figure()`, `show_text(text)` and `show_html(markup)` fill
+the preview area.
 
 ```python
 # the master file: its tree, the first group opened
@@ -12684,18 +12747,23 @@ inspector.close()
 ```
 
 #### `SpecInspector`
-`bexa.gui.inspectors.SpecInspector(tab, path)`
+`bexa.gui.inspectors.SpecInspector(tab, path, keep=None)`
 
 A SPEC session: its scans, a scan's header and first
 rows, a column plotted against another (`x`, `y`), and Open this scan; the first scan is
 shown at once. `variables` lists what the session records (`spec_variables`), filtered by
 the name typed in `find`: to find the motors and counters of interest. `moves` holds every
-motor's range over the session and how many scans it moved in.
+motor's range over the session and how many scans it moved in. `state()` is what is picked
+(`scan`, `x`, `y`, `find`), and `keep` picks it again where it still is: the Browse tab's
+refresh reads a session being written anew on the scan picked.
 
 ```python
-# the synthetic session
+# the synthetic session; read again on scan 4, its columns kept
 spec = SpecInspector(app.browse, session.path)
 len(spec.scans.options), spec.x.value           # (5, 'Time')
+spec.scans.value, spec.y.value = 4, "Yaw"
+again = SpecInspector(app.browse, session.path, keep=spec.state())
+again.scans.value, again.y.value                # (4, 'Yaw')
 ```
 
 #### `spec_variables`
@@ -12895,8 +12963,8 @@ mapping_text({"mu": "omega", "chi": 1.5})        # 'mu=omega, chi=1.5'
 ### bexa.gui.view_tab: drawing the selection
 
 The View tab: a scan's raw frames (a slider per motor, one frame read per move), a scan set's
-scans, the detector a scan of several reads (**detector**: the object itself reads it, so the
-operations take it too), a point detector (a counter of a netCDF run, frames of 1 x 1) against
+scans, with the detector each reads (the objects list's **detector** chooses it), a point
+detector (a counter of a netCDF run, frames of 1 x 1) against
 its motor or as an image of its last two motors, a stack with a slider per motor dim or its
 frames summed (maximum, mean), images and maps
 on their coordinates (colour map, limits, log, colour bar, ROIs), curves overlaid with error bars
@@ -12915,9 +12983,7 @@ app = App(background=False, figures="static", cache=False)  # the GUI without a 
 #### `ViewTab`
 `bexa.gui.view_tab.ViewTab(app)`
 
-The tab: `pane`, `mode`, `member` (the scan of a set), `detector` (the detectors of the scan
-shown, the one it reads chosen, hidden for a scan of one; a choice is `ws.use_detector`, on
-every scan of a set that holds it), `row_dim`
+The tab: `pane`, `mode`, `member` (the scan of a set), `row_dim`
 and `col_dim` (a volume), `sliders` by dim, the image options (`cmap`: a combo box offering
 `colormap_names()` and taking any matplotlib colour map typed, `reverse`, `scale`, `percent`,
 `vmin`, `vmax`, `colorbar`, `show_rois`, `aspect`: the axes to scale or not, for a colour

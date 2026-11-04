@@ -3,6 +3,9 @@
 Raw scans and scan sets come first (they are read from files and never
 change); results follow in the order they were made. Selecting objects here
 sets the inputs of the Analysis and Fit tabs and what the View tab shows.
+The **detector** of the scan selected chooses which of its detectors it reads
+(``Workspace.use_detector``: the object itself, so the View and every
+operation read that one; for a scan set, every scan that holds it).
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ from __future__ import annotations
 import html
 from typing import Any
 
-from bexa.gui.forms import kind_label
+from bexa.gui.forms import kind_label, set_tooltip
 
 __all__ = ["ObjectsPanel"]
 
@@ -34,6 +37,13 @@ class ObjectsPanel:
         self.listing = ipw.SelectMultiple(options=[], rows=8, layout=ipw.Layout(width="100%"))
         self.listing.add_class("bexa-objects")
         self.listing.observe(self._selected, names="value")
+        self.detector = ipw.Dropdown(
+            description="detector",
+            layout=ipw.Layout(width="100%", display="none"),
+            style={"description_width": "60px"},
+        )
+        self.detector.observe(lambda c: self._detector_chosen(c["new"]), names="value")
+        set_tooltip(self.detector, "the detector the scan reads: in the View and every operation")
         self.new_name = ipw.Text(placeholder="new name", layout=ipw.Layout(width="140px"))
         rename = ipw.Button(description="Rename", layout=ipw.Layout(width="80px"))
         duplicate = ipw.Button(
@@ -100,6 +110,7 @@ class ObjectsPanel:
                 ),
                 ipw.HBox([self.filter, self.search]),
                 self.listing,
+                self.detector,
                 ipw.HBox(
                     [self.new_name, rename, duplicate, self.delete, self.confirm],
                     layout=ipw.Layout(flex_flow="row wrap"),
@@ -161,6 +172,7 @@ class ObjectsPanel:
     def _show_details(self) -> None:
         ws = self.app.ws
         current = self.app.current
+        self._detector_options()
         if current is None or current not in ws:
             self.details.value = "<i>nothing selected</i>"
             self.notes.value = ""
@@ -201,6 +213,47 @@ class ObjectsPanel:
             for n, r in rois.items()
         )
         self.rois.value = f"<table style='font-size:11px'>{rows}</table>"
+
+    # ------------------------------------------------------------------ the detector
+    def _scans(self) -> list[Any]:
+        """The scans of the object selected: a scan, a scan set's scans, else none."""
+        current = self.app.current
+        if current is None or current not in self.app.ws:
+            return []
+        obj = self.app.ws[current]
+        if obj.kind == "scan":
+            return [obj.data]
+        return list(obj.data.scans) if obj.kind == "scanset" else []
+
+    def _detector_options(self) -> None:
+        """The detectors of the scan selected (a scan set: those of its scans), the one it
+        reads chosen (the first scan's); hidden for other objects, fixed for one detector."""
+        scans = self._scans()
+        names = list(dict.fromkeys(d for scan in scans for d in scan.detectors))
+        reads = scans[0].detector if scans else None
+        syncing, self._syncing = self._syncing, True
+        try:
+            self.detector.options = names
+            self.detector.value = reads if reads in names else (names[0] if names else None)
+            self.detector.disabled = len(names) < 2
+            self.detector.layout.display = "" if names else "none"
+        finally:
+            self._syncing = syncing
+
+    def _detector_chosen(self, detector: str | None) -> None:
+        """Read the scan selected (every scan of a set that holds it) with ``detector``: the
+        object itself, so the View and every operation read that detector."""
+        current, scans = self.app.current, self._scans()
+        if self._syncing or not detector or not scans:
+            return
+        if all(scan.detector == detector for scan in scans if detector in scan.detectors):
+            return
+        # the workspace says the object changed, and the panels follow
+        done = self.app.guarded(lambda: self.app.ws.use_detector(current, detector))
+        if done is None:  # it failed (said in red): the field shows what is read
+            self._detector_options()
+            return
+        self.app.say(f"{current} reads {detector}", "ok")
 
     # ------------------------------------------------------------------ actions
     def _rename(self) -> None:

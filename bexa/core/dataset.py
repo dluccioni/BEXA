@@ -91,9 +91,21 @@ def _folder_of(path: str | Path) -> Path:
     return folder
 
 
+def _parts(spec: Any, path: Path, folder: Path) -> list[Path]:
+    """Where the scans of a dataset path are numbered: its folder, or each SPEC file of a
+    folder holding several sessions (the one given, when ``path`` is one of them)."""
+    sessions = getattr(engines.get(spec.engine), "sessions", None)
+    found = sessions(spec, folder) if sessions is not None else []
+    if len(found) < 2:
+        return [folder]
+    given = [f for f in found if path.is_file() and f.name == path.name]
+    return given or found
+
+
 @dataclass
 class _Folder:
-    """One dataset folder of a :class:`Dataset` and how its scans are opened."""
+    """One dataset folder of a :class:`Dataset` (or one SPEC session of a folder of several)
+    and how its scans are opened."""
 
     path: Path
     name: str
@@ -136,7 +148,10 @@ class Dataset:
     Every scan has an ``id``, the first column of :meth:`table`: for one folder
     the scan number, so ``ds[7]`` is scan 7; for several folders a running
     number over the combined table, next to a ``dataset`` column naming the
-    folder. ``ds[id]``, :meth:`select`, :meth:`series` and :meth:`groups` all
+    folder. A folder holding several SPEC sessions (one SPEC file each) lists
+    the scans of every one the same way, the ``dataset`` column naming the
+    file (:attr:`parts`; a session started since joins at :meth:`refresh`).
+    ``ds[id]``, :meth:`select`, :meth:`series` and :meth:`groups` all
     take ids. The scans share one result cache.
 
     Parameters
@@ -144,6 +159,7 @@ class Dataset:
     path
         The dataset folder, its master file or one of its ``scanNNNN`` folders;
         or a list of folders when a measurement continues in another dataset.
+        A SPEC file of a folder holding several is that session alone.
     profile, sample, dataset
         Instead of a path: a beamtime profile with a sample name (or a dataset
         folder name), as for :func:`bexa.open`.
@@ -184,6 +200,8 @@ class Dataset:
         if cache_reductions is not None:
             self._open_kwargs["cache_reductions"] = cache_reductions
         folders: list[_Folder] = []
+        # the paths given: (path, its folder, the spec, how its scans open, how they list)
+        self._given: list[tuple[Path, Path, Any, dict[str, Any], dict[str, Any]]] = []
         if profile is not None or path is None:
             from bexa.config import BeamtimeProfile, load_profile
 
@@ -224,11 +242,13 @@ class Dataset:
                     "cache": self.cache if self.cache is not None else False,
                 }
                 listing = {"format": spec.name, "detector": detector}
-                folders.append(_Folder(folder, folder.name, options, listing, _spec=spec))
+                self._given.append((Path(str(p).split("::")[0]), folder, spec, options, listing))
+            folders = self._split([])
         self._folders = folders
-        self.paths = [f.path for f in folders]
+        self.paths = list(dict.fromkeys(g[1] for g in self._given)) or [f.path for f in folders]
         self.path = self.paths[0]
-        self.name = folders[0].name if len(folders) == 1 else " + ".join(f.name for f in folders)
+        named = [folder.name for folder in self.paths]
+        self.name = folders[0].name if len(folders) == 1 else " + ".join(named)
         self._ids: list[int] | None = None
         self._where: dict[int, tuple[int, int]] = {}
         self._table: pd.DataFrame | None = None
@@ -238,7 +258,25 @@ class Dataset:
         self._problems: dict[tuple[int, int], str] = {}
         self._warned: dict[tuple[int, int], str] = {}  # logged once, not at every refresh
 
+    def _split(self, known: Sequence[_Folder]) -> list[_Folder]:
+        """One :class:`_Folder` per place the given paths number scans in (each SPEC file of
+        a folder of several sessions); those already in ``known`` kept as they are."""
+        kept = {f.path: f for f in known}
+        several = len(self._given) > 1
+        out = []
+        for path, folder, spec, options, listing in self._given:
+            for part in _parts(spec, path, folder):
+                name = part.name if part == folder or not several else f"{folder.name}/{part.name}"
+                out.append(kept.get(part) or _Folder(part, name, options, listing, _spec=spec))
+        return out
+
     # ------------------------------------------------------------- basics
+    @property
+    def parts(self) -> list[Path]:
+        """Where the scans are numbered, in order: the dataset folders, with each SPEC file
+        of a folder holding several sessions in place of the folder."""
+        return [f.path for f in self._folders]
+
     @property
     def scans(self) -> list[int]:
         """Every scan id (the scan number for one folder, a running number for several)."""
@@ -259,7 +297,8 @@ class Dataset:
         return list(self.paths)
 
     def origin(self, scan_id: int) -> tuple[Path, int]:
-        """The dataset folder and the scan number behind an id: ``(folder, number)``."""
+        """The dataset folder and the scan number behind an id: ``(folder, number)``; the
+        SPEC file for a session of a folder of several (one of :attr:`parts`)."""
         if self._ids is None:
             _ = self.scans  # lists the folders once
         key = self._where.get(int(scan_id))
@@ -273,7 +312,8 @@ class Dataset:
 
         The scans that were complete or aborted keep their handles and table
         rows (their files do not change any more); the running, empty and
-        unreadable ones are forgotten and read again by the next :meth:`table`.
+        unreadable ones are forgotten and read again by the next :meth:`table`. A SPEC
+        session started in a folder of sessions since joins (:attr:`parts`).
         ``everything=True`` closes and forgets every scan.
         """
         kept_rows: dict[tuple[int, int], dict[str, Any]] = {}
@@ -289,6 +329,20 @@ class Dataset:
             else:
                 scan.close()
         self._scans.clear()
+        if self._given:  # the places again: a new SPEC file may have moved the others
+            before = self.parts
+            self._folders = self._split(self._folders)
+            place = {part: k for k, part in enumerate(self.parts)}
+
+            def moved(keyed: dict[tuple[int, int], Any]) -> dict[tuple[int, int], Any]:
+                out = {}
+                for (k, number), value in keyed.items():
+                    if before[k] in place:
+                        out[(place[before[k]], number)] = value
+                return out
+
+            kept_rows, kept_scans = moved(kept_rows), moved(kept_scans)
+            self._warned = moved(self._warned)
         for folder in self._folders:
             folder.numbers = None
         self._ids = None

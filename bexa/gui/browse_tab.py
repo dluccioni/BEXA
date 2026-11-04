@@ -10,7 +10,9 @@ as a scan opens from here, and **Scan metadata** shows everything its files say
 each point, the positions, the detectors, the files and the engine's own tables.
 The objects list shows the same for a scan object, with its **Names and offsets**
 (:class:`bexa.gui.names_editor.NamesEditor`): an alias, an offset and a scale for each
-motor, counter, position and detector.
+motor, counter, position and detector. Refresh looks again and keeps what is picked:
+the folder's entries, the file picked read anew (a SPEC file being written: its new
+scans and points, on the scan picked) and the opened scans' new points.
 """
 
 from __future__ import annotations
@@ -91,6 +93,12 @@ class BrowseTab:
         up = ipw.Button(
             icon="arrow-up", tooltip="the parent folder", layout=ipw.Layout(width="40px")
         )
+        refresh = ipw.Button(
+            icon="refresh",
+            tooltip="look again, what is picked kept: the folder, the file (a SPEC file being "
+            "written: its new scans and points) and the opened scans' new points",
+            layout=ipw.Layout(width="40px"),
+        )
         enter = ipw.Button(
             description="Open folder", icon="folder-open", layout=ipw.Layout(width="120px")
         )
@@ -102,10 +110,12 @@ class BrowseTab:
         )
         go.on_click(lambda _b: self.go(self.path.value))
         up.on_click(lambda _b: self.go(self.folder.parent))
+        refresh.on_click(lambda _b: self.refresh())
         enter.on_click(lambda _b: self._enter())
         use.on_click(lambda _b: self._use())
         self.listing = ipw.Select(options=[], rows=8, layout=ipw.Layout(width="100%"))
         self.listing.add_class("bexa-files")
+        self._relisting = False  # the listing made again: what is picked is shown after
         self.listing.observe(lambda c: self._picked(c["new"]), names="value")
         self.head = ipw.HTML()
         self.pane = FigurePane((5.4, 3.6), interactive=False)
@@ -120,7 +130,7 @@ class BrowseTab:
         self._shown = 0  # counts what was shown: a job's late answer for an older one waits
         self.box = ipw.VBox(  # one column: the folder, then what is inside the entry picked
             [
-                ipw.HBox([up, self.path, go, choose]),
+                ipw.HBox([up, self.path, go, choose, refresh]),
                 ipw.HBox([enter, use]),
                 self.listing,
                 self.head,
@@ -166,6 +176,29 @@ class BrowseTab:
         self.listing.options = options
         self.head.value = f"<b>{html.escape(str(path))}</b>: {len(entries)} entries"
 
+    def refresh(self) -> None:
+        """Look again, keeping what is picked: the folder's entries, the file picked read
+        anew (a SPEC file being written: its new scans and points, the scan, the columns and
+        the search kept), and the opened scans being written their new points."""
+        chosen = self.listing.value
+        keep = self.inspector.state() if isinstance(self.inspector, SpecInspector) else None
+        self._relisting = True
+        try:
+            self.go(self.folder)
+            listed = {value for _, value in self.listing.options}
+            self.listing.value = chosen if chosen in listed else None
+        finally:
+            self._relisting = False
+        if self.listing.value:
+            self._picked(self.listing.value, keep)
+
+        def said(grown: list[str]) -> None:
+            if grown:
+                self.app.say(f"read again: {', '.join(grown)}", "ok")
+
+        reading = "reading the opened scans again"
+        self.app.submit(reading, self.app.ws.refresh, done=said, quiet=True)
+
     def _enter(self) -> None:
         chosen = self.listing.value
         if chosen and Path(chosen).is_dir():
@@ -201,8 +234,9 @@ class BrowseTab:
         self.metadata_box.children = []
         self._shown += 1
 
-    def _picked(self, chosen: str | None) -> None:
-        if not chosen:
+    def _picked(self, chosen: str | None, keep: dict[str, Any] | None = None) -> None:
+        """Show the entry picked; ``keep``: what was picked in it before (a refresh)."""
+        if not chosen or self._relisting:
             return
         path = Path(chosen)
         self._reset()
@@ -213,7 +247,7 @@ class BrowseTab:
                 self.inspector = H5Inspector(self, path)
                 self.body.children = [self._open_bar(path), self.inspector.box]
             elif _is_spec(path):
-                self.inspector = SpecInspector(self, path)
+                self.inspector = SpecInspector(self, path, keep)
                 self.body.children = [self._open_bar(path), self.inspector.box]
             elif path.suffix.lower() in NC_SUFFIXES:
                 bar = self._open_bar(path)

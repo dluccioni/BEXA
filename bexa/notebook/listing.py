@@ -291,7 +291,7 @@ class ScanListing:
     def selected_in(self, folder: str | Path) -> list[int]:
         """The scan numbers selected in one dataset folder."""
         wanted = folder_path(folder)
-        return [number for f, number in self.selection if f == wanted]
+        return [number for f, number in self.selection if self._selection.folder_of(f) == wanted]
 
     def select(self, ids: Iterable[int]) -> None:
         """Select these scans among those listed, and none of the other listed ones.
@@ -355,7 +355,7 @@ class ScanListing:
         total = len(self._selection.keys)
         if total > len(self.ids):
             listed = " + ".join(folder.name for folder in self.folders)
-            folders = len({folder for folder, _ in self._selection.keys})
+            folders = len({self._selection.folder_of(f) for f, _ in self._selection.keys})
             text += f" in {listed}; {total} in all, from {folders} folder"
             text += "s" if folders > 1 else ""
         return text
@@ -365,7 +365,7 @@ class ScanListing:
         keys = self._selection.keys
         if not keys:
             return "nothing selected"
-        folders = len({folder for folder, _ in keys})
+        folders = len({self._selection.folder_of(f) for f, _ in keys})
         scans = f"{len(keys)} scan{'s' if len(keys) > 1 else ''}"
         return f"{scans} in {folders} folder{'s' if folders > 1 else ''}"
 

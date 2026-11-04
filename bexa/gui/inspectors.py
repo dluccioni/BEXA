@@ -364,9 +364,10 @@ class H5Inspector:
 class SpecInspector:
     """A SPEC session: its scans; its variables, found by name (every motor with where it was
     in the scan picked and over the session, which moved first; the counters, the scan's
-    columns and header fields); a scan's header and columns, a column against another."""
+    columns and header fields); a scan's header and columns, a column against another.
+    ``keep``: what was picked before (:meth:`state`), picked again where it still is."""
 
-    def __init__(self, tab: Any, path: Path) -> None:
+    def __init__(self, tab: Any, path: Path, keep: dict[str, Any] | None = None) -> None:
         import ipywidgets as ipw
 
         from bexa.io.engines.spec_tiff import read_spec_file
@@ -409,9 +410,24 @@ class SpecInspector:
                 self.details,
             ]
         )
-        if options:  # the first scan shown: a Select starts on it, so no change says so
-            self.scans.value = options[0][1]
-            self._scan(options[0][1])
+        self._keep = dict(keep or {})  # the columns to plot again, for the first scan shown
+        self.find.value = str(self._keep.get("find", ""))
+        numbers = [n for _, n in options]
+        if numbers:  # the scan picked before, else the first
+            number = self._keep["scan"] if self._keep.get("scan") in numbers else numbers[0]
+            if self.scans.value != number:
+                self.scans.value = number  # shown as any scan picked
+            else:  # a Select starts on its first option: no change says so
+                self._scan(number)
+
+    def state(self) -> dict[str, Any]:
+        """What is picked: the scan, the columns plotted, the search."""
+        return {
+            "scan": self.scans.value,
+            "x": self.x.value,
+            "y": self.y.value,
+            "find": self.find.value,
+        }
 
     def close(self) -> None:
         return None
@@ -419,12 +435,13 @@ class SpecInspector:
     def _scan(self, number: int | None) -> None:
         if number is None:
             return
+        keep, self._keep = self._keep, {}
         scan = self.spec.scans[number]
         labels = list(scan.labels)
         self.x.options, self.y.options = labels, labels
         if labels:
-            self.x.value = labels[0]
-            self.y.value = labels[-1]
+            self.x.value = keep["x"] if keep.get("x") in labels else labels[0]
+            self.y.value = keep["y"] if keep.get("y") in labels else labels[-1]
         header = "".join(
             f"<tr><td><b>{html.escape(block)}</b></td><td>{html.escape(str(values)[:200])}</td></tr>"
             for block, values in list(scan.header.items())[:12]
