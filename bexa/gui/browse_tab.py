@@ -12,7 +12,8 @@ The objects list shows the same for a scan object, with its **Names and offsets*
 (:class:`bexa.gui.names_editor.NamesEditor`): an alias, an offset and a scale for each
 motor, counter, position and detector. Refresh looks again and keeps what is picked:
 the folder's entries, the file picked read anew (a SPEC file being written: its new
-scans and points, on the scan picked) and the opened scans' new points.
+scans and points, on the scans selected) and the opened scans' new points. Several scans
+of a SPEC session open at once, as objects or as a scan set.
 """
 
 from __future__ import annotations
@@ -178,8 +179,8 @@ class BrowseTab:
 
     def refresh(self) -> None:
         """Look again, keeping what is picked: the folder's entries, the file picked read
-        anew (a SPEC file being written: its new scans and points, the scan, the columns and
-        the search kept), and the opened scans being written their new points."""
+        anew (a SPEC file being written: its new scans and points, the scans selected, the
+        columns and the search kept), and the opened scans being written their new points."""
         chosen = self.listing.value
         keep = self.inspector.state() if isinstance(self.inspector, SpecInspector) else None
         self._relisting = True
@@ -294,10 +295,10 @@ class BrowseTab:
 
     # ------------------------------------------------------------------ metadata
     def _scan_number(self) -> int | None:
-        """The scan picked in the inspector shown: a SPEC session's, or the scan group of
-        an HDF5 file's tree (``/4.1/...``); ``None`` for a file of one scan."""
+        """The scan picked in the inspector shown: a SPEC session's (the one shown), or the
+        scan group of an HDF5 file's tree (``/4.1/...``); ``None`` for a file of one scan."""
         if isinstance(self.inspector, SpecInspector):
-            return self.inspector.scans.value
+            return self.inspector.shown
         if isinstance(self.inspector, H5Inspector) and self.inspector.selected:
             head = self.inspector.selected.strip("/").split("/")[0].split(".")[0]
             return int(head) if head.isdigit() else None

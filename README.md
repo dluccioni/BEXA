@@ -12692,8 +12692,8 @@ objects list's **Full metadata** and **Names and offsets**).
 the system's dialog and goes to it (on a local kernel); **Use this folder** makes
 the folder listed the one to work in (`DataTab.use_folder`), scans or not; `refresh()` (the
 refresh button) looks again and keeps what is picked: the folder's entries, the file picked
-read anew (a SPEC file being written: its new scans and points, the scan, the columns plotted
-and the search kept: `SpecInspector.state`) and, in the background, the opened scans' new
+read anew (a SPEC file being written: its new scans and points, the scans selected, the one
+shown, the columns plotted and the search kept: `SpecInspector.state`) and, in the background, the opened scans' new
 points (`Workspace.refresh`); `show_figure()`, `show_text(text)` and `show_html(markup)` fill
 the preview area.
 
@@ -12749,21 +12749,30 @@ inspector.close()
 #### `SpecInspector`
 `bexa.gui.inspectors.SpecInspector(tab, path, keep=None)`
 
-A SPEC session: its scans, a scan's header and first
-rows, a column plotted against another (`x`, `y`), and Open this scan; the first scan is
-shown at once. `variables` lists what the session records (`spec_variables`), filtered by
-the name typed in `find`: to find the motors and counters of interest. `moves` holds every
-motor's range over the session and how many scans it moved in. `state()` is what is picked
-(`scan`, `x`, `y`, `find`), and `keep` picks it again where it still is: the Browse tab's
-refresh reads a session being written anew on the scan picked.
+A SPEC session: its scans (`scans`, a `SelectMultiple`: ctrl- or shift-click selects
+several), the header and first rows of the scan shown (`shown`: the one last clicked, else
+the one shown before while it stays selected), a column plotted against another (`x`, `y`)
+for every scan selected that records both (the scan shown first, at most `MAX_OVERLAID`), and
+**Open selected** (one object per scan, `Workspace.open_scan` for one, `open_scans` for
+several) and **Open as scan set**; scans named by number open whatever their status, so a
+scan whose frames were not copied opens with its counters. The first scan is shown at once;
+`count` says how many are selected. `variables` lists what the session records
+(`spec_variables`) for the scan shown, filtered by the name typed in `find`: to find the
+motors and counters of interest. `moves` holds every motor's range over the session and how
+many scans it moved in. `state()` is what is picked (`scans`, `shown`, `x`, `y`, `find`), and
+`keep` picks it again where it still is: the Browse tab's refresh reads a session being
+written anew on the scans selected.
 
 ```python
-# the synthetic session; read again on scan 4, its columns kept
+# the synthetic session; scans 2 and 4 selected (a click, then a ctrl-click), read again with them
 spec = SpecInspector(app.browse, session.path)
 len(spec.scans.options), spec.x.value           # (5, 'Time')
-spec.scans.value, spec.y.value = 4, "Yaw"
+spec.scans.value = (2,)
+spec.scans.value = (2, 4)
+spec.shown, len(app.browse.pane.fig.axes[0].lines)   # (4, 2): scan 4 shown, both plotted
+spec.y.value = "Epoch"
 again = SpecInspector(app.browse, session.path, keep=spec.state())
-again.scans.value, again.y.value                # (4, 'Yaw')
+again.scans.value, again.shown, again.y.value   # ((2, 4), 4, 'Epoch')
 ```
 
 #### `spec_variables`
@@ -12819,6 +12828,7 @@ picture.shape, pages                            # ((24, 32), 1)
 ```
 
 - `MAX_LINES`: the most tree lines listed at once.
+- `MAX_OVERLAID`: the most scans of a SPEC session plotted together.
 - `PREVIEW_PIXELS`: an image preview is cut to about this many pixels a side.
 
 ### bexa.gui.metadata_view: a scan's metadata on screen

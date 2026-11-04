@@ -33,6 +33,7 @@ __all__ = [
 MAX_LINES = 3000  # tree lines listed at once
 MAX_FOUND = 1000  # names found in an HDF5 file, listed at once
 MAX_VARIABLES = 300  # rows of a SPEC session's variables, shown at once
+MAX_OVERLAID = 12  # scans of a SPEC session plotted together, the one shown first
 PREVIEW_PIXELS = 1024  # an image preview is cut to about this many pixels a side
 
 
@@ -362,10 +363,12 @@ class H5Inspector:
 
 
 class SpecInspector:
-    """A SPEC session: its scans; its variables, found by name (every motor with where it was
-    in the scan picked and over the session, which moved first; the counters, the scan's
-    columns and header fields); a scan's header and columns, a column against another.
-    ``keep``: what was picked before (:meth:`state`), picked again where it still is."""
+    """A SPEC session: its scans, several selected at once (opened as objects or as a scan
+    set); its variables, found by name (every motor with where it was in the scan shown and
+    over the session, which moved first; the counters, the scan's columns and header fields);
+    the header and columns of the scan shown (the one last clicked), a column against another
+    for every scan selected. ``keep``: what was picked before (:meth:`state`), picked again
+    where it still is."""
 
     def __init__(self, tab: Any, path: Path, keep: dict[str, Any] | None = None) -> None:
         import ipywidgets as ipw
@@ -379,15 +382,27 @@ class SpecInspector:
             (f"#S {n:4d}  {s.n_rows:5d} pts  {s.command}"[:110], n)
             for n, s in self.spec.scans.items()
         ]
-        self.scans = ipw.Select(options=options, rows=8, layout=ipw.Layout(width="100%"))
+        self.scans = ipw.SelectMultiple(options=options, rows=8, layout=ipw.Layout(width="100%"))
         self.scans.add_class("bexa-spec")
-        self.scans.observe(lambda c: self._scan(c["new"]), names="value")
+        self.scans.observe(self._picked, names="value")
+        self.shown: int | None = None  # the scan whose header, rows and variables are shown
         self.x = ipw.Dropdown(description="x", layout=ipw.Layout(width="260px"))
         self.y = ipw.Dropdown(description="y", layout=ipw.Layout(width="260px"))
         self.x.observe(lambda _c: self._plot(), names="value")
         self.y.observe(lambda _c: self._plot(), names="value")
-        open_button = ipw.Button(description="Open this scan", button_style="primary")
-        open_button.on_click(lambda _b: self._open())
+        open_scans = ipw.Button(
+            description="Open selected",
+            button_style="primary",
+            tooltip="one object per scan selected (ctrl- or shift-click to select several)",
+        )
+        open_set = ipw.Button(
+            description="Open as scan set",
+            button_style="info",
+            tooltip="the scans selected as one object, to process together",
+        )
+        open_scans.on_click(lambda _b: self._open(as_set=False))
+        open_set.on_click(lambda _b: self._open(as_set=True))
+        self.count = ipw.HTML()
         self.info = ipw.HTML(
             f"<b>{html.escape(path.name)}</b>: {len(self.spec.scans)} scans, "
             f"{len(self.spec.motor_names)} motors"
@@ -406,28 +421,47 @@ class SpecInspector:
                 self.scans,
                 self.find,
                 self.variables,
-                ipw.HBox([self.x, self.y, open_button], layout=ipw.Layout(flex_flow="row wrap")),
+                ipw.HBox(
+                    [self.x, self.y, open_scans, open_set, self.count],
+                    layout=ipw.Layout(flex_flow="row wrap"),
+                ),
                 self.details,
             ]
         )
-        self._keep = dict(keep or {})  # the columns to plot again, for the first scan shown
+        self._keep = dict(keep or {})  # the scan and the columns to show again
         self.find.value = str(self._keep.get("find", ""))
         numbers = [n for _, n in options]
-        if numbers:  # the scan picked before, else the first
-            number = self._keep["scan"] if self._keep.get("scan") in numbers else numbers[0]
-            if self.scans.value != number:
-                self.scans.value = number  # shown as any scan picked
-            else:  # a Select starts on its first option: no change says so
-                self._scan(number)
+        if numbers:  # the scans selected before, else the first
+            picked = tuple(n for n in self._keep.get("scans", ()) if n in numbers)
+            self.scans.value = picked or (numbers[0],)
 
     def state(self) -> dict[str, Any]:
-        """What is picked: the scan, the columns plotted, the search."""
+        """What is picked: the scans selected, the one shown, the columns plotted, the search."""
         return {
-            "scan": self.scans.value,
+            "scans": tuple(self.scans.value),
+            "shown": self.shown,
             "x": self.x.value,
             "y": self.y.value,
             "find": self.find.value,
         }
+
+    def _picked(self, change: Any) -> None:
+        """Scans selected: the one just clicked is shown, else the one shown before if still
+        selected, else the first."""
+        new = list(change["new"])
+        before = change["old"] if isinstance(change["old"], tuple) else ()  # none at first
+        added = [n for n in new if n not in before]
+        wanted = self._keep.get("shown", self.shown)
+        if len(added) == 1:
+            shown = added[0]
+        else:
+            shown = wanted if wanted in new else (new[0] if new else None)
+        self.count.value = f"&nbsp;{len(new)} selected" if len(new) > 1 else ""
+        if shown != self.shown:
+            self.shown = shown
+            self._scan(shown)
+        else:  # the same scan shown: the others plotted with it changed
+            self._plot()
 
     def close(self) -> None:
         return None
@@ -461,8 +495,8 @@ class SpecInspector:
         self._plot()
 
     def _variables(self) -> None:
-        """The table of variables, for the scan picked and the name typed."""
-        number = self.scans.value
+        """The table of variables, for the scan shown and the name typed."""
+        number = self.shown
         scan = self.spec.scans.get(number) if number is not None else None
         needle = self.find.value.strip().lower()
         rows = [
@@ -487,29 +521,44 @@ class SpecInspector:
         )
 
     def _plot(self) -> None:
-        number = self.scans.value
+        """The columns chosen for the scan shown, and for the other scans selected that
+        record them (the first :data:`MAX_OVERLAID`)."""
+        number = self.shown
         if number is None or not self.x.value or not self.y.value:
             return
-        scan = self.spec.scans[number]
+        x, y = self.x.value, self.y.value
+        picked = [number, *(n for n in self.scans.value if n != number)][:MAX_OVERLAID]
         fig = self.tab.pane.clear()
         ax = fig.add_subplot(111)
-        if scan.n_rows:
-            ax.plot(scan.column(self.x.value), scan.column(self.y.value), "o-", ms=3, lw=1)
-        ax.set_xlabel(self.x.value)
-        ax.set_ylabel(self.y.value)
-        ax.set_title(f"#S {number}", fontsize=9)
+        for n in picked:
+            scan = self.spec.scans[n]
+            if scan.n_rows and x in scan.labels and y in scan.labels:
+                ax.plot(scan.column(x), scan.column(y), "o-", ms=3, lw=1, label=f"#S {n}")
+        ax.set_xlabel(x)
+        ax.set_ylabel(y)
+        if len(picked) > 1:
+            ax.legend(fontsize=7)
+        more = f" and {len(picked) - 1} more" if len(picked) > 1 else ""
+        ax.set_title(f"#S {number}{more}", fontsize=9)
         self.tab.show_figure()
         self.tab.pane.draw()
 
-    def _open(self) -> None:
-        number = self.scans.value
-        if number is None:
+    def _open(self, as_set: bool = False) -> None:
+        """The scans selected as objects, one per scan, or as one scan set; named by number,
+        they open whatever their status (a scan whose frames were not copied has its counters)."""
+        app, numbers = self.tab.app, [int(n) for n in self.scans.value]
+        if not numbers:
+            app.say("select a scan first", "error")
             return
-        self.tab.app.submit(
-            f"opening scan {number}",
-            lambda: [self.tab.app.ws.open_scan(str(self.path), scan=int(number))],
-            done=self.tab.app.show_results,
-        )
+        path = str(self.path)
+
+        def work() -> list[Any]:
+            if len(numbers) == 1 and not as_set:
+                return [app.ws.open_scan(path, scan=numbers[0])]
+            return app.ws.open_scans(path, numbers, as_set=as_set, status="any")
+
+        what = f"scan {numbers[0]}" if len(numbers) == 1 else f"{len(numbers)} scans"
+        app.submit(f"opening {what} of {self.path.name}", work, done=app.show_results)
 
 
 def _motor_moves(spec: Any) -> dict[str, tuple[float, float, int]]:
