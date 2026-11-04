@@ -70,6 +70,11 @@ def read_object(name: str, group: Any, cache: Any = True) -> DataObject:
         units = group[dim].attrs.get("units")
         if units is not None:
             data.coords[dim].attrs["units"] = _text(units)
+    data.attrs.update(json.loads(_text(group.attrs.get("attrs", "{}"))))
+    for point, on in json.loads(_text(group.attrs.get("coordinates", "{}"))).items():
+        units = group[point].attrs.get("units")
+        point_attrs = {"units": _text(units)} if units is not None else {}
+        data = data.assign_coords({point: (on, group[point][()], point_attrs)})
     sigma = None
     if "errors" in group:
         sigma = xr.DataArray(np.asarray(group["errors"][()]), dims=dims, coords=coords)

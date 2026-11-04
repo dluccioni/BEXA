@@ -7,7 +7,15 @@ import xarray as xr
 
 from bexa.analysis import imaging as maps
 from bexa.workspace.objects import DataObject
-from bexa.workspace.ops._base import IMAGES, new, other_dims, pixel_dims, reduce_over, require
+from bexa.workspace.ops._base import (
+    IMAGES,
+    new,
+    other_dims,
+    pixel_dims,
+    point_values,
+    reduce_over,
+    require,
+)
 
 __all__ = [
     "align_frames",
@@ -106,13 +114,20 @@ def orientation_map(
     intensity: DataObject | None = None,
 ) -> DataObject:
     """Two tilt maps as one colour picture: hue the direction, saturation the size of the tilt
-    (fully saturated at ``span``), brightness the ``intensity`` map if given."""
+    (fully saturated at ``span``), brightness the ``intensity`` map if given; the maps are
+    coordinates of its points, read under the mouse (named as their arrays, else as the
+    objects)."""
     require(a, IMAGES, "Orientation Map")
     require(b, IMAGES, "Orientation Map")
     weight = None if intensity is None else intensity.array.values
     rgb = maps.orientation_rgb(a.array.values, b.array.values, span=span, intensity=weight)
     dims = tuple(str(d) for d in a.array.dims)
     coords = {d: a.array.coords[d] for d in dims if d in a.array.coords}
+    sources = [o for o in (a, b, intensity) if o is not None]
+    names = [str(o.array.name or o.name) for o in sources]
+    if len(set(names)) < len(names):  # two maps of one name (com_mu of two scans)
+        names = [o.name for o in sources]
+    coords.update(point_values(dims, {n: o.array for n, o in zip(names, sources, strict=True)}))
     data = xr.DataArray(
         rgb, dims=(*dims, "rgb"), coords={**coords, "rgb": ["r", "g", "b"]}, name="orientation"
     )

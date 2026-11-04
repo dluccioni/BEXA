@@ -24,6 +24,7 @@ from bexa.workspace.ops._base import (
     new,
     other_dims,
     pixel_dims,
+    point_values,
     poisson,
     reduce_over,
     require,
@@ -369,7 +370,8 @@ def _bivariate(
     cmaps: str | Sequence[str],
     percentiles: Sequence[float],
 ) -> DataObject:
-    """The two COM maps of ``made`` as one RGB picture, its key in the attrs."""
+    """The two COM maps of ``made`` as one RGB picture, its key in the attrs, the two maps
+    as coordinates of its points (``com_<a>``, ``com_<b>``: read under the mouse)."""
     from bexa.viz.maps import bivariate_rgb
 
     names = [c.strip() for c in cmaps.split(",")] if isinstance(cmaps, str) else list(cmaps)
@@ -392,12 +394,10 @@ def _bivariate(
         "key_y_range": list(lim_b),
         "key_cmaps": names,
     }
+    coords = {d: first.coords[d] for d in dims if d in first.coords}
+    coords.update(point_values(dims, {f"com_{along[0]}": first, f"com_{along[1]}": second}))
     picture = xr.DataArray(
-        rgb,
-        dims=(*dims, "rgb"),
-        coords={**{d: first.coords[d] for d in dims if d in first.coords}, "rgb": list("rgb")},
-        name=name,
-        attrs=key,
+        rgb, dims=(*dims, "rgb"), coords={**coords, "rgb": list("rgb")}, name=name, attrs=key
     )
     parents = [by_name[f"com_{d}"].name for d in along]
     return new(obj, picture, name, kind="rgb", parents=parents, meta={"quantity": name})

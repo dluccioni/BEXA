@@ -233,13 +233,24 @@ def draw_rgb(
 ) -> Any:
     """A colour picture ``(y, x, rgb)`` on its coordinates, its axes to scale or not as
     ``options.aspect`` says; a bivariate picture (attrs ``key_cmaps``, ``key_x``,
-    ``key_x_range``, ...) with its key in a corner."""
+    ``key_x_range``, ...) with its key in a corner. The mouse reads the values the picture
+    was drawn from where it has them (coordinates of its points: COM Maps' ``com_<dim>``),
+    else the colour."""
     ax = fig.add_subplot(111)
     picture = np.clip(np.nan_to_num(np.asarray(da.values, dtype=float)), 0.0, 1.0)
     plane = da.isel(rgb=0) if "rgb" in da.dims else da
     dims = [str(d) for d in da.dims if d != "rgb"]
     aspect = _aspect((options or ImageOptions()).aspect, dims[-1] if dims else "x")
-    ax.imshow(picture, extent=extent_of(plane), interpolation="nearest", aspect=aspect)
+    image = ax.imshow(picture, extent=extent_of(plane), interpolation="nearest", aspect=aspect)
+    values = {
+        str(name): coord.transpose(*dims)
+        for name, coord in plane.coords.items()
+        if name not in plane.dims and len(dims) == 2 and set(coord.dims) == set(dims)
+    }
+    if values:
+        from bexa.viz.images import cursor_values
+
+        cursor_values(image, values)
     if len(dims) == 2:
         ax.set_ylabel(dims[0])
         ax.set_xlabel(dims[1])
@@ -250,21 +261,25 @@ def draw_rgb(
 
 
 def _bivariate_key(ax: Any, attrs: Mapping[str, Any]) -> None:
-    """The key of a bivariate picture: the two scales and their colours, top right."""
+    """The key of a bivariate picture: the two scales and their colours, top right; the mouse
+    over it reads the two values."""
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
+    from bexa.viz.images import cursor_key
     from bexa.viz.maps import bivariate_key
 
     (x0, x1), (y0, y1) = attrs["key_x_range"], attrs["key_y_range"]
+    names = str(attrs.get("key_x", "")), str(attrs.get("key_y", ""))
     inset = inset_axes(ax, width="22%", height="22%", loc="upper right", borderpad=1)
-    inset.imshow(
+    key = inset.imshow(
         bivariate_key(tuple(attrs["key_cmaps"])),
         extent=[x0, x1, y0, y1],
         origin="lower",
         aspect="auto",
     )
-    inset.set_xlabel(str(attrs.get("key_x", "")), fontsize=7)
-    inset.set_ylabel(str(attrs.get("key_y", "")), fontsize=7)
+    cursor_key(key, *names)
+    inset.set_xlabel(names[0], fontsize=7)
+    inset.set_ylabel(names[1], fontsize=7)
     inset.tick_params(labelsize=6)
 
 

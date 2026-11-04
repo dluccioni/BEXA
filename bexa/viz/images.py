@@ -1,8 +1,8 @@
-"""Single images, tile grids, ROI overlays and scalebars."""
+"""Single images, tile grids, ROI overlays, scalebars, and what the mouse reads over a picture."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import numpy as np
@@ -11,7 +11,7 @@ from bexa.core.roi import ROI
 from bexa.viz import style
 from bexa.viz.style import DEFAULT, as_array, dim_label, new_axes, percentile_limits, pixel_size_nm
 
-__all__ = ["add_scalebar", "roi_overlay", "show", "tiles"]
+__all__ = ["add_scalebar", "cursor_key", "cursor_values", "roi_overlay", "show", "tiles"]
 
 
 def _extent(da: Any) -> list[float] | None:
@@ -64,6 +64,62 @@ def roi_overlay(
         ax.annotate(name, (x[0], y[0]), color=color, fontsize=7, va="bottom")
         patches.append(rect)
     return patches
+
+
+def _decimals(values: np.ndarray) -> int:
+    """Decimals enough to tell a ten-thousandth of the values' range (4 when they have none)."""
+    finite = values[np.isfinite(values)]
+    span = float(finite.max() - finite.min()) if finite.size else 0.0
+    return min(12, max(0, 4 - int(np.floor(np.log10(span))))) if span > 0 else 4
+
+
+def cursor_values(image: Any, values: Mapping[str, Any]) -> None:
+    """The mouse over ``image`` reads ``values`` at the pixel under it in place of its colour,
+    ``com_chi = 10.2345 deg, com_mu = 4.5012 deg``: the maps a colour picture was drawn from.
+
+    Each of ``values`` holds one value per pixel of ``image`` (its rows and columns), read to
+    a ten-thousandth of its range, with its unit (``attrs["units"]``) unless its name gives it
+    in brackets; a point without a value (NaN) reads ``nan``.
+    """
+    rows, cols = image.get_array().shape[:2]
+    planes = []
+    for name, value in values.items():
+        plane = as_array(value)
+        if plane.shape != (rows, cols):
+            raise ValueError(f"{name} is {plane.shape}, the image {rows} x {cols}")
+        unit = str(getattr(value, "attrs", {}).get("units", "") or "")
+        unit = "" if f"({unit})" in str(name) else unit
+        planes.append((str(name), plane, _decimals(plane), f" {unit}" if unit else ""))
+
+    def under(event: Any) -> list[str] | None:
+        if event.xdata is None or event.ydata is None:
+            return None
+        left, right, bottom, top = image.get_extent()
+        first, last = (top, bottom) if image.origin == "upper" else (bottom, top)  # rows 0, n
+        j = int(np.floor((event.xdata - left) / (right - left) * cols))
+        i = int(np.floor((event.ydata - first) / (last - first) * rows))
+        if not (0 <= i < rows and 0 <= j < cols):
+            return None
+        return [
+            f"{name} = {plane[i, j]:.{n}f}{unit}" if np.isfinite(plane[i, j]) else f"{name} = nan"
+            for name, plane, n, unit in planes
+        ]
+
+    image.get_cursor_data = under  # matplotlib's readout (the toolbar, ipympl's footer)
+    image.format_cursor_data = lambda found: ", ".join(found)
+
+
+def cursor_key(image: Any, x: str, y: str) -> None:
+    """The mouse over the key of a colour picture (``image``, drawn on the two scales it keys)
+    reads the two values, ``com_chi = 10.2345, com_mu = 4.5012``, in place of x, y and a
+    colour; zoom and pan leave the key alone, as they do any inset."""
+    left, right, bottom, top = image.get_extent()
+    nx, ny = _decimals(np.array([left, right])), _decimals(np.array([bottom, top]))
+    key = image.axes
+    key.format_coord = lambda vx, vy: f"{x} = {vx:.{nx}f}, {y} = {vy:.{ny}f}"
+    key.set_navigate(True)  # matplotlib reads out only the axes it navigates
+    key.can_zoom = key.can_pan = lambda: False
+    image.set_mouseover(False)
 
 
 def scalebar_nm(scalebar: Any, source: Any) -> float | None:

@@ -277,8 +277,10 @@ def write_nexus(objects: Sequence[DataObject], path: str | Path) -> Path:
     """Write array objects (and tables, texts) to one NeXus HDF5 file, one NXdata group each.
 
     Each group holds the values as ``data`` (the NeXus signal), one dataset
-    per axis, ``errors`` for the uncertainties, and the metadata, parents and
-    history as JSON attributes; tables become one dataset per column.
+    per axis, ``errors`` for the uncertainties, the values of every point that
+    are coordinates (a picture's COMs, ``<name>_indices`` naming their axes), and
+    the metadata, parents, history and the array's attrs (a picture's key) as JSON
+    attributes; tables become one dataset per column.
     """
     import h5py
 
@@ -339,6 +341,23 @@ def _write_nxdata(group: Any, obj: DataObject) -> None:
         if units:
             axis.attrs["units"] = str(units)
         group.attrs[f"{dim}_indices"] = dims.index(dim)
+    points = {}  # the values of every point kept as coordinates: a picture's COMs
+    for name, coord in da.coords.items():
+        name = str(name)
+        on_dims = bool(coord.dims) and set(coord.dims) <= set(dims) and coord.dtype.kind in "iufb"
+        if name in dims or name in ("data", "errors") or "/" in name or not on_dims:
+            continue
+        point = group.create_dataset(
+            name, data=np.asarray(coord.values), compression="gzip" if coord.size > 4096 else None
+        )
+        if coord.attrs.get("units"):
+            point.attrs["units"] = str(coord.attrs["units"])
+        group.attrs[f"{name}_indices"] = [dims.index(str(d)) for d in coord.dims]
+        points[name] = [str(d) for d in coord.dims]
+    if points:
+        group.attrs["coordinates"] = json.dumps(points)
+    if da.attrs:
+        group.attrs["attrs"] = json.dumps(jsonable(dict(da.attrs)))
     if obj.sigma is not None:
         group.create_dataset(
             "errors",

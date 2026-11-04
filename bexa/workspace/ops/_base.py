@@ -183,6 +183,16 @@ def like(da: xr.DataArray, values: Any, name: str | None = None) -> xr.DataArray
     )
 
 
+def point_values(dims: Sequence[str], maps: Mapping[str, xr.DataArray]) -> dict[str, xr.Variable]:
+    """The maps a colour picture is drawn from, as coordinates of its points on its ``dims``
+    (with their units): the values the View reads under the mouse."""
+    out = {}
+    for name, da in maps.items():
+        units = {"units": da.attrs["units"]} if da.attrs.get("units") else {}
+        out[name] = xr.Variable(tuple(dims), np.asarray(da.values), units)
+    return out
+
+
 def pairs(values: Sequence[float] | None, what: str = "values") -> list[tuple[float, float]]:
     """``[1, 2, 9, 10]`` as ``[(1, 2), (9, 10)]``."""
     if not values:

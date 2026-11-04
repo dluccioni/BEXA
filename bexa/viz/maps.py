@@ -14,7 +14,7 @@ import numpy as np
 from matplotlib.colors import LinearSegmentedColormap, hsv_to_rgb
 
 from bexa.viz import style
-from bexa.viz.images import add_scalebar, scalebar_nm
+from bexa.viz.images import add_scalebar, cursor_key, cursor_values, scalebar_nm
 from bexa.viz.style import DEFAULT, as_array, new_axes
 
 __all__ = [
@@ -163,25 +163,28 @@ def bivariate(
     Each map is normalised to [0, 1] (over its own range or ``limits``), mapped
     through its colormap (``bwr`` and ``PiYG`` by default; the notebooks' blue-red and
     green-purple are ``BLUE_RED`` and ``GREEN_PURPLE``), and the two RGB images are
-    averaged, as in the lab's notebooks (:func:`bivariate_rgb`).
+    averaged, as in the lab's notebooks (:func:`bivariate_rgb`). The mouse reads the two
+    maps' values (named by ``labels``), not the colour.
     """
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     fig, ax = new_axes(ax, style.figure_size("bivariate", figsize))
     rgb, lim_a, lim_b = bivariate_rgb(map_a, map_b, cmaps, limits)
-    ax.imshow(rgb)
+    im = ax.imshow(rgb)
     ax.set_xticks([])
     ax.set_yticks([])
     if labels is None:
         labels = (str(getattr(map_a, "name", "a")), str(getattr(map_b, "name", "b")))
+    cursor_values(im, {labels[0]: map_a, labels[1]: map_b})
     if title:
         ax.set_title(title)
     if key:
         key_rgb = bivariate_key(cmaps)
         inset = inset_axes(ax, width="25%", height="25%", loc="upper right", borderpad=1)
-        inset.imshow(
+        shown = inset.imshow(
             key_rgb, extent=[lim_a[0], lim_a[1], lim_b[0], lim_b[1]], origin="lower", aspect="auto"
         )
+        cursor_key(shown, labels[0], labels[1])
         inset.set_xlabel(labels[0], fontsize=7)
         inset.set_ylabel(labels[1], fontsize=7)
         inset.tick_params(labelsize=6)
@@ -200,7 +203,8 @@ def hsv_mosaicity(
     figsize: tuple[float, float] | None = None,
 ) -> tuple[Any, Any]:
     """darfix-style mosaicity image: hue from ``map_a``, saturation from ``map_b``; a point
-    either map lacks (NaN) is grey (``style.MISSING_COLOUR``)."""
+    either map lacks (NaN) is grey (``style.MISSING_COLOUR``). The mouse reads the two maps'
+    values (named by ``labels``), not the colour."""
     from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     fig, ax = new_axes(ax, style.figure_size("hsv", figsize))
@@ -209,11 +213,12 @@ def hsv_mosaicity(
     s, lim_b = _normalize(values_b)
     rgb = hsv_to_rgb(np.stack([h, s, np.ones_like(h)], axis=-1))
     rgb[~(np.isfinite(values_a) & np.isfinite(values_b))] = style.MISSING_COLOUR
-    ax.imshow(rgb)
+    im = ax.imshow(rgb)
     ax.set_xticks([])
     ax.set_yticks([])
     if labels is None:
         labels = (str(getattr(map_a, "name", "hue")), str(getattr(map_b, "name", "saturation")))
+    cursor_values(im, {labels[0]: map_a, labels[1]: map_b})
     if title:
         ax.set_title(title)
     if key:
@@ -221,9 +226,10 @@ def hsv_mosaicity(
         hh, ss = np.meshgrid(np.linspace(0, 1, n), np.linspace(0, 1, n))
         key_rgb = hsv_to_rgb(np.stack([hh, ss, np.ones_like(hh)], axis=-1))
         inset = inset_axes(ax, width="25%", height="25%", loc="upper right", borderpad=1)
-        inset.imshow(
+        shown = inset.imshow(
             key_rgb, extent=[lim_a[0], lim_a[1], lim_b[0], lim_b[1]], origin="lower", aspect="auto"
         )
+        cursor_key(shown, labels[0], labels[1])
         inset.set_xlabel(labels[0], fontsize=7)
         inset.set_ylabel(labels[1], fontsize=7)
         inset.tick_params(labelsize=6)

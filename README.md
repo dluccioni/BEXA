@@ -624,7 +624,7 @@ app  # the last line of the cell shows it
 |---|---|
 | Data | the folder to work in, scans or not yet: the scan picker of its datasets (running scans included), its selection added as scans, a scan set or a series; Refresh (or auto, every 10 s) lists new scans and reads the new points of the opened scans still being written; open a path (the layout is sniffed) as one scan, every scan of a dataset or one scan set; a beamtime profile; demo data |
 | Browse | walk folders, or choose a file in the system's dialog, and look inside files before opening anything: HDF5/NeXus trees with shapes, chunks, compression and attributes and a preview of one slice at a time, SPEC sessions (scans, headers, columns), TIFF tags, arrays, text; load any dataset or slice as an object |
-| View | a scan's raw frames with a slider per motor (one frame read per move), stacks, images and maps on their coordinates (colour map, limits, log, ROIs), curves overlaid with error bars and fits, maps as curves, volumes, colour pictures, tables; ROIs typed or drawn; line profiles; the value under the mouse; 3-D rendering of a stack |
+| View | a scan's raw frames with a slider per motor (one frame read per move), stacks, images and maps on their coordinates (colour map, limits, log, ROIs), curves overlaid with error bars and fits, maps as curves, volumes, colour pictures, tables; ROIs typed or drawn; line profiles; the value under the mouse (over a COM picture, its two COMs); 3-D rendering of a stack |
 | Analysis | every operation of `bexa.workspace.catalog` (Extract, Process, Combine, Multi-scan, Fit, Imaging, XRD, XRR, Calculators), each with its help, its inputs and a form; Run in the background; "Run on each selected object" for a batch |
 | Fit | peaks of any shape on a background, each parameter with a start value, bounds or fixed; guess, add, or click to place peaks; data, fit, components and residuals; refit from the fitted values; fit every curve of a map |
 | Convert | a scan or scan set to a scan package, a cube, NeXus, TIFF or NPY; a whole dataset or session scan by scan; an HDF5 dataset or slice to NPY, TIFF or CSV; a file to another format; objects to NeXus, CSV, NPY, TIFF, PNG |
@@ -8150,6 +8150,46 @@ through it after the style defaults.
 images.scalebar_nm(235, image), images.scalebar_nm(True, image), images.scalebar_nm(False, image)   # (235.0, 235.0, None)
 ```
 
+#### `cursor_values`
+`bexa.viz.images.cursor_values(image, values)`
+
+The mouse over `image` (a matplotlib `AxesImage`) reads `values` at the pixel under it in place
+of its colour, in matplotlib's readout (the toolbar, ipympl's footer): `com_chi = -0.13953 deg,
+com_mu = -0.3856 deg`, the maps a colour picture was drawn from. `values` is `{name: map}`, each
+map one value per pixel of the image (a DataArray or an array; `ValueError` for another shape),
+read to a ten-thousandth of its range with its `attrs["units"]` (left out when the name gives
+it in brackets, `"chi (deg)"`); a point without a value (NaN) reads `nan`. `bexa.viz.maps`'s
+`bivariate` and `hsv_mosaicity` and the View's colour pictures (`bexa.gui.drawing.draw_rgb`)
+use it. Returns `None`.
+
+```python
+# image: the summed image; drawn in grey, the mouse reading the counts and their log
+import matplotlib.pyplot as plt
+import numpy as np
+from types import SimpleNamespace
+fig, ax = plt.subplots()
+grey = ax.imshow(np.stack([image.values / image.values.max()] * 3, axis=-1))
+images.cursor_values(grey, {"counts": image, "log10": np.log10(1 + image.values)})
+grey.format_cursor_data(grey.get_cursor_data(SimpleNamespace(xdata=40.0, ydata=32.0)))   # 'counts = 28060, log10 = 4.44810'
+```
+
+#### `cursor_key`
+`bexa.viz.images.cursor_key(image, x, y)`
+
+The mouse over the key of a colour picture (`image`, an inset drawn on the two scales it keys,
+as `bivariate` and the View draw it) reads the two values, named `x` and `y`, in place of the
+inset's x, y and a colour, each to a ten-thousandth of the key's range. matplotlib reads out
+no inset (it does not navigate them): the key is navigated for its readout, but zoom and pan
+leave it alone. Returns `None`.
+
+```python
+# ax: the axes of the grey image; a key on two scales, read as chi and mu
+from bexa.viz import maps
+key = ax.inset_axes([0.7, 0.7, 0.25, 0.25]).imshow(maps.bivariate_key(), extent=[-0.2, 0.2, -0.5, 0.5], origin="lower")
+images.cursor_key(key, "com_chi", "com_mu")
+key.axes.format_coord(0.1, -0.25)               # 'com_chi = 0.10000, com_mu = -0.2500'
+```
+
 ### bexa.viz.curves: rocking curves, pump-probe panels and moments
 
 1-D figures: intensity against a motor, laser on/off comparisons along the scan axis of a
@@ -8293,7 +8333,9 @@ by default, the notebooks' blue-red and green-purple as `BLUE_RED` and `GREEN_PU
 the two RGB images are averaged (`bivariate_rgb`; a point either map lacks is grey). `key=True`
 adds an inset (top right) with the colour of
 every pair of values, its axes in the maps' units and labelled with `labels` (default: the
-DataArray names). `scalebar` as in `images.show`. Returns `(fig, ax)`.
+DataArray names). The mouse reads the two maps' values under it, named by `labels`
+(`images.cursor_values`), and over the key the two values of its axes (`images.cursor_key`).
+`scalebar` as in `images.show`. Returns `(fig, ax)`.
 
 ```python
 # res: the COM maps of the demo scan; the tilts in chi and mu in one colour image
@@ -8332,7 +8374,8 @@ maps.bivariate_key().shape                       # (100, 100, 3)
 
 darfix-style mosaicity image: hue from `map_a` and saturation from `map_b`, each normalised over
 its minimum and maximum, at full brightness, with an inset key; a point either map lacks
-(NaN) is grey. `labels`, `scalebar` and `title` as in `bivariate`. Returns `(fig, ax)`.
+(NaN) is grey. The mouse reads the two maps' values, as over `bivariate`. `labels`, `scalebar`
+and `title` as in `bivariate`. Returns `(fig, ax)`.
 
 ```python
 # res: the COM maps of the demo scan; chi as hue, mu as saturation
@@ -10379,9 +10422,10 @@ colour picture `com_<a>_<b>` (kind `rgb`): the first through the first of `pictu
 (`"bwr, PiYG"`: any two matplotlib colour maps, `ValueError` naming the close names for one
 it does not know), the second through the second, averaged, each scaled between the
 `picture_percentiles` (`bexa.viz.maps.bivariate_rgb`), its key in the attrs (`key_x`,
-`key_x_range`, `key_y`, `key_y_range`, `key_cmaps`), which the View draws in a corner;
-`"both"`; `"auto"`, the default: the picture along two dims (the two COM maps then stay
-out), a map each otherwise. A picture needs maps over two dims; with fewer the maps come out.
+`key_x_range`, `key_y`, `key_y_range`, `key_cmaps`), which the View draws in a corner, and the
+two COM maps as coordinates of its points (`com_<a>`, `com_<b>`, with their units), which the
+View reads under the mouse in place of the colour; `"both"`; `"auto"`, the default: the
+picture along two dims (the two COM maps then stay out as objects), a map each otherwise. A picture needs maps over two dims; with fewer the maps come out.
 `ValueError` when no dim is left for the maps. On the Analysis tab: Extract, "COM Maps"; in code
 `ws.run("com_maps", ...)`.
 
@@ -10392,6 +10436,8 @@ out), a map each otherwise. A picture needs maps over two dims; with fewer the m
 [o.name for o in extract.com_maps(mosa, sigma=1.0, widths=False, total=False, coms="maps", min_prominence=0.05)]   # ['demo_mosa_com_chi', 'demo_mosa_com_mu']
 # the picture in other colours, scaled between the 5th and 95th percentiles
 extract.com_maps(mosa, coms="picture", picture_cmaps="viridis, plasma", picture_percentiles=(5, 95))[-1].array.attrs["key_cmaps"]   # ['viridis', 'plasma']
+# the two COMs of every point of the picture, read under the mouse
+list(extract.com_maps(mosa, sigma=1.0)[-1].array.coords)   # ['y', 'x', 'com_chi', 'com_mu', 'rgb']
 # every frame's centre on the detector, as chi x mu maps
 [o.dims for o in extract.com_maps(mosa, axes=["y", "x"])][:2]   # [('chi', 'mu'), ('chi', 'mu')]
 ```
@@ -11302,8 +11348,10 @@ imaging.argmax_map(stack, dim="mu").describe()  # 'image y[64] x x[80] float64'
 `bexa.workspace.ops.imaging.orientation_map(a, b, span=None, intensity=None)`
 
 Two tilt maps as one colour picture: hue the direction, saturation the size of the tilt (fully
-saturated at `span`), brightness the `intensity` map if given. On the Analysis tab: Imaging,
-"Orientation Map"; in code `ws.run("orientation_map", ...)`.
+saturated at `span`), brightness the `intensity` map if given. The maps are coordinates of its
+points, named as their arrays (`com_chi`, `com_mu`, `total`; as their objects when two share
+a name), which the View reads under the mouse. On the Analysis tab: Imaging, "Orientation
+Map"; in code `ws.run("orientation_map", ...)`.
 
 ```python
 # both tilts in one picture, brighter where it scatters more
@@ -11726,6 +11774,20 @@ Values with the dims, coordinates and attrs of a DataArray.
 _base.like(curve.array, curve.array.values ** 2).values  # array([1.0, 16.0, 81.0])
 ```
 
+#### `point_values`
+`bexa.workspace.ops._base.point_values(dims, maps)`
+
+The maps a colour picture is drawn from (`{name: DataArray}`) as coordinates of its points:
+one `xarray.Variable` each on the picture's `dims`, with its `attrs["units"]`. COM Maps and
+Orientation Map give their pictures these, which the View reads under the mouse.
+
+```python
+# a map of 2 x 2 points, kept on a picture of the same points
+com = xr.DataArray([[0.1, 0.2], [0.3, 0.4]], dims=("y", "x"), attrs={"units": "deg"})
+picture = xr.DataArray(np.zeros((2, 2, 3)), dims=("y", "x", "rgb"), coords=_base.point_values(("y", "x"), {"com_mu": com}))
+picture.coords["com_mu"].attrs                  # {'units': 'deg'}
+```
+
 #### `pairs`
 `bexa.workspace.ops._base.pairs(values, what="values")`
 
@@ -11793,7 +11855,9 @@ open(f"{out}/c.csv").read().splitlines()[:2]    # ['mu,value,sigma', '0.0,1.0,1.
 `bexa.workspace.files.write_nexus(objects, path)`
 
 Several objects in one NeXus HDF5 file, one NXdata group each
-(tables as one dataset per column, texts as NXnote, scans by their recipes).
+(tables as one dataset per column, texts as NXnote, scans by their recipes). An array keeps
+its coordinates of points (a picture's COMs: a dataset each, `<name>_indices` naming its axes)
+and its attrs (a picture's key, as JSON).
 
 ```python
 # two objects in one file
@@ -12006,8 +12070,8 @@ path = write_nexus([DataObject("c", xr.DataArray([1.0, 2.0], dims=("mu",)), sigm
 #### `read_object`
 `bexa.workspace.storage.read_object(name, group, cache=True)`
 
-The object kept in one group: arrays with their axes and errors,
-tables, texts; scans and scan sets opened again from their recipes (a text object saying why
+The object kept in one group: arrays with their axes, errors, coordinates of points and
+attrs, tables, texts; scans and scan sets opened again from their recipes (a text object saying why
 when that fails).
 
 ```python
@@ -12490,7 +12554,10 @@ draw_curves(Figure(), [("a", curve, np.ones(5)), ("b", 2 * curve, None)], CurveO
 
 A colour picture `(y, x, rgb)` on its coordinates, its axes to scale or not as
 `options.aspect` says (an `ImageOptions`; none: `"auto"`); a bivariate picture of COM Maps (attrs
-`key_cmaps`, `key_x`, `key_x_range`, `key_y`, `key_y_range`) with its key in a corner.
+`key_cmaps`, `key_x`, `key_x_range`, `key_y`, `key_y_range`) with its key in a corner. The mouse
+reads the values the picture was drawn from where it has them (coordinates of its points over
+its two dims: COM Maps' `com_<dim>`, Orientation Map's tilts; `bexa.viz.images.cursor_values`)
+in place of the colour, and over the key the two values of its axes.
 
 ```python
 # a grey picture
@@ -12980,7 +13047,8 @@ frames summed (maximum, mean), images and maps
 on their coordinates (colour map, limits, log, colour bar, ROIs), curves overlaid with error bars
 and their fits, a map as curves, a volume with two dims as the image, colour pictures, tables
 and text. ROIs are typed, or drawn with ipympl; a line drawn on an image makes its line profile;
-the value under the mouse shows; the figure saves; a stack renders in 3-D (plotly).
+the value under the mouse shows (over COM Maps' picture, the pixel's two COMs; over its key,
+the two COMs a colour stands for); the figure saves; a stack renders in 3-D (plotly).
 
 ```python
 import bexa
